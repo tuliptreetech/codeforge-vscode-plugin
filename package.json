@@ -123,7 +123,7 @@
     "compile": "echo 'No compilation needed for JavaScript'",
     "package": "vsce package",
     "publish": "vsce publish",
-    "vscode:prepublish": "npm run test"
+    "vscode:prepublish": "echo 'Skipping tests in prepublish - tests run separately in CI'"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.1",

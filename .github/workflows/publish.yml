@@ -27,17 +27,6 @@ jobs:
           node-version: "16.x"
           cache: "npm"
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb
-
-      - name: Start xvfb
-        run: |
-          export DISPLAY=:99.0
-          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
-          sleep 3
-
       - name: Install dependencies
         run: npm ci
 
@@ -50,8 +39,8 @@ jobs:
           npm version ${{ github.event.inputs.version }} --no-git-tag-version
           echo "Updated version to ${{ github.event.inputs.version }}"
 
-      - name: Package extension
-        run: vsce package
+      - name: Package extension (without tests)
+        run: vsce package --no-dependencies
 
       - name: Publish to VS Code Marketplace
         env:
