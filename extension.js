@@ -69,7 +69,9 @@ function activate(context) {
   context.subscriptions.push(outputChannel);
 
   // Check if Docker is available
-  checkDockerAvailable().then((available) => {
+  const config = vscode.workspace.getConfiguration("codeforge");
+  const dockerCommand = config.get("dockerCommand", "docker");
+  dockerOperations.checkDockerAvailable(dockerCommand).then((available) => {
     if (!available) {
       vscode.window
         .showWarningMessage(
@@ -237,25 +239,25 @@ function activate(context) {
         // Get configuration
         const config = vscode.workspace.getConfiguration("codeforge");
         const dockerCommand = config.get("dockerCommand", "docker");
-        const workspaceMount = config.get("workspaceMount", "/workspace");
         const removeAfterRun = config.get("removeContainersAfterRun", true);
         const defaultShell = config.get("defaultShell", "/bin/bash");
         const additionalArgs = config.get("additionalDockerRunArgs", []);
+        const mountWorkspace = config.get("mountWorkspace", true);
 
-        const shellArgs = ["run", "-it"];
-
-        if (removeAfterRun) {
-          shellArgs.push("--rm");
-        }
-
-        if (config.get("mountWorkspace", true)) {
-          shellArgs.push("-v", `${workspacePath}:${workspaceMount}`);
-          shellArgs.push("-w", workspaceMount);
-        }
-
-        shellArgs.push(...additionalArgs);
-        shellArgs.push(containerName);
-        shellArgs.push(defaultShell);
+        // Use dockerOperations to generate Docker run arguments
+        const shellArgs = dockerOperations.generateDockerRunArgs(
+          workspacePath,
+          containerName,
+          {
+            interactive: true,
+            tty: true,
+            removeAfterRun: removeAfterRun,
+            mountWorkspace: mountWorkspace,
+            workingDir: workspacePath,
+            additionalArgs: additionalArgs,
+            shell: defaultShell
+          }
+        );
 
         const terminal = vscode.window.createTerminal({
           name: `CodeForge: ${path.basename(workspacePath)}`,
@@ -314,37 +316,30 @@ function activate(context) {
 
         // Get configuration
         const config = vscode.workspace.getConfiguration("codeforge");
-        const dockerCommand = config.get("dockerCommand", "docker");
-        const workspaceMount = config.get("workspaceMount", "/workspace");
         const removeAfterRun = config.get("removeContainersAfterRun", true);
         const defaultShell = config.get("defaultShell", "/bin/bash");
         const additionalArgs = config.get("additionalDockerRunArgs", []);
         const showOutput = config.get("showOutputChannel", true);
+        const dockerCommand = config.get("dockerCommand", "docker");
+        const mountWorkspace = config.get("mountWorkspace", true);
 
         if (showOutput) {
           outputChannel.show();
         }
 
-        // We need to spawn the process with pipe stdio to capture output
-        const { spawn } = require("child_process");
-        const dockerArgs = ["run"];
-
-        if (removeAfterRun) {
-          dockerArgs.push("--rm");
-        }
-
-        if (config.get("mountWorkspace", true)) {
-          dockerArgs.push("-v", `${workspacePath}:${workspaceMount}`);
-          dockerArgs.push("-w", workspaceMount);
-        }
-
-        dockerArgs.push(...additionalArgs);
-        dockerArgs.push(containerName);
-        dockerArgs.push(defaultShell, "-c", command);
-
-        const dockerProcess = spawn(dockerCommand, dockerArgs, {
-          stdio: ["ignore", "pipe", "pipe"],
-        });
+        // Use dockerOperations.runDockerCommandWithOutput for proper output capture
+        const dockerProcess = dockerOperations.runDockerCommandWithOutput(
+          workspacePath,
+          containerName,
+          command,
+          defaultShell,
+          {
+            removeAfterRun: removeAfterRun,
+            additionalArgs: additionalArgs,
+            dockerCommand: dockerCommand,
+            mountWorkspace: mountWorkspace,
+          }
+        );
 
         // Capture output
         dockerProcess.stdout.on("data", (data) => {
@@ -395,7 +390,9 @@ function activate(context) {
   let checkDockerCommand = vscode.commands.registerCommand(
     "codeforge.checkDocker",
     async function () {
-      const available = await checkDockerAvailable();
+      const config = vscode.workspace.getConfiguration("codeforge");
+      const dockerCommand = config.get("dockerCommand", "docker");
+      const available = await dockerOperations.checkDockerAvailable(dockerCommand);
       if (available) {
         vscode.window.showInformationMessage(
           "CodeForge: Docker is installed and running properly!",
@@ -505,28 +502,6 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
   }
 }
 
-/**
- * Check if Docker is available on the system
- * @returns {Promise<boolean>} True if Docker is available, false otherwise
- */
-async function checkDockerAvailable() {
-  const { exec } = require("child_process");
-  const { promisify } = require("util");
-  const execAsync = promisify(exec);
-
-  try {
-    const config = vscode.workspace.getConfiguration("codeforge");
-    const dockerCommand = config.get("dockerCommand", "docker");
-
-    await execAsync(`${dockerCommand} --version`);
-    // Also check if Docker daemon is running
-    await execAsync(`${dockerCommand} ps`);
-    return true;
-  } catch (error) {
-    outputChannel.appendLine(`Docker check failed: ${error.message}`);
-    return false;
-  }
-}
 
 function deactivate() {
   console.log("CodeForge extension is now deactivated");
