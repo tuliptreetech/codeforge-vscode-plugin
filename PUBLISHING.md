@@ -12,11 +12,13 @@ This guide explains how to package and publish the CodeForge VS Code extension.
 ## Setup
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```
 
 2. Install VS Code Extension Manager (vsce):
+
    ```bash
    npm install -g @vscode/vsce
    ```
@@ -49,6 +51,7 @@ vsce package
 ```
 
 This creates a file like `codeforge-0.0.1.vsix` that can be:
+
 - Shared directly with users
 - Installed using `code --install-extension codeforge-0.0.1.vsix`
 - Uploaded to private extension registries
@@ -96,11 +99,13 @@ vsce publish patch  # 0.1.0 -> 0.1.1
 ### Automated Publishing
 
 The GitHub Actions workflow will automatically:
+
 1. Run tests on push/PR
 2. Create releases when pushing to main
 3. Publish to marketplace when a release is created (requires VSCE_PAT secret)
 
 To set up automated publishing:
+
 1. Add `VSCE_PAT` secret to GitHub repository settings
 2. Push to main branch or create a release
 
@@ -142,6 +147,7 @@ vsce package --out test.vsix  # Test packaging
 ## Post-publish
 
 After publishing:
+
 1. Verify extension appears in marketplace (may take a few minutes)
 2. Test installation: `code --install-extension codeforge`
 3. Monitor user feedback and ratings
@@ -150,6 +156,7 @@ After publishing:
 ## Version Management
 
 Follow semantic versioning:
+
 - **Major** (1.0.0): Breaking changes
 - **Minor** (0.1.0): New features, backward compatible
 - **Patch** (0.0.1): Bug fixes

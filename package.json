@@ -7,8 +7,18 @@
   "engines": {
     "vscode": "^1.74.0"
   },
-  "categories": ["Other", "Programming Languages", "Debuggers"],
-  "keywords": ["docker", "container", "development", "environment", "devcontainer"],
+  "categories": [
+    "Other",
+    "Programming Languages",
+    "Debuggers"
+  ],
+  "keywords": [
+    "docker",
+    "container",
+    "development",
+    "environment",
+    "devcontainer"
+  ],
   "homepage": "https://github.com/codeforge/codeforge-vscode-plugin",
   "repository": {
     "type": "git",

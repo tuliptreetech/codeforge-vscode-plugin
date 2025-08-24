@@ -7,6 +7,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ## [Unreleased]
 
 ### Added
+
 - Initial release of CodeForge extension
 - Command: Initialize CodeForge - Creates .codeforge directory with Dockerfile
 - Command: Build Docker Environment - Builds Docker image from .codeforge/Dockerfile
@@ -18,6 +19,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Comprehensive test suite for extension functionality
 
 ### Features
+
 - Embedded Dockerfile with Ubuntu 24.04 base image
 - Pre-configured development tools:
   - Build essentials
@@ -34,14 +36,17 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ## [0.0.1] - 2024-08-24
 
 ### Added
+
 - Initial development release
 - Basic command structure
 - Docker integration foundation
 
 ### Security
+
 - Non-root container execution by default
 - Sudo access configured for development convenience
 
 ### Known Issues
+
 - Extension requires Docker to be installed and running
 - Windows support requires winpty for interactive terminals

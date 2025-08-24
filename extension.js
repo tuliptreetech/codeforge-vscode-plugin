@@ -1,7 +1,7 @@
-const vscode = require('vscode');
-const dockerOperations = require('./dockerOperations');
-const fs = require('fs').promises;
-const path = require('path');
+const vscode = require("vscode");
+const dockerOperations = require("./dockerOperations");
+const fs = require("fs").promises;
+const path = require("path");
 
 // Embedded Dockerfile content
 const DOCKERFILE_CONTENT = `# specify the base image (latest ubuntu lts release as of Oct 2024)
@@ -62,314 +62,384 @@ let outputChannel;
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-    console.log('CodeForge extension is now active!');
+  console.log("CodeForge extension is now active!");
 
-    // Create output channel for CodeForge
-    outputChannel = vscode.window.createOutputChannel('CodeForge');
-    context.subscriptions.push(outputChannel);
+  // Create output channel for CodeForge
+  outputChannel = vscode.window.createOutputChannel("CodeForge");
+  context.subscriptions.push(outputChannel);
 
-    // Check if Docker is available
-    checkDockerAvailable().then(available => {
-        if (!available) {
-            vscode.window.showWarningMessage(
-                'CodeForge: Docker is not installed or not running. Please install Docker and ensure it is running.',
-                'Check Again',
-                'Ignore'
-            ).then(selection => {
-                if (selection === 'Check Again') {
-                    vscode.commands.executeCommand('codeforge.checkDocker');
-                }
-            });
+  // Check if Docker is available
+  checkDockerAvailable().then((available) => {
+    if (!available) {
+      vscode.window
+        .showWarningMessage(
+          "CodeForge: Docker is not installed or not running. Please install Docker and ensure it is running.",
+          "Check Again",
+          "Ignore",
+        )
+        .then((selection) => {
+          if (selection === "Check Again") {
+            vscode.commands.executeCommand("codeforge.checkDocker");
+          }
+        });
+    }
+  });
+
+  // Register the initialize command
+  let initializeCommand = vscode.commands.registerCommand(
+    "codeforge.initialize",
+    async function () {
+      try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+          vscode.window.showErrorMessage(
+            "CodeForge: No workspace folder is open",
+          );
+          return;
         }
-    });
 
-    // Register the initialize command
-    let initializeCommand = vscode.commands.registerCommand('codeforge.initialize', async function () {
+        const workspacePath = workspaceFolder.uri.fsPath;
+        const codeforgeDir = path.join(workspacePath, ".codeforge");
+        const dockerfilePath = path.join(codeforgeDir, "Dockerfile");
+
+        // Check if .codeforge directory already exists
         try {
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            if (!workspaceFolder) {
-                vscode.window.showErrorMessage('CodeForge: No workspace folder is open');
-                return;
-            }
+          await fs.access(codeforgeDir);
+          const result = await vscode.window.showWarningMessage(
+            "CodeForge: .codeforge directory already exists. Do you want to overwrite it?",
+            "Yes",
+            "No",
+          );
+          if (result !== "Yes") {
+            return;
+          }
+        } catch (error) {
+          // Directory doesn't exist, which is fine
+        }
 
-            const workspacePath = workspaceFolder.uri.fsPath;
-            const codeforgeDir = path.join(workspacePath, '.codeforge');
-            const dockerfilePath = path.join(codeforgeDir, 'Dockerfile');
+        // Create .codeforge directory
+        await fs.mkdir(codeforgeDir, { recursive: true });
+        outputChannel.appendLine(`Created directory: ${codeforgeDir}`);
 
-            // Check if .codeforge directory already exists
+        // Write Dockerfile
+        await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
+        outputChannel.appendLine(`Created Dockerfile: ${dockerfilePath}`);
+
+        vscode.window.showInformationMessage(
+          "CodeForge: Successfully initialized .codeforge directory",
+        );
+        outputChannel.show();
+      } catch (error) {
+        outputChannel.appendLine(`Error: ${error.message}`);
+        outputChannel.show();
+        vscode.window.showErrorMessage(
+          `CodeForge: Failed to initialize - ${error.message}`,
+        );
+      }
+    },
+  );
+
+  // Register the build environment command
+  let buildEnvironmentCommand = vscode.commands.registerCommand(
+    "codeforge.buildEnvironment",
+    async function () {
+      try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+          vscode.window.showErrorMessage(
+            "CodeForge: No workspace folder is open",
+          );
+          return;
+        }
+
+        const workspacePath = workspaceFolder.uri.fsPath;
+        const dockerfilePath = path.join(
+          workspacePath,
+          ".codeforge",
+          "Dockerfile",
+        );
+
+        // Check if Dockerfile exists
+        try {
+          await fs.access(dockerfilePath);
+        } catch (error) {
+          vscode.window.showErrorMessage(
+            'CodeForge: Dockerfile not found. Please run "Initialize CodeForge" first.',
+          );
+          return;
+        }
+
+        // Generate container name
+        const containerName =
+          dockerOperations.generateContainerName(workspacePath);
+        outputChannel.appendLine(`Building Docker image: ${containerName}`);
+        outputChannel.show();
+
+        // Show progress notification
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "CodeForge: Building Docker environment...",
+            cancellable: false,
+          },
+          async (progress) => {
             try {
-                await fs.access(codeforgeDir);
-                const result = await vscode.window.showWarningMessage(
-                    'CodeForge: .codeforge directory already exists. Do you want to overwrite it?',
-                    'Yes', 'No'
-                );
-                if (result !== 'Yes') {
-                    return;
-                }
+              // Build the Docker image
+              await dockerOperations.buildDockerImage(
+                workspacePath,
+                containerName,
+              );
+              outputChannel.appendLine(
+                `Successfully built Docker image: ${containerName}`,
+              );
+              vscode.window.showInformationMessage(
+                `CodeForge: Successfully built Docker image ${containerName}`,
+              );
             } catch (error) {
-                // Directory doesn't exist, which is fine
+              throw error;
             }
+          },
+        );
+      } catch (error) {
+        outputChannel.appendLine(`Build failed: ${error.message}`);
+        outputChannel.show();
+        vscode.window.showErrorMessage(
+          `CodeForge: Build failed - ${error.message}`,
+        );
+      }
+    },
+  );
 
-            // Create .codeforge directory
-            await fs.mkdir(codeforgeDir, { recursive: true });
-            outputChannel.appendLine(`Created directory: ${codeforgeDir}`);
-
-            // Write Dockerfile
-            await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
-            outputChannel.appendLine(`Created Dockerfile: ${dockerfilePath}`);
-
-            vscode.window.showInformationMessage('CodeForge: Successfully initialized .codeforge directory');
-            outputChannel.show();
-        } catch (error) {
-            outputChannel.appendLine(`Error: ${error.message}`);
-            outputChannel.show();
-            vscode.window.showErrorMessage(`CodeForge: Failed to initialize - ${error.message}`);
+  // Register the launch terminal command
+  let launchTerminalCommand = vscode.commands.registerCommand(
+    "codeforge.launchTerminal",
+    async function () {
+      try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+          vscode.window.showErrorMessage(
+            "CodeForge: No workspace folder is open",
+          );
+          return;
         }
-    });
 
-    // Register the build environment command
-    let buildEnvironmentCommand = vscode.commands.registerCommand('codeforge.buildEnvironment', async function () {
-        try {
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            if (!workspaceFolder) {
-                vscode.window.showErrorMessage('CodeForge: No workspace folder is open');
-                return;
+        const workspacePath = workspaceFolder.uri.fsPath;
+        const containerName =
+          dockerOperations.generateContainerName(workspacePath);
+
+        // Check if Docker image exists
+        const imageExists =
+          await dockerOperations.checkImageExists(containerName);
+        if (!imageExists) {
+          const result = await vscode.window.showWarningMessage(
+            "CodeForge: Docker image not found. Would you like to build it now?",
+            "Yes",
+            "No",
+          );
+          if (result === "Yes") {
+            await vscode.commands.executeCommand("codeforge.buildEnvironment");
+            // Check again after build
+            const imageExistsAfterBuild =
+              await dockerOperations.checkImageExists(containerName);
+            if (!imageExistsAfterBuild) {
+              return;
             }
-
-            const workspacePath = workspaceFolder.uri.fsPath;
-            const dockerfilePath = path.join(workspacePath, '.codeforge', 'Dockerfile');
-
-            // Check if Dockerfile exists
-            try {
-                await fs.access(dockerfilePath);
-            } catch (error) {
-                vscode.window.showErrorMessage('CodeForge: Dockerfile not found. Please run "Initialize CodeForge" first.');
-                return;
-            }
-
-            // Generate container name
-            const containerName = dockerOperations.generateContainerName(workspacePath);
-            outputChannel.appendLine(`Building Docker image: ${containerName}`);
-            outputChannel.show();
-
-            // Show progress notification
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: "CodeForge: Building Docker environment...",
-                cancellable: false
-            }, async (progress) => {
-                try {
-                    // Build the Docker image
-                    await dockerOperations.buildDockerImage(workspacePath, containerName);
-                    outputChannel.appendLine(`Successfully built Docker image: ${containerName}`);
-                    vscode.window.showInformationMessage(`CodeForge: Successfully built Docker image ${containerName}`);
-                } catch (error) {
-                    throw error;
-                }
-            });
-        } catch (error) {
-            outputChannel.appendLine(`Build failed: ${error.message}`);
-            outputChannel.show();
-            vscode.window.showErrorMessage(`CodeForge: Build failed - ${error.message}`);
+          } else {
+            return;
+          }
         }
-    });
 
-    // Register the launch terminal command
-    let launchTerminalCommand = vscode.commands.registerCommand('codeforge.launchTerminal', async function () {
-        try {
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            if (!workspaceFolder) {
-                vscode.window.showErrorMessage('CodeForge: No workspace folder is open');
-                return;
-            }
+        // Create a new terminal
+        // Get configuration
+        const config = vscode.workspace.getConfiguration("codeforge");
+        const dockerCommand = config.get("dockerCommand", "docker");
+        const workspaceMount = config.get("workspaceMount", "/workspace");
+        const removeAfterRun = config.get("removeContainersAfterRun", true);
+        const defaultShell = config.get("defaultShell", "/bin/bash");
+        const additionalArgs = config.get("additionalDockerRunArgs", []);
 
-            const workspacePath = workspaceFolder.uri.fsPath;
-            const containerName = dockerOperations.generateContainerName(workspacePath);
+        const shellArgs = ["run", "-it"];
 
-            // Check if Docker image exists
-            const imageExists = await dockerOperations.checkImageExists(containerName);
-            if (!imageExists) {
-                const result = await vscode.window.showWarningMessage(
-                    'CodeForge: Docker image not found. Would you like to build it now?',
-                    'Yes', 'No'
-                );
-                if (result === 'Yes') {
-                    await vscode.commands.executeCommand('codeforge.buildEnvironment');
-                    // Check again after build
-                    const imageExistsAfterBuild = await dockerOperations.checkImageExists(containerName);
-                    if (!imageExistsAfterBuild) {
-                        return;
-                    }
-                } else {
-                    return;
-                }
-            }
-
-            // Create a new terminal
-            // Get configuration
-            const config = vscode.workspace.getConfiguration('codeforge');
-            const dockerCommand = config.get('dockerCommand', 'docker');
-            const workspaceMount = config.get('workspaceMount', '/workspace');
-            const removeAfterRun = config.get('removeContainersAfterRun', true);
-            const defaultShell = config.get('defaultShell', '/bin/bash');
-            const additionalArgs = config.get('additionalDockerRunArgs', []);
-
-            const shellArgs = [
-                'run',
-                '-it'
-            ];
-
-            if (removeAfterRun) {
-                shellArgs.push('--rm');
-            }
-
-            if (config.get('mountWorkspace', true)) {
-                shellArgs.push('-v', `${workspacePath}:${workspaceMount}`);
-                shellArgs.push('-w', workspaceMount);
-            }
-
-            shellArgs.push(...additionalArgs);
-            shellArgs.push(containerName);
-            shellArgs.push(defaultShell);
-
-            const terminal = vscode.window.createTerminal({
-                name: `CodeForge: ${path.basename(workspacePath)}`,
-                shellPath: dockerCommand,
-                shellArgs: shellArgs
-            });
-
-            terminal.show();
-            outputChannel.appendLine(`Launched terminal in container: ${containerName}`);
-        } catch (error) {
-            outputChannel.appendLine(`Error: ${error.message}`);
-            outputChannel.show();
-            vscode.window.showErrorMessage(`CodeForge: Failed to launch terminal - ${error.message}`);
+        if (removeAfterRun) {
+          shellArgs.push("--rm");
         }
-    });
 
-    // Register the run command
-    let runCommandCommand = vscode.commands.registerCommand('codeforge.runCommand', async function () {
-        try {
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            if (!workspaceFolder) {
-                vscode.window.showErrorMessage('CodeForge: No workspace folder is open');
-                return;
-            }
-
-            const workspacePath = workspaceFolder.uri.fsPath;
-            const containerName = dockerOperations.generateContainerName(workspacePath);
-
-            // Check if Docker image exists
-            const imageExists = await dockerOperations.checkImageExists(containerName);
-            if (!imageExists) {
-                const result = await vscode.window.showWarningMessage(
-                    'CodeForge: Docker image not found. Would you like to build it now?',
-                    'Yes', 'No'
-                );
-                if (result === 'Yes') {
-                    await vscode.commands.executeCommand('codeforge.buildEnvironment');
-                    // Check again after build
-                    const imageExistsAfterBuild = await dockerOperations.checkImageExists(containerName);
-                    if (!imageExistsAfterBuild) {
-                        return;
-                    }
-                } else {
-                    return;
-                }
-            }
-
-            // Prompt user for command
-            const command = await vscode.window.showInputBox({
-                prompt: 'Enter command to run in container',
-                placeHolder: 'e.g., ls -la, python script.py, make build'
-            });
-
-            if (!command) {
-                return;
-            }
-
-            outputChannel.appendLine(`Running command in container: ${command}`);
-            
-            // Get configuration
-            const config = vscode.workspace.getConfiguration('codeforge');
-            const dockerCommand = config.get('dockerCommand', 'docker');
-            const workspaceMount = config.get('workspaceMount', '/workspace');
-            const removeAfterRun = config.get('removeContainersAfterRun', true);
-            const defaultShell = config.get('defaultShell', '/bin/bash');
-            const additionalArgs = config.get('additionalDockerRunArgs', []);
-            const showOutput = config.get('showOutputChannel', true);
-
-            if (showOutput) {
-                outputChannel.show();
-            }
-
-            // We need to spawn the process with pipe stdio to capture output
-            const { spawn } = require('child_process');
-            const dockerArgs = ['run'];
-            
-            if (removeAfterRun) {
-                dockerArgs.push('--rm');
-            }
-
-            if (config.get('mountWorkspace', true)) {
-                dockerArgs.push('-v', `${workspacePath}:${workspaceMount}`);
-                dockerArgs.push('-w', workspaceMount);
-            }
-
-            dockerArgs.push(...additionalArgs);
-            dockerArgs.push(containerName);
-            dockerArgs.push(defaultShell, '-c', command);
-
-            const dockerProcess = spawn(dockerCommand, dockerArgs, {
-                stdio: ['ignore', 'pipe', 'pipe']
-            });
-
-            // Capture output
-            dockerProcess.stdout.on('data', (data) => {
-                outputChannel.append(data.toString());
-            });
-
-            dockerProcess.stderr.on('data', (data) => {
-                outputChannel.append(data.toString());
-            });
-
-            dockerProcess.on('close', (code) => {
-                if (code === 0) {
-                    outputChannel.appendLine(`\nCommand completed successfully`);
-                    vscode.window.showInformationMessage('CodeForge: Command completed successfully');
-                } else {
-                    outputChannel.appendLine(`\nCommand failed with exit code ${code}`);
-                    vscode.window.showErrorMessage(`CodeForge: Command failed with exit code ${code}`);
-                }
-            });
-
-            dockerProcess.on('error', (error) => {
-                outputChannel.appendLine(`\nError: ${error.message}`);
-                vscode.window.showErrorMessage(`CodeForge: Failed to run command - ${error.message}`);
-            });
-        } catch (error) {
-            outputChannel.appendLine(`Error: ${error.message}`);
-            outputChannel.show();
-            vscode.window.showErrorMessage(`CodeForge: Failed to run command - ${error.message}`);
+        if (config.get("mountWorkspace", true)) {
+          shellArgs.push("-v", `${workspacePath}:${workspaceMount}`);
+          shellArgs.push("-w", workspaceMount);
         }
-    });
 
-    // Add all commands to subscriptions
-    context.subscriptions.push(initializeCommand);
-    context.subscriptions.push(buildEnvironmentCommand);
-    context.subscriptions.push(launchTerminalCommand);
-    context.subscriptions.push(runCommandCommand);
+        shellArgs.push(...additionalArgs);
+        shellArgs.push(containerName);
+        shellArgs.push(defaultShell);
 
-    // Register check Docker command (not shown in command palette)
-    let checkDockerCommand = vscode.commands.registerCommand('codeforge.checkDocker', async function () {
-        const available = await checkDockerAvailable();
-        if (available) {
-            vscode.window.showInformationMessage('CodeForge: Docker is installed and running properly!');
-        } else {
-            vscode.window.showErrorMessage('CodeForge: Docker is not available. Please ensure Docker is installed and running.');
+        const terminal = vscode.window.createTerminal({
+          name: `CodeForge: ${path.basename(workspacePath)}`,
+          shellPath: dockerCommand,
+          shellArgs: shellArgs,
+        });
+
+        terminal.show();
+        outputChannel.appendLine(
+          `Launched terminal in container: ${containerName}`,
+        );
+      } catch (error) {
+        outputChannel.appendLine(`Error: ${error.message}`);
+        outputChannel.show();
+        vscode.window.showErrorMessage(
+          `CodeForge: Failed to launch terminal - ${error.message}`,
+        );
+      }
+    },
+  );
+
+  // Register the run command
+  let runCommandCommand = vscode.commands.registerCommand(
+    "codeforge.runCommand",
+    async function () {
+      try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+          vscode.window.showErrorMessage(
+            "CodeForge: No workspace folder is open",
+          );
+          return;
         }
-    });
-    context.subscriptions.push(checkDockerCommand);
+
+        const workspacePath = workspaceFolder.uri.fsPath;
+        const containerName =
+          dockerOperations.generateContainerName(workspacePath);
+
+        // Check if Docker image exists
+        const imageExists =
+          await dockerOperations.checkImageExists(containerName);
+        if (!imageExists) {
+          const result = await vscode.window.showWarningMessage(
+            "CodeForge: Docker image not found. Would you like to build it now?",
+            "Yes",
+            "No",
+          );
+          if (result === "Yes") {
+            await vscode.commands.executeCommand("codeforge.buildEnvironment");
+            // Check again after build
+            const imageExistsAfterBuild =
+              await dockerOperations.checkImageExists(containerName);
+            if (!imageExistsAfterBuild) {
+              return;
+            }
+          } else {
+            return;
+          }
+        }
+
+        // Prompt user for command
+        const command = await vscode.window.showInputBox({
+          prompt: "Enter command to run in container",
+          placeHolder: "e.g., ls -la, python script.py, make build",
+        });
+
+        if (!command) {
+          return;
+        }
+
+        outputChannel.appendLine(`Running command in container: ${command}`);
+
+        // Get configuration
+        const config = vscode.workspace.getConfiguration("codeforge");
+        const dockerCommand = config.get("dockerCommand", "docker");
+        const workspaceMount = config.get("workspaceMount", "/workspace");
+        const removeAfterRun = config.get("removeContainersAfterRun", true);
+        const defaultShell = config.get("defaultShell", "/bin/bash");
+        const additionalArgs = config.get("additionalDockerRunArgs", []);
+        const showOutput = config.get("showOutputChannel", true);
+
+        if (showOutput) {
+          outputChannel.show();
+        }
+
+        // We need to spawn the process with pipe stdio to capture output
+        const { spawn } = require("child_process");
+        const dockerArgs = ["run"];
+
+        if (removeAfterRun) {
+          dockerArgs.push("--rm");
+        }
+
+        if (config.get("mountWorkspace", true)) {
+          dockerArgs.push("-v", `${workspacePath}:${workspaceMount}`);
+          dockerArgs.push("-w", workspaceMount);
+        }
+
+        dockerArgs.push(...additionalArgs);
+        dockerArgs.push(containerName);
+        dockerArgs.push(defaultShell, "-c", command);
+
+        const dockerProcess = spawn(dockerCommand, dockerArgs, {
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        // Capture output
+        dockerProcess.stdout.on("data", (data) => {
+          outputChannel.append(data.toString());
+        });
+
+        dockerProcess.stderr.on("data", (data) => {
+          outputChannel.append(data.toString());
+        });
+
+        dockerProcess.on("close", (code) => {
+          if (code === 0) {
+            outputChannel.appendLine(`\nCommand completed successfully`);
+            vscode.window.showInformationMessage(
+              "CodeForge: Command completed successfully",
+            );
+          } else {
+            outputChannel.appendLine(`\nCommand failed with exit code ${code}`);
+            vscode.window.showErrorMessage(
+              `CodeForge: Command failed with exit code ${code}`,
+            );
+          }
+        });
+
+        dockerProcess.on("error", (error) => {
+          outputChannel.appendLine(`\nError: ${error.message}`);
+          vscode.window.showErrorMessage(
+            `CodeForge: Failed to run command - ${error.message}`,
+          );
+        });
+      } catch (error) {
+        outputChannel.appendLine(`Error: ${error.message}`);
+        outputChannel.show();
+        vscode.window.showErrorMessage(
+          `CodeForge: Failed to run command - ${error.message}`,
+        );
+      }
+    },
+  );
+
+  // Add all commands to subscriptions
+  context.subscriptions.push(initializeCommand);
+  context.subscriptions.push(buildEnvironmentCommand);
+  context.subscriptions.push(launchTerminalCommand);
+  context.subscriptions.push(runCommandCommand);
+
+  // Register check Docker command (not shown in command palette)
+  let checkDockerCommand = vscode.commands.registerCommand(
+    "codeforge.checkDocker",
+    async function () {
+      const available = await checkDockerAvailable();
+      if (available) {
+        vscode.window.showInformationMessage(
+          "CodeForge: Docker is installed and running properly!",
+        );
+      } else {
+        vscode.window.showErrorMessage(
+          "CodeForge: Docker is not available. Please ensure Docker is installed and running.",
+        );
+      }
+    },
+  );
+  context.subscriptions.push(checkDockerCommand);
 }
 
 /**
@@ -377,32 +447,32 @@ function activate(context) {
  * @returns {Promise<boolean>} True if Docker is available, false otherwise
  */
 async function checkDockerAvailable() {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
+  const { exec } = require("child_process");
+  const { promisify } = require("util");
+  const execAsync = promisify(exec);
 
-    try {
-        const config = vscode.workspace.getConfiguration('codeforge');
-        const dockerCommand = config.get('dockerCommand', 'docker');
-        
-        await execAsync(`${dockerCommand} --version`);
-        // Also check if Docker daemon is running
-        await execAsync(`${dockerCommand} ps`);
-        return true;
-    } catch (error) {
-        outputChannel.appendLine(`Docker check failed: ${error.message}`);
-        return false;
-    }
+  try {
+    const config = vscode.workspace.getConfiguration("codeforge");
+    const dockerCommand = config.get("dockerCommand", "docker");
+
+    await execAsync(`${dockerCommand} --version`);
+    // Also check if Docker daemon is running
+    await execAsync(`${dockerCommand} ps`);
+    return true;
+  } catch (error) {
+    outputChannel.appendLine(`Docker check failed: ${error.message}`);
+    return false;
+  }
 }
 
 function deactivate() {
-    console.log('CodeForge extension is now deactivated');
-    if (outputChannel) {
-        outputChannel.dispose();
-    }
+  console.log("CodeForge extension is now deactivated");
+  if (outputChannel) {
+    outputChannel.dispose();
+  }
 }
 
 module.exports = {
-    activate,
-    deactivate
-}
+  activate,
+  deactivate,
+};
