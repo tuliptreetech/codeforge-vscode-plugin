@@ -1,6 +1,6 @@
 # CodeForge
 
-Docker container management for development environments.
+Docker container management for development environments by Tulip Tree Technology.
 
 ## Features
 
@@ -47,4 +47,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This extension is licensed under the MIT License.
+This extension is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## About
+
+CodeForge is developed and maintained by Tulip Tree Technology.

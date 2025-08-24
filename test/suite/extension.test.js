@@ -22,11 +22,11 @@ suite("CodeForge Extension Test Suite", () => {
   });
 
   test("Extension should be present", () => {
-    assert.ok(vscode.extensions.getExtension("codeforge.codeforge"));
+    assert.ok(vscode.extensions.getExtension("tuliptreetech.codeforge"));
   });
 
   test("Should register all commands", async () => {
-    const extension = vscode.extensions.getExtension("codeforge.codeforge");
+    const extension = vscode.extensions.getExtension("tuliptreetech.codeforge");
     await extension.activate();
 
     // Check if all commands are registered
@@ -223,7 +223,7 @@ suite("CodeForge Extension Test Suite", () => {
 
   suite("Integration Tests", () => {
     test("Extension activation should create output channel", async () => {
-      const extension = vscode.extensions.getExtension("codeforge.codeforge");
+      const extension = vscode.extensions.getExtension("tuliptreetech.codeforge");
       const context = await extension.activate();
 
       // Check if output channel was created
