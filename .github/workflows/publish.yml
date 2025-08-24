@@ -13,6 +13,9 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      CI: true
+      DISPLAY: ':99.0'
 
     steps:
       - name: Checkout
@@ -29,6 +32,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb
 
+      - name: Start xvfb
+        run: |
+          export DISPLAY=:99.0
+          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+          sleep 3
+
       - name: Install dependencies
         run: npm ci
 
@@ -42,12 +51,12 @@ jobs:
           echo "Updated version to ${{ github.event.inputs.version }}"
 
       - name: Package extension
-        run: xvfb-run -a vsce package
+        run: vsce package
 
       - name: Publish to VS Code Marketplace
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: xvfb-run -a vsce publish -p $VSCE_PAT
+        run: vsce publish -p $VSCE_PAT
 
       - name: Publish to Open VSX Registry
         continue-on-error: true
