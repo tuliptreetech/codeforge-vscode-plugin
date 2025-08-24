@@ -1,14 +1,20 @@
-name: Publish to VS Code Marketplace
+name: Publish Extension
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
         description: "Version to publish (e.g., 1.0.0)"
         required: true
         type: string
+      create_release:
+        description: "Create GitHub Release after publishing"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   publish:
@@ -16,6 +22,9 @@ jobs:
     env:
       CI: true
       DISPLAY: ":99.0"
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      vsix_path: ${{ steps.get_vsix.outputs.vsix_path }}
 
     steps:
       - name: Checkout
@@ -39,8 +48,25 @@ jobs:
           npm version ${{ github.event.inputs.version }} --no-git-tag-version
           echo "Updated version to ${{ github.event.inputs.version }}"
 
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            # Extract version from tag
+            VERSION=${GITHUB_REF#refs/tags/v}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
       - name: Package extension (without tests)
         run: vsce package --no-dependencies
+
+      - name: Get VSIX filename
+        id: get_vsix
+        run: |
+          VSIX_FILE=$(ls *.vsix | head -n 1)
+          echo "vsix_path=$VSIX_FILE" >> $GITHUB_OUTPUT
 
       - name: Publish to VS Code Marketplace
         env:
@@ -60,3 +86,49 @@ jobs:
         with:
           name: published-vsix
           path: "*.vsix"
+
+  create-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    # This job requires manual approval via the 'production' environment
+    # Configure this environment in your repository settings with protection rules
+    environment: production
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: published-vsix
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.publish.outputs.version }}
+          name: Release v${{ needs.publish.outputs.version }}
+          body: |
+            ## 🎉 Release v${{ needs.publish.outputs.version }}
+            
+            This release has been published to:
+            - ✅ VS Code Marketplace
+            - ✅ Open VSX Registry
+            
+            ### Installation
+            
+            You can install this extension directly from:
+            - [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=YOUR-PUBLISHER-ID.YOUR-EXTENSION-ID)
+            - [Open VSX Registry](https://open-vsx.org/extension/YOUR-PUBLISHER-ID/YOUR-EXTENSION-ID)
+            
+            Or download the VSIX file attached to this release and install it manually.
+            
+            ### What's Changed
+            
+            Please see the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          files: |
+            *.vsix
+          draft: false
+          prerelease: false
+          generate_release_notes: true
