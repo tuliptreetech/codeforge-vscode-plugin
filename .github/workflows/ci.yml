@@ -30,7 +30,16 @@ jobs:
         run: npm ci
 
       - name: Run tests
+        if: runner.os != 'Linux'
         run: npm test
+        env:
+          VSCODE_VERSION: ${{ matrix.vscode-version }}
+
+      - name: Run tests on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y xvfb
+          xvfb-run -a npm test
         env:
           VSCODE_VERSION: ${{ matrix.vscode-version }}
 
