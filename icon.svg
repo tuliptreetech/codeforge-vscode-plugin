@@ -1,0 +1,32 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" rx="16" fill="#1e1e1e"/>
+  
+  <!-- Docker whale outline -->
+  <g transform="translate(20, 30)">
+    <!-- Whale body -->
+    <path d="M 10 40 Q 10 20, 30 20 L 60 20 Q 80 20, 80 40 L 80 50 Q 80 60, 70 60 L 20 60 Q 10 60, 10 50 Z" 
+          fill="#2496ED" stroke="#1e1e1e" stroke-width="2"/>
+    
+    <!-- Container blocks on whale -->
+    <rect x="20" y="30" width="10" height="10" fill="#ffffff" opacity="0.9"/>
+    <rect x="35" y="30" width="10" height="10" fill="#ffffff" opacity="0.9"/>
+    <rect x="50" y="30" width="10" height="10" fill="#ffffff" opacity="0.9"/>
+    <rect x="20" y="45" width="10" height="10" fill="#ffffff" opacity="0.9"/>
+    <rect x="35" y="45" width="10" height="10" fill="#ffffff" opacity="0.9"/>
+    <rect x="50" y="45" width="10" height="10" fill="#ffffff" opacity="0.9"/>
+    
+    <!-- Whale tail -->
+    <path d="M 70 55 Q 85 55, 85 45 Q 85 55, 70 55" fill="#2496ED" stroke="#1e1e1e" stroke-width="2"/>
+  </g>
+  
+  <!-- Hammer icon (forge) -->
+  <g transform="translate(55, 65)">
+    <rect x="20" y="10" width="30" height="8" rx="2" fill="#FF6B6B" transform="rotate(-45 35 14)"/>
+    <rect x="32" y="22" width="6" height="25" rx="1" fill="#4ECDC4" transform="rotate(-45 35 34.5)"/>
+    <circle cx="35" cy="14" r="4" fill="#FFD93D"/>
+  </g>
+  
+  <!-- Code brackets -->
+  <text x="10" y="25" font-family="monospace" font-size="20" fill="#4ECDC4" font-weight="bold">&lt;/&gt;</text>
+</svg>

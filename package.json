@@ -1,0 +1,131 @@
+{
+  "name": "codeforge",
+  "displayName": "CodeForge",
+  "description": "Docker container management for development environments",
+  "publisher": "codeforge",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": ["Other", "Programming Languages", "Debuggers"],
+  "keywords": ["docker", "container", "development", "environment", "devcontainer"],
+  "homepage": "https://github.com/codeforge/codeforge-vscode-plugin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codeforge/codeforge-vscode-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/codeforge/codeforge-vscode-plugin/issues"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "CodeForge Team"
+  },
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "badges": [
+    {
+      "url": "https://img.shields.io/badge/Docker-Required-blue",
+      "href": "https://www.docker.com/",
+      "description": "Requires Docker"
+    }
+  ],
+  "activationEvents": [
+    "onCommand:codeforge.initialize",
+    "onCommand:codeforge.buildEnvironment",
+    "onCommand:codeforge.launchTerminal",
+    "onCommand:codeforge.runCommand"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codeforge.initialize",
+        "title": "CodeForge: Initialize CodeForge"
+      },
+      {
+        "command": "codeforge.buildEnvironment",
+        "title": "CodeForge: Build Docker Environment"
+      },
+      {
+        "command": "codeforge.launchTerminal",
+        "title": "CodeForge: Launch Terminal in Container"
+      },
+      {
+        "command": "codeforge.runCommand",
+        "title": "CodeForge: Run Command in Container"
+      }
+    ],
+    "configuration": {
+      "title": "CodeForge",
+      "properties": {
+        "codeforge.dockerCommand": {
+          "type": "string",
+          "default": "docker",
+          "description": "The Docker command to use (e.g., 'docker', 'podman')"
+        },
+        "codeforge.defaultBaseImage": {
+          "type": "string",
+          "default": "ubuntu:24.04",
+          "description": "Default base image for new Dockerfiles"
+        },
+        "codeforge.mountWorkspace": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically mount the workspace directory in containers"
+        },
+        "codeforge.workspaceMount": {
+          "type": "string",
+          "default": "/workspace",
+          "description": "Mount point for the workspace directory inside containers"
+        },
+        "codeforge.removeContainersAfterRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically remove containers after they exit"
+        },
+        "codeforge.additionalDockerRunArgs": {
+          "type": "array",
+          "default": [],
+          "description": "Additional arguments to pass to 'docker run' commands",
+          "items": {
+            "type": "string"
+          }
+        },
+        "codeforge.showOutputChannel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically show the output channel when running commands"
+        },
+        "codeforge.defaultShell": {
+          "type": "string",
+          "default": "/bin/bash",
+          "description": "Default shell to use in containers"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node ./test/runTest.js",
+    "pretest": "npm run compile",
+    "compile": "echo 'No compilation needed for JavaScript'",
+    "package": "vsce package",
+    "publish": "vsce publish",
+    "vscode:prepublish": "npm run test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "@types/mocha": "^10.0.1",
+    "@types/glob": "^8.0.0",
+    "mocha": "^10.2.0",
+    "sinon": "^15.0.1",
+    "glob": "^8.0.3",
+    "@vscode/test-electron": "^2.2.0",
+    "@vscode/vsce": "^2.15.0"
+  },
+  "extensionPack": [],
+  "extensionDependencies": []
+}
