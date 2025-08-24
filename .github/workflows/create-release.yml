@@ -1,0 +1,85 @@
+name: Create GitHub Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to create release for (e.g., 1.0.0)"
+        required: true
+        type: string
+      draft:
+        description: "Create as draft release"
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    # Optional: Add environment protection if you want additional approval
+    # environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "24.x"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Update version
+        run: |
+          npm version ${{ github.event.inputs.version }} --no-git-tag-version
+          echo "Updated version to ${{ github.event.inputs.version }}"
+
+      - name: Package extension
+        run: vsce package --no-dependencies
+
+      - name: Get VSIX filename
+        id: get_vsix
+        run: |
+          VSIX_FILE=$(ls *.vsix | head -n 1)
+          echo "vsix_path=$VSIX_FILE" >> $GITHUB_OUTPUT
+          echo "Found VSIX: $VSIX_FILE"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: Release v${{ github.event.inputs.version }}
+          body: |
+            ## 🎉 Release v${{ github.event.inputs.version }}
+            
+            This release has been published to:
+            - ✅ VS Code Marketplace
+            - ✅ Open VSX Registry
+            
+            ### Installation
+            
+            You can install this extension directly from:
+            - [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=YOUR-PUBLISHER-ID.YOUR-EXTENSION-ID)
+            - [Open VSX Registry](https://open-vsx.org/extension/YOUR-PUBLISHER-ID/YOUR-EXTENSION-ID)
+            
+            Or download the VSIX file attached to this release and install it manually.
+            
+            ### What's Changed
+            
+            Please see the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          files: |
+            *.vsix
+          draft: ${{ github.event.inputs.draft }}
+          prerelease: ${{ github.event.inputs.prerelease }}
+          generate_release_notes: true
