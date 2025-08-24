@@ -246,7 +246,13 @@ function runDockerCommand(workspaceFolder, imageName, command, options = {}) {
  * @param {Object} options - Options for running the container
  * @returns {ChildProcess} The spawned child process with piped stdio for output capture
  */
-function runDockerCommandWithOutput(workspaceFolder, imageName, command, shell = "/bin/bash", options = {}) {
+function runDockerCommandWithOutput(
+  workspaceFolder,
+  imageName,
+  command,
+  shell = "/bin/bash",
+  options = {},
+) {
   const {
     removeAfterRun = true,
     additionalArgs = [],
@@ -274,7 +280,11 @@ function runDockerCommandWithOutput(workspaceFolder, imageName, command, shell =
   // Add the shell command
   dockerArgs.push(shell, "-c", command);
 
-  console.log("Running Docker command with output capture:", dockerCommand, dockerArgs.join(" "));
+  console.log(
+    "Running Docker command with output capture:",
+    dockerCommand,
+    dockerArgs.join(" "),
+  );
 
   // Spawn the Docker process with piped stdio for output capture
   const dockerProcess = spawn(dockerCommand, dockerArgs, {
@@ -299,7 +309,7 @@ function generateDockerRunArgs(workspaceFolder, imageName, options = {}) {
     mountWorkspace = true,
     workingDir = workspaceFolder,
     additionalArgs = [],
-    shell = "/bin/bash"
+    shell = "/bin/bash",
   } = options;
 
   const dockerArgs = ["run"];
@@ -336,7 +346,7 @@ function generateDockerRunArgs(workspaceFolder, imageName, options = {}) {
  * @param {string} dockerCommand - The docker command to use (default: 'docker')
  * @returns {Promise<boolean>} True if Docker is available, false otherwise
  */
-async function checkDockerAvailable(dockerCommand = 'docker') {
+async function checkDockerAvailable(dockerCommand = "docker") {
   try {
     // Check if Docker command exists and get version
     await execAsync(`${dockerCommand} --version`);
