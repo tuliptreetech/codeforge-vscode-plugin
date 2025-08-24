@@ -126,14 +126,15 @@
     "vscode:prepublish": "npm run test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.74.0",
-    "@types/node": "24.x",
     "@types/mocha": "^10.0.1",
-    "mocha": "^10.2.0",
-    "sinon": "^21.0.0",
-    "glob": "^11.0.3",
+    "@types/node": "24.x",
+    "@types/vscode": "^1.74.0",
     "@vscode/test-electron": "^2.2.0",
-    "@vscode/vsce": "^2.15.0"
+    "@vscode/vsce": "^2.15.0",
+    "glob": "^11.0.3",
+    "mocha": "^10.2.0",
+    "prettier": "^3.6.2",
+    "sinon": "^21.0.0"
   },
   "extensionPack": [],
   "extensionDependencies": []

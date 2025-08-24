@@ -223,7 +223,9 @@ suite("CodeForge Extension Test Suite", () => {
 
   suite("Integration Tests", () => {
     test("Extension activation should create output channel", async () => {
-      const extension = vscode.extensions.getExtension("tuliptreetech.codeforge");
+      const extension = vscode.extensions.getExtension(
+        "tuliptreetech.codeforge",
+      );
       const context = await extension.activate();
 
       // Check if output channel was created
