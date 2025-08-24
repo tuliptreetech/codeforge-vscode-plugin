@@ -177,7 +177,7 @@ function buildDockerImage(workspaceFolder, imageName) {
  * @param {boolean} options.interactive - Whether to run in interactive mode (default: false)
  * @param {boolean} options.tty - Whether to allocate a pseudo-TTY (default: false)
  * @param {boolean} options.removeAfterRun - Whether to remove the container after it exits (default: true)
- * @param {string} options.workingDir - Working directory inside the container (default: /workspace)
+ * @param {string} options.workingDir - Working directory inside the container (default: same as host workspaceFolder path)
  * @param {Array<string>} options.additionalArgs - Additional arguments to pass to docker run
  * @returns {ChildProcess} The spawned child process
  */
@@ -186,8 +186,11 @@ function runDockerCommand(workspaceFolder, imageName, command, options = {}) {
     interactive = false,
     tty = false,
     removeAfterRun = true,
-    workingDir = "/workspace",
+    workingDir = workspaceFolder, // Use the host workspace folder path as default
     additionalArgs = [],
+    stdio = "inherit", // Allow customizing stdio
+    dockerCommand = "docker", // Allow specifying the docker command
+    mountWorkspace = true, // Allow disabling workspace mounting
   } = options;
 
   const dockerArgs = ["run"];
@@ -199,11 +202,12 @@ function runDockerCommand(workspaceFolder, imageName, command, options = {}) {
   // Remove container after run if requested
   if (removeAfterRun) dockerArgs.push("--rm");
 
-  // Mount the workspace folder
-  dockerArgs.push("-v", `${workspaceFolder}:${workingDir}`);
-
-  // Set working directory
-  dockerArgs.push("-w", workingDir);
+  // Mount the workspace folder to the same path inside the container
+  if (mountWorkspace) {
+    dockerArgs.push("-v", `${workspaceFolder}:${workspaceFolder}`);
+    // Set working directory (defaults to the workspace folder path)
+    dockerArgs.push("-w", workingDir);
+  }
 
   // Add any additional arguments
   dockerArgs.push(...additionalArgs);
@@ -219,11 +223,11 @@ function runDockerCommand(workspaceFolder, imageName, command, options = {}) {
     dockerArgs.push(...commandParts);
   }
 
-  console.log("Running Docker command:", "docker", dockerArgs.join(" "));
+  console.log("Running Docker command:", dockerCommand, dockerArgs.join(" "));
 
   // Spawn the Docker process
-  const dockerProcess = spawn("docker", dockerArgs, {
-    stdio: "inherit",
+  const dockerProcess = spawn(dockerCommand, dockerArgs, {
+    stdio: stdio,
   });
 
   dockerProcess.on("error", (error) => {
@@ -233,10 +237,125 @@ function runDockerCommand(workspaceFolder, imageName, command, options = {}) {
   return dockerProcess;
 }
 
+/**
+ * Runs a command in a Docker container with output capture support
+ * @param {string} workspaceFolder - The path to the workspace folder to mount
+ * @param {string} imageName - The name of the Docker image to use
+ * @param {string} command - The command to run in the container
+ * @param {string} shell - The shell to use for running the command
+ * @param {Object} options - Options for running the container
+ * @returns {ChildProcess} The spawned child process with piped stdio for output capture
+ */
+function runDockerCommandWithOutput(workspaceFolder, imageName, command, shell = "/bin/bash", options = {}) {
+  const {
+    removeAfterRun = true,
+    additionalArgs = [],
+    dockerCommand = "docker",
+    mountWorkspace = true,
+  } = options;
+
+  const dockerArgs = ["run"];
+
+  // Remove container after run if requested
+  if (removeAfterRun) dockerArgs.push("--rm");
+
+  // Mount the workspace folder to the same path inside the container
+  if (mountWorkspace) {
+    dockerArgs.push("-v", `${workspaceFolder}:${workspaceFolder}`);
+    dockerArgs.push("-w", workspaceFolder);
+  }
+
+  // Add any additional arguments
+  dockerArgs.push(...additionalArgs);
+
+  // Add the image name
+  dockerArgs.push(imageName);
+
+  // Add the shell command
+  dockerArgs.push(shell, "-c", command);
+
+  console.log("Running Docker command with output capture:", dockerCommand, dockerArgs.join(" "));
+
+  // Spawn the Docker process with piped stdio for output capture
+  const dockerProcess = spawn(dockerCommand, dockerArgs, {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  return dockerProcess;
+}
+
+/**
+ * Generates Docker run arguments for terminal usage
+ * @param {string} workspaceFolder - The path to the workspace folder
+ * @param {string} imageName - The name of the Docker image
+ * @param {Object} options - Options for the Docker run command
+ * @returns {Array<string>} Array of arguments for docker run command
+ */
+function generateDockerRunArgs(workspaceFolder, imageName, options = {}) {
+  const {
+    interactive = true,
+    tty = true,
+    removeAfterRun = true,
+    mountWorkspace = true,
+    workingDir = workspaceFolder,
+    additionalArgs = [],
+    shell = "/bin/bash"
+  } = options;
+
+  const dockerArgs = ["run"];
+
+  // Add interactive and TTY flags
+  if (interactive) dockerArgs.push("-i");
+  if (tty) dockerArgs.push("-t");
+
+  // Remove container after run if requested
+  if (removeAfterRun) dockerArgs.push("--rm");
+
+  // Mount the workspace folder
+  if (mountWorkspace) {
+    dockerArgs.push("-v", `${workspaceFolder}:${workspaceFolder}`);
+    dockerArgs.push("-w", workingDir);
+  }
+
+  // Add any additional arguments
+  dockerArgs.push(...additionalArgs);
+
+  // Add the image name
+  dockerArgs.push(imageName);
+
+  // Add the shell
+  if (shell) {
+    dockerArgs.push(shell);
+  }
+
+  return dockerArgs;
+}
+
+/**
+ * Check if Docker is available on the system
+ * @param {string} dockerCommand - The docker command to use (default: 'docker')
+ * @returns {Promise<boolean>} True if Docker is available, false otherwise
+ */
+async function checkDockerAvailable(dockerCommand = 'docker') {
+  try {
+    // Check if Docker command exists and get version
+    await execAsync(`${dockerCommand} --version`);
+    // Also check if Docker daemon is running
+    await execAsync(`${dockerCommand} ps`);
+    return true;
+  } catch (error) {
+    console.error(`Docker check failed: ${error.message}`);
+    return false;
+  }
+}
+
 // Export all functions
 module.exports = {
   generateContainerName,
   checkImageExists,
   buildDockerImage,
   runDockerCommand,
+  runDockerCommandWithOutput,
+  generateDockerRunArgs,
+  checkDockerAvailable,
 };
