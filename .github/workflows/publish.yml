@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CI: true
-      DISPLAY: ':99.0'
+      DISPLAY: ":99.0"
 
     steps:
       - name: Checkout
