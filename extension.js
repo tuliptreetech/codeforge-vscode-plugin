@@ -230,7 +230,10 @@ function activate(context) {
           dockerOperations.generateContainerName(workspacePath);
 
         // Auto-initialize and build if needed
-        const initialized = await ensureInitializedAndBuilt(workspacePath, containerName);
+        const initialized = await ensureInitializedAndBuilt(
+          workspacePath,
+          containerName,
+        );
         if (!initialized) {
           return;
         }
@@ -255,8 +258,8 @@ function activate(context) {
             mountWorkspace: mountWorkspace,
             workingDir: workspacePath,
             additionalArgs: additionalArgs,
-            shell: defaultShell
-          }
+            shell: defaultShell,
+          },
         );
 
         const terminal = vscode.window.createTerminal({
@@ -297,7 +300,10 @@ function activate(context) {
           dockerOperations.generateContainerName(workspacePath);
 
         // Auto-initialize and build if needed
-        const initialized = await ensureInitializedAndBuilt(workspacePath, containerName);
+        const initialized = await ensureInitializedAndBuilt(
+          workspacePath,
+          containerName,
+        );
         if (!initialized) {
           return;
         }
@@ -338,7 +344,7 @@ function activate(context) {
             additionalArgs: additionalArgs,
             dockerCommand: dockerCommand,
             mountWorkspace: mountWorkspace,
-          }
+          },
         );
 
         // Capture output
@@ -392,7 +398,8 @@ function activate(context) {
     async function () {
       const config = vscode.workspace.getConfiguration("codeforge");
       const dockerCommand = config.get("dockerCommand", "docker");
-      const available = await dockerOperations.checkDockerAvailable(dockerCommand);
+      const available =
+        await dockerOperations.checkDockerAvailable(dockerCommand);
       if (available) {
         vscode.window.showInformationMessage(
           "CodeForge: Docker is installed and running properly!",
@@ -416,7 +423,7 @@ function activate(context) {
 async function ensureInitializedAndBuilt(workspacePath, containerName) {
   try {
     const dockerfilePath = path.join(workspacePath, ".codeforge", "Dockerfile");
-    
+
     // Check if Dockerfile exists
     let dockerfileExists = false;
     try {
@@ -429,31 +436,35 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
 
     // If Dockerfile doesn't exist, automatically initialize
     if (!dockerfileExists) {
-      outputChannel.appendLine("CodeForge: Dockerfile not found. Automatically initializing...");
+      outputChannel.appendLine(
+        "CodeForge: Dockerfile not found. Automatically initializing...",
+      );
       outputChannel.show();
-      
+
       // Create .codeforge directory
       const codeforgeDir = path.join(workspacePath, ".codeforge");
       await fs.mkdir(codeforgeDir, { recursive: true });
       outputChannel.appendLine(`Created directory: ${codeforgeDir}`);
-      
+
       // Write Dockerfile
       await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
       outputChannel.appendLine(`Created Dockerfile: ${dockerfilePath}`);
-      
+
       vscode.window.showInformationMessage(
-        "CodeForge: Automatically initialized .codeforge directory"
+        "CodeForge: Automatically initialized .codeforge directory",
       );
     }
 
     // Check if Docker image exists
     const imageExists = await dockerOperations.checkImageExists(containerName);
-    
+
     // If image doesn't exist, automatically build it
     if (!imageExists) {
-      outputChannel.appendLine(`CodeForge: Docker image not found. Automatically building ${containerName}...`);
+      outputChannel.appendLine(
+        `CodeForge: Docker image not found. Automatically building ${containerName}...`,
+      );
       outputChannel.show();
-      
+
       // Show progress notification
       await vscode.window.withProgress(
         {
@@ -479,29 +490,31 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
           }
         },
       );
-      
+
       // Verify the image was built successfully
-      const imageExistsAfterBuild = await dockerOperations.checkImageExists(containerName);
+      const imageExistsAfterBuild =
+        await dockerOperations.checkImageExists(containerName);
       if (!imageExistsAfterBuild) {
         outputChannel.appendLine("Error: Docker image build failed");
         vscode.window.showErrorMessage(
-          "CodeForge: Failed to build Docker image automatically"
+          "CodeForge: Failed to build Docker image automatically",
         );
         return false;
       }
     }
-    
+
     return true;
   } catch (error) {
-    outputChannel.appendLine(`Error in ensureInitializedAndBuilt: ${error.message}`);
+    outputChannel.appendLine(
+      `Error in ensureInitializedAndBuilt: ${error.message}`,
+    );
     outputChannel.show();
     vscode.window.showErrorMessage(
-      `CodeForge: Failed to initialize/build automatically - ${error.message}`
+      `CodeForge: Failed to initialize/build automatically - ${error.message}`,
     );
     return false;
   }
 }
-
 
 function deactivate() {
   console.log("CodeForge extension is now deactivated");
