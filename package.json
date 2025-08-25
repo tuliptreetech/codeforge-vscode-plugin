@@ -46,7 +46,9 @@
     "onCommand:codeforge.initialize",
     "onCommand:codeforge.buildEnvironment",
     "onCommand:codeforge.launchTerminal",
-    "onCommand:codeforge.runCommand"
+    "onCommand:codeforge.runCommand",
+    "workspaceContains:.codeforge/Dockerfile",
+    "onTaskType:codeforge"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -66,6 +68,33 @@
       {
         "command": "codeforge.runCommand",
         "title": "CodeForge: Run Command in Container"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "codeforge",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "The command to run in the Docker container"
+          },
+          "label": {
+            "type": "string",
+            "description": "A label for the task"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Additional details about the task"
+          },
+          "interactive": {
+            "type": "boolean",
+            "description": "Whether the task requires interactive input",
+            "default": false
+          }
+        }
       }
     ],
     "configuration": {

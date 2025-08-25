@@ -1,5 +1,6 @@
 const vscode = require("vscode");
 const dockerOperations = require("./dockerOperations");
+const { CodeForgeTaskProvider } = require("./taskProvider");
 const fs = require("fs").promises;
 const path = require("path");
 
@@ -62,11 +63,28 @@ let outputChannel;
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-  console.log("CodeForge extension is now active!");
-
   // Create output channel for CodeForge
   outputChannel = vscode.window.createOutputChannel("CodeForge");
   context.subscriptions.push(outputChannel);
+
+  // Register the task provider
+  try {
+    const taskProvider = new CodeForgeTaskProvider(context, outputChannel);
+    const taskProviderDisposable = vscode.tasks.registerTaskProvider(
+      "codeforge",
+      taskProvider,
+    );
+
+    if (!taskProviderDisposable) {
+      throw new Error("Failed to create task provider disposable");
+    }
+
+    context.subscriptions.push(taskProviderDisposable);
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `CodeForge: Failed to register task provider - ${error.message}`,
+    );
+  }
 
   // Check if Docker is available
   const config = vscode.workspace.getConfiguration("codeforge");
@@ -517,12 +535,14 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
 }
 
 function deactivate() {
-  console.log("CodeForge extension is now deactivated");
+  // Clean up resources
   if (outputChannel) {
     outputChannel.dispose();
   }
 }
 
+// Export the activate and deactivate functions
+// IMPORTANT: VSCode requires these exports to properly activate the extension
 module.exports = {
   activate,
   deactivate,

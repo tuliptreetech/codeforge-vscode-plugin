@@ -1,0 +1,132 @@
+{
+  // Example tasks.json configuration for CodeForge
+  // Place this file in your project's .vscode folder
+  //
+  // IMPORTANT: CodeForge no longer provides default tasks.
+  // You MUST configure your own tasks with the "command" property.
+  // The command will be executed inside your Docker container.
+  "version": "2.0.0",
+  "tasks": [
+    // Example 1: Build a C/C++ project using Make
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Build Project",
+      "command": "make build", // REQUIRED: The command to run in the container
+      "detail": "Builds the project using make in the Docker container",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$gcc"
+    },
+
+    // Example 2: Run Python tests with pytest
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Python Tests",
+      "command": "python3 -m pytest tests/ -v", // REQUIRED: Command to execute
+      "detail": "Runs Python tests with verbose output in the Docker container",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+
+    // Example 3: Run a Node.js development server
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Dev Server",
+      "command": "npm run dev", // REQUIRED: The npm script to run
+      "detail": "Starts the development server in the Docker container",
+      "problemMatcher": []
+    },
+
+    // Example 4: Clean build artifacts
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Clean",
+      "command": "make clean && rm -rf build/", // Can chain multiple commands
+      "detail": "Cleans build artifacts and removes build directory"
+    },
+
+    // Example 5: Run code linter
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Lint Code",
+      "command": "eslint src/**/*.js --fix", // REQUIRED: Linting command
+      "detail": "Runs ESLint on JavaScript files and auto-fixes issues",
+      "problemMatcher": {
+        "owner": "eslint",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.+):(\\d+):(\\d+):\\s+(error|warning)\\s+(.+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    },
+
+    // Example 6: Format code with prettier
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Format Code",
+      "command": "prettier --write '**/*.{js,jsx,ts,tsx,json,css,md}'",
+      "detail": "Formats code files using Prettier"
+    },
+
+    // Example 7: Database migration
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Database Migration",
+      "command": "npm run migrate:latest", // REQUIRED: Migration command
+      "detail": "Runs database migrations to latest version"
+    },
+
+    // Example 8: Generate documentation
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Generate Docs",
+      "command": "jsdoc -c jsdoc.json -r src/ -d docs/api",
+      "detail": "Generates API documentation from source code"
+    },
+
+    // Example 9: Run security audit
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Security Audit",
+      "command": "npm audit --production", // REQUIRED: Audit command
+      "detail": "Checks for security vulnerabilities in dependencies"
+    },
+
+    // Example 10: Custom shell script
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Custom Build Script",
+      "command": "./scripts/build.sh --production", // REQUIRED: Script path
+      "detail": "Runs a custom build script with production flag",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+
+    // Example 11: Install dependencies
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Install Dependencies",
+      "command": "npm ci", // REQUIRED: Install command
+      "detail": "Installs project dependencies from package-lock.json"
+    },
+
+    // Example 12: Run integration tests
+    {
+      "type": "codeforge",
+      "label": "Run in Container: Integration Tests",
+      "command": "npm run test:integration -- --coverage",
+      "detail": "Runs integration tests with code coverage report",
+      "group": "test"
+    }
+  ]
+}
