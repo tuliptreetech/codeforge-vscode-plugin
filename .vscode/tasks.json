@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run in Container",
+      "type": "codeforge",
+      "command": "echo 'Hello from container'",
+      "containerName": "test-container",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      }
+    },
+    {
+      "label": "Run Python Script in Container",
+      "type": "codeforge",
+      "command": "python --version",
+      "containerName": "python-dev",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always"
+      }
+    },
+    {
+      "label": "Run Node.js in Container",
+      "type": "codeforge",
+      "command": "node --version && npm --version",
+      "containerName": "node-app",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Build Project in Container",
+      "type": "codeforge",
+      "command": "make build",
+      "containerName": "build-env",
+      "problemMatcher": ["$gcc"],
+      "group": "build"
+    }
+  ]
+}
