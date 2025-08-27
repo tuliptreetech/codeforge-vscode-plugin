@@ -12,3 +12,8 @@ tsconfig.json
 vsc-extension-quickstart.md
 **/jsconfig.json
 **/*.ts
+.codeforge/**
+.github/**
+docs/**
+icon.png.instructions.md
+icon.svg
