@@ -2,7 +2,7 @@
   "name": "codeforge",
   "displayName": "CodeForge",
   "description": "Docker container management for development environments",
-  "publisher": "TulipTreeTechology",
+  "publisher": "TulipTreeTechnology",
   "version": "0.0.1",
   "icon": "icon.png",
   "engines": {
