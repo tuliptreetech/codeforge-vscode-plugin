@@ -26,11 +26,13 @@ suite("CodeForge Extension Test Suite", () => {
   });
 
   test("Extension should be present", () => {
-    assert.ok(vscode.extensions.getExtension("tuliptreetech.codeforge"));
+    assert.ok(vscode.extensions.getExtension("TulipTreeTechology.codeforge"));
   });
 
   test("Should register all commands", async () => {
-    const extension = vscode.extensions.getExtension("tuliptreetech.codeforge");
+    const extension = vscode.extensions.getExtension(
+      "TulipTreeTechology.codeforge",
+    );
     await extension.activate();
 
     // Check if all commands are registered
@@ -122,17 +124,22 @@ suite("CodeForge Extension Test Suite", () => {
         mkdirStub.calledWith(path.join("/test/workspace", ".codeforge"), {
           recursive: true,
         }),
+        "mkdir should be called with correct path and options",
       );
 
       // Verify the Dockerfile was written
-      assert.ok(writeFileStub.calledOnce);
-      assert.ok(writeFileStub.firstCall.args[0].includes("Dockerfile"));
+      assert.ok(writeFileStub.calledOnce, "writeFile should be called once");
+      assert.ok(
+        writeFileStub.firstCall.args[0].includes("Dockerfile"),
+        "writeFile should be called with Dockerfile path",
+      );
 
       // Verify success message was shown
       assert.ok(
         showInformationMessageStub.calledWith(
           "CodeForge: Successfully initialized .codeforge directory",
         ),
+        "Success message should be shown",
       );
     });
 
@@ -228,7 +235,7 @@ suite("CodeForge Extension Test Suite", () => {
   suite("Integration Tests", () => {
     test("Extension activation should create output channel", async () => {
       const extension = vscode.extensions.getExtension(
-        "tuliptreetech.codeforge",
+        "TulipTreeTechology.codeforge",
       );
       const context = await extension.activate();
 
