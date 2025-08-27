@@ -86,6 +86,9 @@ function activate(context) {
     );
   }
 
+  // Automatically initialize .codeforge directory on activation
+  initializeCodeForgeOnActivation();
+
   // Check if Docker is available
   const config = vscode.workspace.getConfiguration("codeforge");
   const dockerCommand = config.get("dockerCommand", "docker");
@@ -430,6 +433,83 @@ function activate(context) {
     },
   );
   context.subscriptions.push(checkDockerCommand);
+}
+
+/**
+ * Automatically initializes the .codeforge directory when the extension is activated
+ * This function runs silently and only creates the directory/Dockerfile if they don't exist
+ */
+async function initializeCodeForgeOnActivation() {
+  try {
+    // Check if there's an open workspace
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      // No workspace open, silently skip initialization
+      outputChannel.appendLine(
+        "No workspace folder open, skipping automatic initialization",
+      );
+      return;
+    }
+
+    const workspacePath = workspaceFolder.uri.fsPath;
+    const codeforgeDir = path.join(workspacePath, ".codeforge");
+    const dockerfilePath = path.join(codeforgeDir, "Dockerfile");
+
+    // Check if .codeforge directory exists
+    let dirExists = false;
+    try {
+      await fs.access(codeforgeDir);
+      dirExists = true;
+    } catch (error) {
+      // Directory doesn't exist
+      dirExists = false;
+    }
+
+    // Check if Dockerfile exists
+    let dockerfileExists = false;
+    if (dirExists) {
+      try {
+        await fs.access(dockerfilePath);
+        dockerfileExists = true;
+      } catch (error) {
+        // Dockerfile doesn't exist
+        dockerfileExists = false;
+      }
+    }
+
+    // If both directory and Dockerfile exist, nothing to do
+    if (dirExists && dockerfileExists) {
+      outputChannel.appendLine(
+        "CodeForge already initialized, skipping automatic initialization",
+      );
+      return;
+    }
+
+    // Create .codeforge directory if it doesn't exist
+    if (!dirExists) {
+      await fs.mkdir(codeforgeDir, { recursive: true });
+      outputChannel.appendLine(
+        `Auto-created .codeforge directory: ${codeforgeDir}`,
+      );
+    }
+
+    // Create Dockerfile if it doesn't exist
+    if (!dockerfileExists) {
+      await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
+      outputChannel.appendLine(`Auto-created Dockerfile: ${dockerfilePath}`);
+
+      // Show a subtle notification that initialization occurred
+      vscode.window.showInformationMessage(
+        "CodeForge: Initialized .codeforge directory with Dockerfile",
+      );
+    }
+  } catch (error) {
+    // Log the error but don't show an error message to avoid disrupting the user
+    outputChannel.appendLine(
+      `Error during automatic initialization: ${error.message}`,
+    );
+    // Silently fail - the user can still manually initialize if needed
+  }
 }
 
 /**
