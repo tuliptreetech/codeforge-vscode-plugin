@@ -93,6 +93,16 @@ jobs:
       - name: Install vsce
         run: npm install -g @vscode/vsce
 
+      - name: Download extension icon
+        run: |
+          curl -L -o icon.png http://images.tuliptreetech.com/code-forge-orange-circle.png
+          if [ ! -f icon.png ]; then
+            echo "Failed to download icon"
+            exit 1
+          fi
+          echo "Icon downloaded successfully"
+          ls -la icon.png
+
       - name: Package extension
         run: vsce package
 
