@@ -26,12 +26,12 @@ suite("CodeForge Extension Test Suite", () => {
   });
 
   test("Extension should be present", () => {
-    assert.ok(vscode.extensions.getExtension("TulipTreeTechology.codeforge"));
+    assert.ok(vscode.extensions.getExtension("TulipTreeTechnology.codeforge"));
   });
 
   test("Should register all commands", async () => {
     const extension = vscode.extensions.getExtension(
-      "TulipTreeTechology.codeforge",
+      "TulipTreeTechnology.codeforge",
     );
     await extension.activate();
 
@@ -235,7 +235,7 @@ suite("CodeForge Extension Test Suite", () => {
   suite("Integration Tests", () => {
     test("Extension activation should create output channel", async () => {
       const extension = vscode.extensions.getExtension(
-        "TulipTreeTechology.codeforge",
+        "TulipTreeTechnology.codeforge",
       );
       const context = await extension.activate();
 
