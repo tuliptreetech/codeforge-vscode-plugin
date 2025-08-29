@@ -143,9 +143,10 @@ class CodeForgeTaskProvider {
     task.detail = detail;
     task.presentationOptions = {
       reveal: vscode.TaskRevealKind.Always,
-      panel: vscode.TaskPanelKind.New,
-      clear: false,
+      panel: vscode.TaskPanelKind.Shared, // Changed from New to Shared to reuse the same panel
+      clear: false, // Don't clear the terminal, we want to append
       echo: true,
+      focus: true, // Focus the terminal when task starts
     };
 
     return task;
@@ -164,6 +165,7 @@ class CodeForgeTaskTerminal {
     this.writeEmitter = new vscode.EventEmitter();
     this.closeEmitter = new vscode.EventEmitter();
     this.dockerProcess = null;
+    this.taskStartTime = null;
   }
 
   get onDidWrite() {
@@ -176,6 +178,9 @@ class CodeForgeTaskTerminal {
 
   async open(initialDimensions) {
     try {
+      // Record task start time
+      this.taskStartTime = new Date();
+
       // Get configuration
       const config = vscode.workspace.getConfiguration("codeforge");
       const dockerCommand = config.get("dockerCommand", "docker");
@@ -293,6 +298,9 @@ class CodeForgeTaskTerminal {
       // Handle process close
       this.dockerProcess.on("close", (code) => {
         let message;
+        const endTime = new Date();
+        const duration = ((endTime - this.taskStartTime) / 1000).toFixed(2);
+
         if (code === 0) {
           message = "Task completed successfully";
           this.writeEmitter.fire(`\r\n\x1b[32m${message}\x1b[0m\r\n`);
