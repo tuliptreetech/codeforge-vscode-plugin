@@ -281,18 +281,22 @@ function activate(context) {
         const mountWorkspace = config.get("mountWorkspace", true);
 
         // Use dockerOperations to generate Docker run arguments
+        const options = {
+          interactive: true,
+          tty: true,
+          removeAfterRun: removeAfterRun,
+          mountWorkspace: mountWorkspace,
+          workingDir: workspacePath,
+          additionalArgs: additionalArgs,
+          shell: defaultShell,
+          enableTracking: true, // Always enable tracking for terminals
+          containerType: "terminal",
+        };
+
         const shellArgs = dockerOperations.generateDockerRunArgs(
           workspacePath,
           containerName,
-          {
-            interactive: true,
-            tty: true,
-            removeAfterRun: removeAfterRun,
-            mountWorkspace: mountWorkspace,
-            workingDir: workspacePath,
-            additionalArgs: additionalArgs,
-            shell: defaultShell,
-          },
+          options,
         );
 
         const terminal = vscode.window.createTerminal({
@@ -302,7 +306,47 @@ function activate(context) {
         });
 
         terminal.show();
-        safeOutputLog(`Launched terminal in container: ${containerName}`);
+
+        // Track the container after it's launched
+        const generatedName = options.generatedContainerName;
+        if (generatedName) {
+          // Always attempt to track, even with auto-remove (for the duration it's running)
+          dockerOperations
+            .trackLaunchedContainer(
+              generatedName,
+              workspacePath,
+              containerName,
+              "terminal",
+            )
+            .then((tracked) => {
+              if (tracked) {
+                safeOutputLog(
+                  `Launched and tracked terminal container: ${generatedName}`,
+                );
+                vscode.window.showInformationMessage(
+                  `CodeForge: Terminal container started and tracked: ${generatedName}`,
+                );
+              } else {
+                safeOutputLog(
+                  `Launched terminal but could not track container: ${generatedName}`,
+                );
+                if (!removeAfterRun) {
+                  vscode.window.showWarningMessage(
+                    `CodeForge: Terminal started but container tracking failed. Container may not appear in active list.`,
+                  );
+                }
+              }
+            })
+            .catch((error) => {
+              safeOutputLog(
+                `Error tracking terminal container: ${error.message}`,
+              );
+            });
+        } else {
+          safeOutputLog(
+            `Launched terminal in container: ${containerName} (no container name generated)`,
+          );
+        }
       } catch (error) {
         safeOutputLog(`Error: ${error.message}`, true);
         vscode.window.showErrorMessage(
@@ -415,11 +459,151 @@ function activate(context) {
     },
   );
 
+  // Register container management commands
+  let listContainersCommand = vscode.commands.registerCommand(
+    "codeforge.listContainers",
+    async function () {
+      try {
+        const containers = await dockerOperations.getContainerStatus();
+
+        if (containers.length === 0) {
+          vscode.window.showInformationMessage(
+            "CodeForge: No active containers tracked by this extension",
+          );
+          return;
+        }
+
+        // Format container information for display
+        const containerInfo = containers.map((c) => {
+          const status = c.running ? "🟢 Running" : "🔴 Stopped";
+          const age = Math.round(
+            (Date.now() - new Date(c.createdAt).getTime()) / 1000 / 60,
+          );
+          return `${status} | ${c.name} | Type: ${c.type} | Age: ${age}m | Image: ${c.image}`;
+        });
+
+        const selected = await vscode.window.showQuickPick(containerInfo, {
+          placeHolder: "Active containers (select to manage)",
+          canPickMany: false,
+        });
+
+        if (selected) {
+          // Extract container name from the selected item
+          const containerName = selected.split(" | ")[1];
+          const container = containers.find((c) => c.name === containerName);
+
+          if (container) {
+            const action = await vscode.window.showQuickPick(
+              ["Stop Container", "Stop and Remove Container", "Cancel"],
+              { placeHolder: `Action for ${container.name}` },
+            );
+
+            if (action === "Stop Container") {
+              await dockerOperations.stopContainer(container.id, false);
+              vscode.window.showInformationMessage(
+                `Stopped container: ${container.name}`,
+              );
+            } else if (action === "Stop and Remove Container") {
+              await dockerOperations.stopContainer(container.id, true);
+              vscode.window.showInformationMessage(
+                `Stopped and removed container: ${container.name}`,
+              );
+            }
+          }
+        }
+      } catch (error) {
+        safeOutputLog(`Error listing containers: ${error.message}`, true);
+        vscode.window.showErrorMessage(
+          `CodeForge: Failed to list containers - ${error.message}`,
+        );
+      }
+    },
+  );
+
+  let terminateAllContainersCommand = vscode.commands.registerCommand(
+    "codeforge.terminateAllContainers",
+    async function () {
+      try {
+        const containers = await dockerOperations.getActiveContainers();
+
+        if (containers.length === 0) {
+          vscode.window.showInformationMessage(
+            "CodeForge: No active containers to terminate",
+          );
+          return;
+        }
+
+        const confirmation = await vscode.window.showWarningMessage(
+          `CodeForge: Terminate ${containers.length} active container(s)?`,
+          "Yes, Terminate All",
+          "Cancel",
+        );
+
+        if (confirmation === "Yes, Terminate All") {
+          const results = await dockerOperations.terminateAllContainers(true);
+
+          if (results.succeeded > 0) {
+            vscode.window.showInformationMessage(
+              `CodeForge: Terminated ${results.succeeded} container(s)`,
+            );
+          }
+
+          if (results.failed > 0) {
+            vscode.window.showWarningMessage(
+              `CodeForge: Failed to terminate ${results.failed} container(s)`,
+            );
+          }
+
+          safeOutputLog(
+            `Container termination complete: ${results.succeeded} succeeded, ${results.failed} failed`,
+          );
+        }
+      } catch (error) {
+        safeOutputLog(`Error terminating containers: ${error.message}`, true);
+        vscode.window.showErrorMessage(
+          `CodeForge: Failed to terminate containers - ${error.message}`,
+        );
+      }
+    },
+  );
+
+  let cleanupOrphanedCommand = vscode.commands.registerCommand(
+    "codeforge.cleanupOrphaned",
+    async function () {
+      try {
+        const cleaned = await dockerOperations.cleanupOrphanedContainers();
+
+        if (cleaned > 0) {
+          vscode.window.showInformationMessage(
+            `CodeForge: Cleaned up ${cleaned} orphaned container(s) from tracking`,
+          );
+        } else {
+          vscode.window.showInformationMessage(
+            "CodeForge: No orphaned containers found",
+          );
+        }
+
+        safeOutputLog(`Cleaned up ${cleaned} orphaned container(s)`);
+      } catch (error) {
+        safeOutputLog(
+          `Error cleaning up orphaned containers: ${error.message}`,
+          true,
+        );
+        vscode.window.showErrorMessage(
+          `CodeForge: Failed to cleanup orphaned containers - ${error.message}`,
+        );
+      }
+    },
+  );
+
   // Add all commands to subscriptions
   context.subscriptions.push(initializeCommand);
   context.subscriptions.push(buildEnvironmentCommand);
   context.subscriptions.push(launchTerminalCommand);
   context.subscriptions.push(runCommandCommand);
+  context.subscriptions.push(listContainersCommand);
+  context.subscriptions.push(terminateAllContainersCommand);
+  context.subscriptions.push(cleanupOrphanedCommand);
 
   // Register check Docker command (not shown in command palette)
   let checkDockerCommand = vscode.commands.registerCommand(
@@ -620,8 +804,29 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
   }
 }
 
-function deactivate() {
+async function deactivate() {
   // Clean up resources
+  try {
+    // Optionally terminate all containers on deactivation
+    const config = vscode.workspace.getConfiguration("codeforge");
+    const terminateOnDeactivate = config.get(
+      "terminateContainersOnDeactivate",
+      true,
+    );
+
+    if (terminateOnDeactivate) {
+      const containers = await dockerOperations.getActiveContainers();
+      if (containers.length > 0) {
+        console.log(
+          `Terminating ${containers.length} container(s) on deactivation...`,
+        );
+        await dockerOperations.terminateAllContainers(true);
+      }
+    }
+  } catch (error) {
+    console.error(`Error during deactivation cleanup: ${error.message}`);
+  }
+
   if (outputChannel) {
     outputChannel.dispose();
   }
