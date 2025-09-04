@@ -94,6 +94,15 @@
             "type": "boolean",
             "description": "Whether the task requires interactive input",
             "default": false
+          },
+          "ports": {
+            "type": "array",
+            "description": "Port mappings for the container (e.g., ['8080:8080', '3000:3000/tcp'])",
+            "items": {
+              "type": "string",
+              "pattern": "^\\d+(:\\d+)?(/tcp|/udp)?$",
+              "description": "Port mapping in format: hostPort:containerPort[/protocol]"
+            }
           }
         }
       }
@@ -132,6 +141,16 @@
           "description": "Additional arguments to pass to 'docker run' commands",
           "items": {
             "type": "string"
+          }
+        },
+        "codeforge.defaultPortMappings": {
+          "type": "array",
+          "default": [],
+          "description": "Default port mappings to apply to all containers (e.g., ['8080:8080', '3000:3000']). Task-specific ports will override these defaults.",
+          "items": {
+            "type": "string",
+            "pattern": "^\\d+(:\\d+)?(/tcp|/udp)?$",
+            "description": "Port mapping in format: hostPort:containerPort[/protocol]"
           }
         },
         "codeforge.showOutputChannel": {
