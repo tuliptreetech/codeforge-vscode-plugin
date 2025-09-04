@@ -40,21 +40,6 @@ class CodeForgeTaskProvider {
           'echo "Hello from CodeForge! Configure your tasks in .vscode/tasks.json"',
       },
     );
-
-    // IMPORTANT: Users should configure their own tasks in .vscode/tasks.json
-    // Example tasks.json configuration:
-    // {
-    //     "version": "2.0.0",
-    //     "tasks": [
-    //         {
-    //             "type": "codeforge",
-    //             "label": "Run in Container",
-    //             "command": "your-command-here",
-    //             "problemMatcher": []
-    //         }
-    //     ]
-    // }
-
     return [sampleTask];
   }
 
