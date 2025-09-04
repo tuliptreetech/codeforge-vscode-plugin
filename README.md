@@ -165,6 +165,10 @@ CodeForge can be configured through VSCode settings:
 
 ## Release Notes
 
+### 0.0.2
+
+Version bump - Updated version number and documentation (2025-01-03).
+
 ### 0.0.1
 
 Initial release of CodeForge with basic command structure.

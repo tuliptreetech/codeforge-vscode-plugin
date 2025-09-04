@@ -6,7 +6,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-## [0.0.2] - 2024-12-03
+## [0.0.2] - 2025-09-03
 
 ### Added
 
@@ -23,7 +23,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Docker operations automatically handle port mapping arguments
 - Documentation expanded with comprehensive port forwarding guide
 
-## [0.0.1] - 2024-08-24
+## [0.0.1] - 2025-08-24
 
 ### Added
 
