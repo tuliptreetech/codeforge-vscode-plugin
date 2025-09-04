@@ -6,6 +6,25 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.2] - 2024-12-03
+
+### Added
+
+- **Port Forwarding**: Automatic port forwarding from Docker containers to host machine
+  - Task-specific port configuration via `ports` property in task definitions
+  - Global default port mappings via `codeforge.defaultPortMappings` setting
+  - Support for multiple port mappings per task
+  - Seamless integration with existing CodeForge tasks
+  - Common use cases: web servers, databases, development servers, debugging ports
+
+### Enhanced
+
+- Task Provider now supports port forwarding configuration
+- Docker operations automatically handle port mapping arguments
+- Documentation expanded with comprehensive port forwarding guide
+
+## [0.0.1] - 2024-08-24
+
 ### Added
 
 - Initial release of CodeForge extension
@@ -32,14 +51,6 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   - Various C++ testing and analysis tools
 - Automatic user creation matching host user for seamless file permissions
 - Support for Windows (with winpty) and Unix-like systems
-
-## [0.0.1] - 2024-08-24
-
-### Added
-
-- Initial development release
-- Basic command structure
-- Docker integration foundation
 
 ### Security
 

@@ -188,6 +188,7 @@ class CodeForgeTaskTerminal {
       const defaultShell = config.get("defaultShell", "/bin/bash");
       const additionalArgs = config.get("additionalDockerRunArgs", []);
       const mountWorkspace = config.get("mountWorkspace", true);
+      const defaultPortMappings = config.get("defaultPortMappings", []);
 
       // Generate container name
       const containerName = dockerOperations.generateContainerName(
@@ -265,6 +266,41 @@ class CodeForgeTaskTerminal {
         return;
       }
 
+      // Prepare port mappings
+      const portArgs = [];
+
+      // First, add default port mappings from global configuration
+      if (defaultPortMappings && defaultPortMappings.length > 0) {
+        for (const portMapping of defaultPortMappings) {
+          portArgs.push("-p", portMapping);
+        }
+      }
+
+      // Then, add task-specific port mappings (these will override defaults if there's a conflict)
+      if (this.definition.ports && Array.isArray(this.definition.ports)) {
+        for (const portMapping of this.definition.ports) {
+          // Check if this port mapping overrides a default one
+          const portNumber = portMapping.split(":")[0];
+          const existingIndex = portArgs.findIndex(
+            (arg, index) =>
+              index > 0 &&
+              portArgs[index - 1] === "-p" &&
+              arg.split(":")[0] === portNumber,
+          );
+
+          if (existingIndex !== -1) {
+            // Override the existing default port mapping
+            portArgs[existingIndex] = portMapping;
+          } else {
+            // Add new port mapping
+            portArgs.push("-p", portMapping);
+          }
+        }
+      }
+
+      // Combine port arguments with any other additional arguments
+      const finalAdditionalArgs = [...additionalArgs, ...portArgs];
+
       // Run the command using dockerOperations
       this.dockerProcess = dockerOperations.runDockerCommandWithOutput(
         this.workspacePath,
@@ -273,7 +309,7 @@ class CodeForgeTaskTerminal {
         defaultShell,
         {
           removeAfterRun: removeAfterRun,
-          additionalArgs: additionalArgs,
+          additionalArgs: finalAdditionalArgs,
           dockerCommand: dockerCommand,
           mountWorkspace: mountWorkspace,
         },
