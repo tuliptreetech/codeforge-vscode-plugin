@@ -35,6 +35,17 @@ async function main() {
     // Passed to --extensionTestsPath
     const extensionTestsPath = path.resolve(__dirname, "./suite/index");
 
+    // Verify paths exist
+    const fs = require("fs");
+    if (!fs.existsSync(path.join(extensionDevelopmentPath, "package.json"))) {
+      throw new Error(
+        `Extension package.json not found at ${extensionDevelopmentPath}`,
+      );
+    }
+    if (!fs.existsSync(extensionTestsPath + ".js")) {
+      throw new Error(`Test suite index not found at ${extensionTestsPath}.js`);
+    }
+
     // Determine if we're running in CI environment
     const isCI =
       process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";

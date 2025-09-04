@@ -67,6 +67,21 @@ function activate(context) {
   outputChannel = vscode.window.createOutputChannel("CodeForge");
   context.subscriptions.push(outputChannel);
 
+  // Safe wrapper for output channel operations
+  function safeOutputLog(message, show = false) {
+    try {
+      if (outputChannel) {
+        outputChannel.appendLine(message);
+        if (show) {
+          outputChannel.show();
+        }
+      }
+    } catch (error) {
+      // Silently ignore if output channel is disposed
+      console.log(`CodeForge: ${message}`);
+    }
+  }
+
   // Register the task provider
   try {
     const taskProvider = new CodeForgeTaskProvider(context, outputChannel);
@@ -142,19 +157,18 @@ function activate(context) {
 
         // Create .codeforge directory
         await fs.mkdir(codeforgeDir, { recursive: true });
-        outputChannel.appendLine(`Created directory: ${codeforgeDir}`);
+        safeOutputLog(`Created directory: ${codeforgeDir}`);
 
         // Write Dockerfile
         await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
-        outputChannel.appendLine(`Created Dockerfile: ${dockerfilePath}`);
+        safeOutputLog(`Created Dockerfile: ${dockerfilePath}`);
 
         vscode.window.showInformationMessage(
           "CodeForge: Successfully initialized .codeforge directory",
         );
-        outputChannel.show();
+        safeOutputLog("", true); // Just show the output channel
       } catch (error) {
-        outputChannel.appendLine(`Error: ${error.message}`);
-        outputChannel.show();
+        safeOutputLog(`Error: ${error.message}`, true);
         vscode.window.showErrorMessage(
           `CodeForge: Failed to initialize - ${error.message}`,
         );
@@ -195,8 +209,7 @@ function activate(context) {
         // Generate container name
         const containerName =
           dockerOperations.generateContainerName(workspacePath);
-        outputChannel.appendLine(`Building Docker image: ${containerName}`);
-        outputChannel.show();
+        safeOutputLog(`Building Docker image: ${containerName}`, true);
 
         // Show progress notification
         await vscode.window.withProgress(
@@ -224,8 +237,7 @@ function activate(context) {
           },
         );
       } catch (error) {
-        outputChannel.appendLine(`Build failed: ${error.message}`);
-        outputChannel.show();
+        safeOutputLog(`Build failed: ${error.message}`, true);
         vscode.window.showErrorMessage(
           `CodeForge: Build failed - ${error.message}`,
         );
@@ -290,12 +302,9 @@ function activate(context) {
         });
 
         terminal.show();
-        outputChannel.appendLine(
-          `Launched terminal in container: ${containerName}`,
-        );
+        safeOutputLog(`Launched terminal in container: ${containerName}`);
       } catch (error) {
-        outputChannel.appendLine(`Error: ${error.message}`);
-        outputChannel.show();
+        safeOutputLog(`Error: ${error.message}`, true);
         vscode.window.showErrorMessage(
           `CodeForge: Failed to launch terminal - ${error.message}`,
         );
@@ -339,7 +348,7 @@ function activate(context) {
           return;
         }
 
-        outputChannel.appendLine(`Running command in container: ${command}`);
+        safeOutputLog(`Running command in container: ${command}`);
 
         // Get configuration
         const config = vscode.workspace.getConfiguration("codeforge");
@@ -351,7 +360,7 @@ function activate(context) {
         const mountWorkspace = config.get("mountWorkspace", true);
 
         if (showOutput) {
-          outputChannel.show();
+          safeOutputLog("", true); // Just show the output channel
         }
 
         // Use dockerOperations.runDockerCommandWithOutput for proper output capture
@@ -379,12 +388,12 @@ function activate(context) {
 
         dockerProcess.on("close", (code) => {
           if (code === 0) {
-            outputChannel.appendLine(`\nCommand completed successfully`);
+            safeOutputLog(`\nCommand completed successfully`);
             vscode.window.showInformationMessage(
               "CodeForge: Command completed successfully",
             );
           } else {
-            outputChannel.appendLine(`\nCommand failed with exit code ${code}`);
+            safeOutputLog(`\nCommand failed with exit code ${code}`);
             vscode.window.showErrorMessage(
               `CodeForge: Command failed with exit code ${code}`,
             );
@@ -392,14 +401,13 @@ function activate(context) {
         });
 
         dockerProcess.on("error", (error) => {
-          outputChannel.appendLine(`\nError: ${error.message}`);
+          safeOutputLog(`\nError: ${error.message}`);
           vscode.window.showErrorMessage(
             `CodeForge: Failed to run command - ${error.message}`,
           );
         });
       } catch (error) {
-        outputChannel.appendLine(`Error: ${error.message}`);
-        outputChannel.show();
+        safeOutputLog(`Error: ${error.message}`, true);
         vscode.window.showErrorMessage(
           `CodeForge: Failed to run command - ${error.message}`,
         );
@@ -445,7 +453,7 @@ async function initializeCodeForgeOnActivation() {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
       // No workspace open, silently skip initialization
-      outputChannel.appendLine(
+      safeOutputLog(
         "No workspace folder open, skipping automatic initialization",
       );
       return;
@@ -479,7 +487,7 @@ async function initializeCodeForgeOnActivation() {
 
     // If both directory and Dockerfile exist, nothing to do
     if (dirExists && dockerfileExists) {
-      outputChannel.appendLine(
+      safeOutputLog(
         "CodeForge already initialized, skipping automatic initialization",
       );
       return;
@@ -488,15 +496,13 @@ async function initializeCodeForgeOnActivation() {
     // Create .codeforge directory if it doesn't exist
     if (!dirExists) {
       await fs.mkdir(codeforgeDir, { recursive: true });
-      outputChannel.appendLine(
-        `Auto-created .codeforge directory: ${codeforgeDir}`,
-      );
+      safeOutputLog(`Auto-created .codeforge directory: ${codeforgeDir}`);
     }
 
     // Create Dockerfile if it doesn't exist
     if (!dockerfileExists) {
       await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
-      outputChannel.appendLine(`Auto-created Dockerfile: ${dockerfilePath}`);
+      safeOutputLog(`Auto-created Dockerfile: ${dockerfilePath}`);
 
       // Show a subtle notification that initialization occurred
       vscode.window.showInformationMessage(
@@ -534,10 +540,10 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
 
     // If Dockerfile doesn't exist, automatically initialize
     if (!dockerfileExists) {
-      outputChannel.appendLine(
+      safeOutputLog(
         "CodeForge: Dockerfile not found. Automatically initializing...",
+        true,
       );
-      outputChannel.show();
 
       // Create .codeforge directory
       const codeforgeDir = path.join(workspacePath, ".codeforge");
@@ -558,10 +564,10 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
 
     // If image doesn't exist, automatically build it
     if (!imageExists) {
-      outputChannel.appendLine(
+      safeOutputLog(
         `CodeForge: Docker image not found. Automatically building ${containerName}...`,
+        true,
       );
-      outputChannel.show();
 
       // Show progress notification
       await vscode.window.withProgress(

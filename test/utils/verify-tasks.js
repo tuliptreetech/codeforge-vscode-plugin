@@ -1,8 +1,23 @@
 #!/usr/bin/env node
 
 /**
- * Test script to verify CodeForge task configuration and execution
- * This script validates the task configuration structure and simulates task execution
+ * Task Configuration Verification Utility
+ *
+ * This script validates CodeForge task configuration and simulates task execution.
+ * It checks the structure of tasks.json files, validates task definitions against
+ * the VSCode Task 2.0.0 schema, and verifies that CodeForge-specific requirements
+ * are met.
+ *
+ * This is NOT an automated test - it's a utility for manual verification.
+ * Run this script to validate your task configuration before attempting to run tasks.
+ *
+ * Usage: node test/utils/verify-tasks.js
+ *
+ * The script will:
+ * - Check for .vscode/tasks.json in the current directory
+ * - Validate task schema compliance
+ * - Verify CodeForge-specific requirements
+ * - Simulate task execution (dry run)
  */
 
 const fs = require("fs");
