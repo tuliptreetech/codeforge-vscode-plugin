@@ -60,27 +60,29 @@ USER $USERNAME
 let outputChannel;
 
 /**
+ * Safe wrapper for output channel operations
+ */
+function safeOutputLog(message, show = false) {
+  try {
+    if (outputChannel) {
+      outputChannel.appendLine(message);
+      if (show) {
+        outputChannel.show();
+      }
+    }
+  } catch (error) {
+    // Silently ignore if output channel is disposed
+    console.log(`CodeForge: ${message}`);
+  }
+}
+
+/**
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
   // Create output channel for CodeForge
   outputChannel = vscode.window.createOutputChannel("CodeForge");
   context.subscriptions.push(outputChannel);
-
-  // Safe wrapper for output channel operations
-  function safeOutputLog(message, show = false) {
-    try {
-      if (outputChannel) {
-        outputChannel.appendLine(message);
-        if (show) {
-          outputChannel.show();
-        }
-      }
-    } catch (error) {
-      // Silently ignore if output channel is disposed
-      console.log(`CodeForge: ${message}`);
-    }
-  }
 
   // Register the task provider
   try {
