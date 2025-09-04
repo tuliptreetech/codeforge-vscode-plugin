@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * Minimal test to verify task provider registration
- * This simulates what VSCode does when looking for task providers
+ * Minimal Task Provider Test Utility
+ *
+ * This is a verification utility script that simulates what VSCode does when
+ * looking for task providers. It tests the task provider registration and
+ * basic functionality without requiring a full VSCode environment.
+ *
+ * This is NOT an automated test - it's a utility for manual verification.
+ * Run this script directly with Node.js to verify task provider setup.
+ *
+ * Usage: node test/utils/test-minimal-task.js
  */
-
-const vscode = require("vscode");
 
 // Mock VSCode API for testing
 const mockVscode = {
@@ -83,7 +89,7 @@ console.log("=== Minimal Task Provider Test ===\n");
 
 try {
   // Load the task provider
-  const { CodeForgeTaskProvider } = require("../taskProvider");
+  const { CodeForgeTaskProvider } = require("../../taskProvider");
   console.log("✅ CodeForgeTaskProvider loaded successfully\n");
 
   // Create mock context

@@ -14,7 +14,28 @@ function run() {
 
   return new Promise(async (c, e) => {
     try {
-      const files = await glob("**/**.test.js", { cwd: testsRoot });
+      // Use more specific glob pattern to find test files
+      const files = await glob("suite/**/*.test.js", { cwd: testsRoot });
+
+      console.log("=== Test Discovery ===");
+      console.log(`Found ${files.length} test file(s):`);
+      files.forEach((f) => console.log(`  - ${f}`));
+
+      // Verify we found all expected test files
+      const expectedTests = [
+        "extension.test.js",
+        "docker-operations.test.js",
+        "task-provider.test.js",
+      ];
+
+      const foundTestNames = files.map((f) => path.basename(f));
+      const missingTests = expectedTests.filter(
+        (test) => !foundTestNames.includes(test),
+      );
+
+      if (missingTests.length > 0) {
+        console.warn("Warning: Missing expected test files:", missingTests);
+      }
 
       // Add files to the test suite
       files.forEach((f) => mocha.addFile(path.resolve(testsRoot, f)));

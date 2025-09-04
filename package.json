@@ -170,6 +170,13 @@
     "test": "node ./test/runTest.js",
     "pretest": "npm run compile",
     "compile": "echo 'No compilation needed for JavaScript'",
+    "verify": "npm run verify:all",
+    "verify:all": "npm run verify:registration && npm run verify:tasks && npm run verify:extension && npm run verify:minimal",
+    "verify:registration": "node ./test/utils/verify-registration.js",
+    "verify:tasks": "node ./test/utils/verify-tasks.js",
+    "verify:extension": "node ./test/utils/verify-extension-loading.js",
+    "verify:minimal": "node ./test/utils/test-minimal-task.js",
+    "test:full": "npm run verify && npm test",
     "package": "vsce package",
     "publish": "vsce publish",
     "vscode:prepublish": "echo 'Skipping tests in prepublish - tests run separately in CI'"

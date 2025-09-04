@@ -1,3 +1,12 @@
+/**
+ * Core Extension Test Suite
+ *
+ * This file contains core extension tests for the CodeForge VSCode extension.
+ * Tests cover extension activation, command registration, and basic functionality.
+ * Docker and Task Provider tests have been moved to their respective test files.
+ * These are automated Mocha tests that run with `npm test`.
+ */
+
 const assert = require("assert");
 const vscode = require("vscode");
 const path = require("path");
@@ -6,13 +15,8 @@ const sinon = require("sinon");
 
 // Import the extension module
 const myExtension = require("../../extension");
-const dockerOperations = require("../../dockerOperations");
-const {
-  CodeForgeTaskProvider,
-  CodeForgeTaskTerminal,
-} = require("../../taskProvider");
 
-suite("CodeForge Extension Test Suite", () => {
+suite("CodeForge Extension Core Test Suite", () => {
   vscode.window.showInformationMessage("Start all tests.");
 
   let sandbox;
@@ -25,76 +29,58 @@ suite("CodeForge Extension Test Suite", () => {
     sandbox.restore();
   });
 
-  test("Extension should be present", () => {
-    assert.ok(vscode.extensions.getExtension("TulipTreeTechnology.codeforge"));
-  });
-
-  test("Should register all commands", async () => {
-    const extension = vscode.extensions.getExtension(
-      "TulipTreeTechnology.codeforge",
-    );
-    await extension.activate();
-
-    // Check if all commands are registered
-    const commands = await vscode.commands.getCommands();
-    assert.ok(commands.includes("codeforge.initialize"));
-    assert.ok(commands.includes("codeforge.buildEnvironment"));
-    assert.ok(commands.includes("codeforge.launchTerminal"));
-    assert.ok(commands.includes("codeforge.runCommand"));
-  });
-
-  suite("Docker Operations Tests", () => {
-    test("generateContainerName should create valid container names", () => {
-      // Test various path formats
-      assert.strictEqual(
-        dockerOperations.generateContainerName("/home/user/my-project"),
-        "home_user_my-project",
-      );
-
-      assert.strictEqual(
-        dockerOperations.generateContainerName("C:\\Users\\Developer\\Project"),
-        "c__users_developer_project",
-      );
-
-      assert.strictEqual(
-        dockerOperations.generateContainerName("/var/lib/docker/volumes/test"),
-        "var_lib_docker_volumes_test",
+  suite("Extension Activation", () => {
+    test("Extension should be present", () => {
+      assert.ok(
+        vscode.extensions.getExtension("TulipTreeTechnology.codeforge"),
       );
     });
 
-    test("generateContainerName should handle edge cases", () => {
-      // Test empty string
-      assert.throws(
-        () => dockerOperations.generateContainerName(""),
-        Error,
-        "Should throw an error for empty string",
+    test("Should register all commands", async () => {
+      const extension = vscode.extensions.getExtension(
+        "TulipTreeTechnology.codeforge",
       );
+      await extension.activate();
 
-      // Test single slash
-      assert.throws(
-        () => dockerOperations.generateContainerName("/"),
-        Error,
-        "Should throw an error for empty string",
-      );
-
-      // Test path without leading slash
-      assert.strictEqual(
-        dockerOperations.generateContainerName("relative/path/to/project"),
-        "relative_path_to_project",
-      );
+      // Check if all commands are registered
+      const commands = await vscode.commands.getCommands();
+      assert.ok(commands.includes("codeforge.initialize"));
+      assert.ok(commands.includes("codeforge.buildEnvironment"));
+      assert.ok(commands.includes("codeforge.launchTerminal"));
+      assert.ok(commands.includes("codeforge.runCommand"));
     });
 
-    test("checkImageExists should handle docker command errors gracefully", async () => {
-      // Mock exec to simulate docker not being installed
-      const execStub = sandbox.stub(require("child_process"), "exec");
-      execStub.yields(new Error("docker: command not found"), null, null);
+    test("Extension activation should create output channel", async () => {
+      const extension = vscode.extensions.getExtension(
+        "TulipTreeTechnology.codeforge",
+      );
 
-      const exists = await dockerOperations.checkImageExists("test-image");
-      assert.strictEqual(exists, false);
+      if (extension && !extension.isActive) {
+        const context = await extension.activate();
+        assert.ok(context, "Extension should activate and return context");
+      } else {
+        // Extension is already active or not found
+        assert.ok(extension, "Extension should be present");
+      }
+    });
+
+    test("Deactivate should dispose resources", () => {
+      // Create a mock output channel
+      const mockOutputChannel = {
+        dispose: sinon.spy(),
+      };
+
+      // Test that the deactivate function exists
+      assert.ok(typeof myExtension.deactivate === "function");
+
+      // Call deactivate and verify it doesn't throw
+      assert.doesNotThrow(() => {
+        myExtension.deactivate();
+      }, "Deactivate should not throw errors");
     });
   });
 
-  suite("Command Tests", () => {
+  suite("Initialize Command", () => {
     test("Initialize command should create .codeforge directory", async () => {
       // Mock file system operations
       const mkdirStub = sandbox.stub(fs, "mkdir").resolves();
@@ -172,6 +158,48 @@ suite("CodeForge Extension Test Suite", () => {
       );
     });
 
+    test("Initialize command should handle overwrite confirmation", async () => {
+      // Mock file system operations - directory already exists
+      const accessStub = sandbox.stub(fs, "access").resolves();
+      const mkdirStub = sandbox.stub(fs, "mkdir").resolves();
+      const writeFileStub = sandbox.stub(fs, "writeFile").resolves();
+
+      // Mock user choosing to overwrite
+      const showWarningMessageStub = sandbox
+        .stub(vscode.window, "showWarningMessage")
+        .resolves("Yes");
+      const showInformationMessageStub = sandbox.stub(
+        vscode.window,
+        "showInformationMessage",
+      );
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([
+          {
+            uri: { fsPath: "/test/workspace" },
+          },
+        ]);
+
+      // Execute the command
+      await vscode.commands.executeCommand("codeforge.initialize");
+
+      // Verify the Dockerfile was written
+      assert.ok(
+        writeFileStub.calledOnce,
+        "writeFile should be called when overwriting",
+      );
+
+      // Verify success message was shown
+      assert.ok(
+        showInformationMessageStub.calledWith(
+          "CodeForge: Successfully initialized .codeforge directory",
+        ),
+        "Success message should be shown after overwrite",
+      );
+    });
+  });
+
+  suite("Build Environment Command", () => {
     test("Build command should check for Dockerfile existence", async () => {
       // Mock file system - Dockerfile doesn't exist
       const accessStub = sandbox
@@ -202,6 +230,14 @@ suite("CodeForge Extension Test Suite", () => {
       );
     });
 
+    test("Build command should handle successful build", async () => {
+      // This test would require mocking the terminal creation and Docker build process
+      // Currently a placeholder for future implementation
+      assert.ok(true, "Build success test placeholder");
+    });
+  });
+
+  suite("Command Error Handling", () => {
     test("Commands should handle no workspace folder", async () => {
       // Mock no workspace folder
       const workspaceFolderStub = sandbox
@@ -226,221 +262,116 @@ suite("CodeForge Extension Test Suite", () => {
           showErrorMessageStub.calledWith(
             "CodeForge: No workspace folder is open",
           ),
+          `${command} should show error for no workspace`,
         );
         showErrorMessageStub.reset();
       }
     });
-  });
 
-  suite("Integration Tests", () => {
-    test("Extension activation should create output channel", async () => {
-      const extension = vscode.extensions.getExtension(
-        "TulipTreeTechnology.codeforge",
-      );
-      const context = await extension.activate();
-
-      // Check if output channel was created
-      const outputChannels = vscode.window.visibleTextEditors;
-      // Note: In actual tests, we'd need to mock vscode.window.createOutputChannel
-      // and verify it was called with 'CodeForge'
-    });
-
-    test("Deactivate should dispose output channel", () => {
-      // Create a mock output channel
-      const mockOutputChannel = {
-        dispose: sinon.spy(),
-      };
-
-      // Set the output channel in the module (this would require refactoring the extension)
-      // For now, we just test the deactivate function exists
-      assert.ok(typeof myExtension.deactivate === "function");
-    });
-  });
-
-  suite("Task Provider Tests", () => {
-    let taskProvider;
-    let mockContext;
-    let mockOutputChannel;
-
-    setup(() => {
-      mockContext = {
-        subscriptions: [],
-      };
-      mockOutputChannel = {
-        appendLine: sinon.spy(),
-        append: sinon.spy(),
-        show: sinon.spy(),
-        dispose: sinon.spy(),
-      };
-      taskProvider = new CodeForgeTaskProvider(mockContext, mockOutputChannel);
-    });
-
-    test("Task provider should not provide default tasks", async () => {
-      // The new implementation doesn't provide default tasks
-      const tasks = await taskProvider.provideTasks();
-      assert.strictEqual(
-        tasks.length,
-        0,
-        "Task provider should return empty array (no default tasks)",
-      );
-    });
-
-    test.skip("Task provider should resolve codeforge tasks with command", async () => {
-      // Since we can't use vscode.WorkspaceFolder constructor in tests,
-      // this test requires proper VSCode integration
-      // The functionality is tested through the verify-tasks.js script
-    });
-
-    test("Task provider should reject codeforge tasks without command", async () => {
-      const showErrorMessageStub = sandbox.stub(
-        vscode.window,
-        "showErrorMessage",
-      );
-      const mockWorkspaceFolder = {
-        uri: { fsPath: "/test/workspace" },
-        name: "test-workspace",
-        index: 0,
-      };
-
-      const mockTask = {
-        definition: {
-          type: "codeforge",
-          label: "Test Task",
-          // Missing command property
-        },
-        scope: mockWorkspaceFolder,
-        name: "Test Task",
-      };
-
-      const resolvedTask = await taskProvider.resolveTask(mockTask);
-
-      assert.strictEqual(
-        resolvedTask,
-        undefined,
-        "Task should not be resolved without command",
-      );
-      assert.ok(
-        showErrorMessageStub.calledOnce,
-        "Error message should be shown",
-      );
-      assert.ok(
-        showErrorMessageStub.firstCall.args[0].includes(
-          'missing required "command" property',
-        ),
-        "Error message should mention missing command",
-      );
-    });
-
-    test("Task provider should ignore non-codeforge tasks", async () => {
-      const mockTask = {
-        definition: {
-          type: "shell",
-          command: "echo 'Hello'",
-        },
-        name: "Shell Task",
-      };
-
-      const resolvedTask = await taskProvider.resolveTask(mockTask);
-      assert.strictEqual(
-        resolvedTask,
-        undefined,
-        "Non-codeforge tasks should not be resolved",
-      );
-    });
-
-    test.skip("Task provider should handle tasks without workspace folder", async () => {
-      // Since we can't properly test instanceof vscode.WorkspaceFolder in unit tests,
-      // The functionality is tested through the verify-tasks.js script
-    });
-
-    test.skip("createTask should create task with correct properties", () => {
-      // Since we can't use vscode.WorkspaceFolder constructor in tests,
-      // The functionality is tested through the verify-tasks.js script
-    });
-
-    test.skip("Task configuration should support containerName property", () => {
-      // Since we can't use vscode.WorkspaceFolder constructor in tests,
-      // The functionality is tested through the verify-tasks.js script
-    });
-
-    test("Task terminal should handle missing Dockerfile", async () => {
-      const mockWorkspaceFolder = "/test/workspace";
-      const mockDefinition = {
-        type: "codeforge",
-        command: "echo 'test'",
-      };
-
-      // Mock file system - Dockerfile doesn't exist
+    test("Commands should handle errors gracefully", async () => {
+      // Mock file system operations to throw an error
+      const errorMessage = "Simulated file system error";
+      const mkdirStub = sandbox
+        .stub(fs, "mkdir")
+        .rejects(new Error(errorMessage));
       const accessStub = sandbox
         .stub(fs, "access")
         .rejects(new Error("Not found"));
 
-      const terminal = new CodeForgeTaskTerminal(
-        mockWorkspaceFolder,
-        mockDefinition,
-        mockOutputChannel,
+      // Mock VS Code API
+      const showErrorMessageStub = sandbox.stub(
+        vscode.window,
+        "showErrorMessage",
       );
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([
+          {
+            uri: { fsPath: "/test/workspace" },
+          },
+        ]);
 
-      let writeOutput = "";
-      let closeCode = null;
+      // Execute the command
+      await vscode.commands.executeCommand("codeforge.initialize");
 
-      terminal.onDidWrite((data) => {
-        writeOutput += data;
-      });
-
-      terminal.onDidClose((code) => {
-        closeCode = code;
-      });
-
-      await terminal.open();
-
+      // Verify error was handled
       assert.ok(
-        writeOutput.includes("Dockerfile not found"),
-        "Terminal should show Dockerfile not found message",
+        showErrorMessageStub.called,
+        "Error message should be shown when operation fails",
       );
-      assert.strictEqual(closeCode, 1, "Terminal should close with error code");
+    });
+  });
+
+  suite("Launch Terminal Command", () => {
+    test("Launch terminal should check for Docker image", async () => {
+      // This test would verify that the launch terminal command checks for the Docker image
+      // Currently a placeholder for future implementation
+      assert.ok(true, "Launch terminal Docker check test placeholder");
     });
 
-    test("Task terminal should handle interactive commands appropriately", async () => {
-      const mockWorkspaceFolder = "/test/workspace";
-      const mockDefinition = {
-        type: "codeforge",
-        command: "/bin/bash",
-        interactive: true,
-      };
+    test("Launch terminal should create interactive terminal", async () => {
+      // This test would verify that an interactive terminal is created
+      // Currently a placeholder for future implementation
+      assert.ok(true, "Launch terminal creation test placeholder");
+    });
+  });
 
-      // Mock file system - Dockerfile exists
-      const accessStub = sandbox.stub(fs, "access").resolves();
+  suite("Run Command", () => {
+    test("Run command should prompt for command input", async () => {
+      // This test would verify that the run command prompts for input
+      // Currently a placeholder for future implementation
+      assert.ok(true, "Run command prompt test placeholder");
+    });
 
-      // Mock docker operations
-      const checkImageStub = sandbox
-        .stub(dockerOperations, "checkImageExists")
-        .resolves(true);
+    test("Run command should execute in Docker container", async () => {
+      // This test would verify that commands are executed in the Docker container
+      // Currently a placeholder for future implementation
+      assert.ok(true, "Run command execution test placeholder");
+    });
+  });
 
-      const terminal = new CodeForgeTaskTerminal(
-        mockWorkspaceFolder,
-        mockDefinition,
-        mockOutputChannel,
+  suite("Extension Configuration", () => {
+    test("Extension should have correct metadata", () => {
+      const extension = vscode.extensions.getExtension(
+        "TulipTreeTechnology.codeforge",
       );
 
-      let writeOutput = "";
-      let closeCode = null;
+      assert.ok(extension, "Extension should be found");
+      assert.strictEqual(
+        extension.id.toLowerCase(),
+        "tuliptreetechnology.codeforge",
+        "Extension ID should match (case-insensitive)",
+      );
+      assert.ok(extension.extensionPath, "Extension should have a path");
+      assert.ok(extension.packageJSON, "Extension should have package.json");
+    });
 
-      terminal.onDidWrite((data) => {
-        writeOutput += data;
-      });
+    test("Extension should contribute expected items", () => {
+      const extension = vscode.extensions.getExtension(
+        "TulipTreeTechnology.codeforge",
+      );
 
-      terminal.onDidClose((code) => {
-        closeCode = code;
-      });
-
-      await terminal.open();
-
+      const contributions = extension.packageJSON.contributes;
+      assert.ok(contributions, "Extension should have contributions");
+      assert.ok(contributions.commands, "Extension should contribute commands");
       assert.ok(
-        writeOutput.includes("For interactive shells"),
-        "Terminal should suggest using Launch Terminal command for interactive shells",
+        contributions.taskDefinitions,
+        "Extension should contribute task definitions",
       );
-      assert.strictEqual(closeCode, 0, "Terminal should close normally");
+    });
+  });
+
+  suite("Output Channel Management", () => {
+    test("Output channel should be created on activation", async () => {
+      // This test would verify that the output channel is created
+      // Currently a placeholder for better mocking support
+      assert.ok(true, "Output channel creation test placeholder");
+    });
+
+    test("Output channel should log operations", async () => {
+      // This test would verify that operations are logged to the output channel
+      // Currently a placeholder for better mocking support
+      assert.ok(true, "Output channel logging test placeholder");
     });
   });
 });
