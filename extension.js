@@ -461,6 +461,118 @@ function activate(context) {
     },
   );
 
+  // Register the register task command
+  let registerTaskCommand = vscode.commands.registerCommand(
+    "codeforge.registerTask",
+    async function () {
+      try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+          vscode.window.showErrorMessage(
+            "CodeForge: No workspace folder is open",
+          );
+          return;
+        }
+
+        // Prompt for the command to run
+        const command = await vscode.window.showInputBox({
+          prompt: "Enter the command to run in the container",
+          placeHolder: "e.g., npm test, make build, python script.py",
+          validateInput: (value) => {
+            if (!value || value.trim().length === 0) {
+              return "Command cannot be empty";
+            }
+            return null;
+          },
+        });
+
+        if (!command) {
+          return; // User cancelled
+        }
+
+        // Auto-generate label and description
+        const taskLabel = `Run in CodeForge: ${command}`;
+        const taskDetail = `Run '${command}' in CodeForge container`;
+
+        // Create the task definition
+        const taskDefinition = {
+          type: "codeforge",
+          label: taskLabel,
+          command: command,
+          detail: taskDetail,
+          problemMatcher: [],
+        };
+
+        // Get or create tasks.json
+        const tasksJsonPath = path.join(
+          workspaceFolder.uri.fsPath,
+          ".vscode",
+          "tasks.json",
+        );
+
+        let tasksConfig = {
+          version: "2.0.0",
+          tasks: [],
+        };
+
+        // Check if tasks.json exists
+        try {
+          const tasksJsonContent = await fs.readFile(tasksJsonPath, "utf8");
+          // Parse the JSON, handling comments
+          const jsonWithoutComments = tasksJsonContent.replace(
+            /\/\*[\s\S]*?\*\/|\/\/.*/g,
+            "",
+          );
+          tasksConfig = JSON.parse(jsonWithoutComments);
+        } catch (error) {
+          // File doesn't exist or is invalid, we'll create a new one
+          safeOutputLog(`Creating new tasks.json file at ${tasksJsonPath}`);
+        }
+
+        // Add the new task
+        if (!tasksConfig.tasks) {
+          tasksConfig.tasks = [];
+        }
+
+        // Check if a task with the same label already exists
+        const existingTaskIndex = tasksConfig.tasks.findIndex(
+          (task) => task.label === taskLabel,
+        );
+
+        if (existingTaskIndex !== -1) {
+          const overwrite = await vscode.window.showWarningMessage(
+            `A task with label "${taskLabel}" already exists. Do you want to overwrite it?`,
+            "Yes",
+            "No",
+          );
+          if (overwrite !== "Yes") {
+            return;
+          }
+          // Replace the existing task
+          tasksConfig.tasks[existingTaskIndex] = taskDefinition;
+        } else {
+          // Add the new task
+          tasksConfig.tasks.push(taskDefinition);
+        }
+
+        // Ensure .vscode directory exists
+        const vscodeDir = path.join(workspaceFolder.uri.fsPath, ".vscode");
+        await fs.mkdir(vscodeDir, { recursive: true });
+
+        // Write the updated tasks.json
+        const tasksJsonString = JSON.stringify(tasksConfig, null, 2);
+        await fs.writeFile(tasksJsonPath, tasksJsonString, "utf8");
+
+        safeOutputLog(`Successfully registered task: ${taskLabel}`);
+      } catch (error) {
+        safeOutputLog(`Error registering task: ${error.message}`, true);
+        vscode.window.showErrorMessage(
+          `CodeForge: Failed to register task - ${error.message}`,
+        );
+      }
+    },
+  );
+
   // Register container management commands
   let listContainersCommand = vscode.commands.registerCommand(
     "codeforge.listContainers",
@@ -603,6 +715,7 @@ function activate(context) {
   context.subscriptions.push(buildEnvironmentCommand);
   context.subscriptions.push(launchTerminalCommand);
   context.subscriptions.push(runCommandCommand);
+  context.subscriptions.push(registerTaskCommand);
   context.subscriptions.push(listContainersCommand);
   context.subscriptions.push(terminateAllContainersCommand);
   context.subscriptions.push(cleanupOrphanedCommand);

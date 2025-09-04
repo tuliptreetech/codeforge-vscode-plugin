@@ -48,6 +48,7 @@
     "onCommand:codeforge.buildEnvironment",
     "onCommand:codeforge.launchTerminal",
     "onCommand:codeforge.runCommand",
+    "onCommand:codeforge.registerTask",
     "onCommand:codeforge.listContainers",
     "onCommand:codeforge.terminateAllContainers",
     "onCommand:codeforge.cleanupOrphaned",
@@ -72,6 +73,10 @@
       {
         "command": "codeforge.runCommand",
         "title": "CodeForge: Run Command in Container"
+      },
+      {
+        "command": "codeforge.registerTask",
+        "title": "CodeForge: Register Task"
       },
       {
         "command": "codeforge.listContainers",

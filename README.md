@@ -17,30 +17,53 @@ CodeForge is a VSCode extension that simplifies Docker container management dire
 
 Open the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on macOS) and type "CodeForge" to see all available commands.
 
+### Quick Start: Register a Task
+
+The fastest way to get started with CodeForge tasks is to use the **`CodeForge: Register Task`** command:
+
+1. Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
+2. Type `CodeForge: Register Task` and press Enter
+3. Enter your command (e.g., `npm test`, `python app.py`, `make build`)
+4. That's it! Your task is automatically registered and ready to use
+
+The command automatically:
+
+- Creates a properly formatted task with label `Run in CodeForge: [command]`
+- Adds a description `Run '[command]' in CodeForge container`
+- Saves it to `.vscode/tasks.json`
+- Offers to run the task immediately
+
+You can customize the generated task later by editing `.vscode/tasks.json` if needed.
+
 ### Available Commands
 
 1. `CodeForge: Initialize CodeForge` - Initialize CodeForge in your current workspace
 2. `CodeForge: Build Docker Environment` - Build the Docker environment based on your configuration
 3. `CodeForge: Launch Terminal in Container` - Open an interactive terminal in a Docker container
 4. `CodeForge: Run Command in Container` - Run a specific command inside a Docker container
+5. `CodeForge: Register Task` - **Recommended:** Quickly register a new CodeForge task
 
 ### Task Provider
 
 CodeForge includes a VSCode Task Provider that allows you to run commands inside Docker containers. This integrates seamlessly with VSCode's task system.
 
-#### Important: Task Configuration Required
+#### Quick Task Registration (Recommended)
 
-**CodeForge no longer provides default tasks.** You MUST configure your own tasks in `.vscode/tasks.json` with the required `"command"` property that specifies what to run in the Docker container.
+The easiest way to create CodeForge tasks is using the **`CodeForge: Register Task`** command:
 
-#### Using Tasks
+1. Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
+2. Run `CodeForge: Register Task`
+3. Enter the command you want to run in the container (e.g., `npm test`, `make build`)
+4. The task is automatically created with:
+   - Label: `Run in CodeForge: [your command]`
+   - Description: `Run '[your command]' in CodeForge container`
+5. You'll be prompted to run the task immediately or can run it later via `Terminal → Run Task`
 
-1. **Configure Tasks**: Create a `.vscode/tasks.json` file with your CodeForge task definitions (required)
-2. **Execute Tasks**: Run tasks via `Terminal → Run Task` or keyboard shortcuts (`Ctrl+Shift+B` for build)
-3. **View Output**: Command output is captured in the CodeForge output window (View → Output → CodeForge)
+This command automatically creates or updates your `.vscode/tasks.json` file with the proper configuration. You can later edit `tasks.json` manually if you want to customize the labels, descriptions, or add additional properties like port mappings.
 
-#### Example Task Definition
+#### Manual Task Configuration
 
-Create a `.vscode/tasks.json` file in your project with the required `"command"` property:
+While using `CodeForge: Register Task` is recommended, you can also manually create or edit tasks in `.vscode/tasks.json`:
 
 ```json
 {
@@ -48,7 +71,7 @@ Create a `.vscode/tasks.json` file in your project with the required `"command"`
   "tasks": [
     {
       "type": "codeforge",
-      "label": "Run in Container: Build",
+      "label": "Run in CodeForge: Build",
       "command": "make build", // REQUIRED: Command to execute
       "detail": "Builds the project in Docker container",
       "group": {
@@ -58,7 +81,7 @@ Create a `.vscode/tasks.json` file in your project with the required `"command"`
     },
     {
       "type": "codeforge",
-      "label": "Run in Container: Test",
+      "label": "Run in CodeForge: Test",
       "command": "npm test", // REQUIRED: Command to execute
       "detail": "Runs tests in Docker container",
       "group": {
@@ -68,13 +91,13 @@ Create a `.vscode/tasks.json` file in your project with the required `"command"`
     },
     {
       "type": "codeforge",
-      "label": "Run in Container: Dev Server",
+      "label": "Run in CodeForge: Dev Server",
       "command": "npm run dev", // REQUIRED: Command to execute
       "detail": "Starts development server in Docker container"
     },
     {
       "type": "codeforge",
-      "label": "Run in Container: Web Server with Port Forwarding",
+      "label": "Run in CodeForge: Web Server with Port Forwarding",
       "command": "python -m http.server 8080", // REQUIRED: Command to execute
       "detail": "Starts a web server with port forwarding",
       "ports": ["8080:8080"] // Forward container port 8080 to host port 8080
@@ -83,7 +106,7 @@ Create a `.vscode/tasks.json` file in your project with the required `"command"`
 }
 ```
 
-**Note:** The `"command"` property is required for all tasks. Without it, the task will fail.
+**Note:** The `"command"` property is required for all tasks. Without it, the task will fail. For quick task creation, use the `CodeForge: Register Task` command instead of manually editing this file.
 
 ### Port Forwarding
 
