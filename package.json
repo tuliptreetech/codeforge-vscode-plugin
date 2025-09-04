@@ -48,6 +48,9 @@
     "onCommand:codeforge.buildEnvironment",
     "onCommand:codeforge.launchTerminal",
     "onCommand:codeforge.runCommand",
+    "onCommand:codeforge.listContainers",
+    "onCommand:codeforge.terminateAllContainers",
+    "onCommand:codeforge.cleanupOrphaned",
     "workspaceContains:.codeforge/Dockerfile",
     "onTaskType:codeforge"
   ],
@@ -69,6 +72,18 @@
       {
         "command": "codeforge.runCommand",
         "title": "CodeForge: Run Command in Container"
+      },
+      {
+        "command": "codeforge.listContainers",
+        "title": "CodeForge: List Active Containers"
+      },
+      {
+        "command": "codeforge.terminateAllContainers",
+        "title": "CodeForge: Terminate All Containers"
+      },
+      {
+        "command": "codeforge.cleanupOrphaned",
+        "title": "CodeForge: Cleanup Orphaned Containers"
       }
     ],
     "taskDefinitions": [
@@ -162,6 +177,11 @@
           "type": "string",
           "default": "/bin/bash",
           "description": "Default shell to use in containers"
+        },
+        "codeforge.terminateContainersOnDeactivate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically terminate all tracked containers when the extension is deactivated"
         }
       }
     }

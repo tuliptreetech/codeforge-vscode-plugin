@@ -166,6 +166,7 @@ class CodeForgeTaskTerminal {
     this.closeEmitter = new vscode.EventEmitter();
     this.dockerProcess = null;
     this.taskStartTime = null;
+    this.containerId = null;
   }
 
   get onDidWrite() {
@@ -312,8 +313,13 @@ class CodeForgeTaskTerminal {
           additionalArgs: finalAdditionalArgs,
           dockerCommand: dockerCommand,
           mountWorkspace: mountWorkspace,
+          enableTracking: true, // Always track task containers
+          containerType: "task", // Mark as task type for tracking
         },
       );
+
+      // Store container tracking info
+      this.containerName = containerName;
 
       // Handle stdout
       this.dockerProcess.stdout.on("data", (data) => {
@@ -332,7 +338,7 @@ class CodeForgeTaskTerminal {
       });
 
       // Handle process close
-      this.dockerProcess.on("close", (code) => {
+      this.dockerProcess.on("close", async (code) => {
         let message;
         const endTime = new Date();
         const duration = ((endTime - this.taskStartTime) / 1000).toFixed(2);
@@ -343,6 +349,26 @@ class CodeForgeTaskTerminal {
         } else {
           message = `Task failed with exit code ${code}`;
           this.writeEmitter.fire(`\r\n\x1b[31m${message}\x1b[0m\r\n`);
+        }
+
+        // Clean up container tracking if not using auto-remove
+        if (!removeAfterRun && this.containerName) {
+          try {
+            // Get container ID and untrack it
+            const { exec } = require("child_process");
+            const { promisify } = require("util");
+            const execAsync = promisify(exec);
+
+            const { stdout } = await execAsync(
+              `docker ps -a --filter "name=${this.containerName}" --format "{{.ID}}"`,
+            );
+            const containerId = stdout.trim();
+            if (containerId) {
+              dockerOperations.untrackContainer(containerId);
+            }
+          } catch (error) {
+            console.error(`Failed to untrack task container: ${error.message}`);
+          }
         }
 
         this.closeEmitter.fire(code || 0);
@@ -363,10 +389,31 @@ class CodeForgeTaskTerminal {
     }
   }
 
-  close() {
+  async close() {
     // Kill the Docker process if it's still running
     if (this.dockerProcess && !this.dockerProcess.killed) {
       this.dockerProcess.kill();
+    }
+
+    // Clean up container tracking
+    if (this.containerName) {
+      try {
+        const { exec } = require("child_process");
+        const { promisify } = require("util");
+        const execAsync = promisify(exec);
+
+        const { stdout } = await execAsync(
+          `docker ps -a --filter "name=${this.containerName}" --format "{{.ID}}"`,
+        );
+        const containerId = stdout.trim();
+        if (containerId) {
+          dockerOperations.untrackContainer(containerId);
+        }
+      } catch (error) {
+        console.error(
+          `Failed to untrack task container on close: ${error.message}`,
+        );
+      }
     }
   }
 
