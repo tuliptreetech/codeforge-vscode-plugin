@@ -647,31 +647,23 @@ function activate(context) {
           return;
         }
 
-        const confirmation = await vscode.window.showWarningMessage(
-          `CodeForge: Terminate ${containers.length} active container(s)?`,
-          "Yes, Terminate All",
-          "Cancel",
-        );
+        const results = await dockerOperations.terminateAllContainers(true);
 
-        if (confirmation === "Yes, Terminate All") {
-          const results = await dockerOperations.terminateAllContainers(true);
-
-          if (results.succeeded > 0) {
-            vscode.window.showInformationMessage(
-              `CodeForge: Terminated ${results.succeeded} container(s)`,
-            );
-          }
-
-          if (results.failed > 0) {
-            vscode.window.showWarningMessage(
-              `CodeForge: Failed to terminate ${results.failed} container(s)`,
-            );
-          }
-
-          safeOutputLog(
-            `Container termination complete: ${results.succeeded} succeeded, ${results.failed} failed`,
+        if (results.succeeded > 0) {
+          vscode.window.showInformationMessage(
+            `CodeForge: Terminated ${results.succeeded} container(s)`,
           );
         }
+
+        if (results.failed > 0) {
+          vscode.window.showWarningMessage(
+            `CodeForge: Failed to terminate ${results.failed} container(s)`,
+          );
+        }
+
+        safeOutputLog(
+          `Container termination complete: ${results.succeeded} succeeded, ${results.failed} failed`,
+        );
       } catch (error) {
         safeOutputLog(`Error terminating containers: ${error.message}`, true);
         vscode.window.showErrorMessage(
