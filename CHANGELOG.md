@@ -6,6 +6,34 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.3] - 2025-09-09
+
+### Added
+
+- **Container Management System**: Comprehensive Docker container tracking and lifecycle management
+  - Automatic tracking of all containers created by terminals and tasks
+  - New commands: `CodeForge: Terminate All Containers` and `CodeForge: Show Active Containers`
+  - Container ID extraction from terminal output for accurate tracking
+  - Task-based container tracking with proper lifecycle management
+  - Automatic container cleanup on VSCode window close (configurable via `codeforge.autoTerminateContainers`)
+- **Task Registration Command**: New `CodeForge: Register Task` command for managing CodeForge tasks directly from VS Code command palette
+- **Comprehensive Test Suite**: 9 new test utility files covering container tracking, terminal tracking, and command execution validation
+- **New Setting**: `codeforge.autoTerminateContainers` (default: true) to control automatic container termination
+
+### Enhanced
+
+- **Docker Operations**: Enhanced dockerOperations.js with new functions for container termination and enumeration
+- **Task Provider**: Integrated container tracking for task executions
+- **Documentation**: Expanded README.md with comprehensive task registration guide
+- **Examples**: Updated task configuration examples with improved patterns
+
+### Fixed
+
+- **Function Scope Issue**: Moved `safeOutputLog` function to global scope to resolve "undefined error" during automatic initialization
+- **Container Tracking**: Improved container ID extraction regex patterns for various Docker command formats
+- **Resource Cleanup**: Added proper cleanup of tracking data when terminals/tasks are disposed
+- **User Experience**: Removed confirmation prompts when terminating containers for streamlined workflow
+
 ## [0.0.2] - 2025-09-03
 
 ### Added
