@@ -188,6 +188,16 @@ CodeForge can be configured through VSCode settings:
 
 ## Release Notes
 
+### 0.0.3
+
+Major feature release with Container Management System and enhanced Docker operations:
+
+- **Container Management System**: Added comprehensive container tracking and lifecycle management
+- **Container Termination Commands**: New commands for terminating and managing running containers
+- **Task Registration Command**: Streamlined task creation with `CodeForge: Register Task` command
+- **Enhanced Docker Operations**: Improved Docker container handling and testing infrastructure
+- **Expanded Testing Suite**: Added comprehensive test utilities for container features and task tracking
+
 ### 0.0.2
 
 Version bump - Updated version number and documentation (2025-01-03).
