@@ -1,4 +1,4 @@
-const dockerOperations = require("../../dockerOperations");
+const dockerOperations = require("../../src/core/dockerOperations");
 const path = require("path");
 
 async function testDockerIntegration() {

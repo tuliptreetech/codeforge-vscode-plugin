@@ -3,7 +3,7 @@ const vscode = require("vscode");
 const sinon = require("sinon");
 const path = require("path");
 const fuzzingOperations = require("../../src/fuzzing/fuzzingOperations");
-const dockerOperations = require("../../dockerOperations");
+const dockerOperations = require("../../src/core/dockerOperations");
 
 suite("Fuzzing Operations Test Suite", () => {
   let sandbox;

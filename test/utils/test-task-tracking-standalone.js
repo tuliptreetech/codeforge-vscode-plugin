@@ -10,7 +10,7 @@ const path = require("path");
 const fs = require("fs").promises;
 
 // Import the dockerOperations module
-const dockerOperations = require("../../dockerOperations");
+const dockerOperations = require("../../src/core/dockerOperations");
 
 // Test configuration
 const TEST_WORKSPACE = path.join(__dirname, "../../test-project");

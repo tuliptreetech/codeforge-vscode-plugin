@@ -103,7 +103,7 @@ function testCommandRegistration() {
 
     // Test 5: Verify extension.js exports the command handlers
     console.log("5️⃣ Verifying command handlers in extension.js...");
-    const extensionPath = path.join(__dirname, "../../extension.js");
+    const extensionPath = path.join(__dirname, "../../src/extension.js");
     const extensionContent = fs.readFileSync(extensionPath, "utf8");
 
     // Check for command registration in activate function

@@ -5,7 +5,7 @@
  * This script tests the container tracking and management features
  */
 
-const dockerOperations = require("../../dockerOperations");
+const dockerOperations = require("../../src/core/dockerOperations");
 const { exec } = require("child_process");
 const { promisify } = require("util");
 const execAsync = promisify(exec);

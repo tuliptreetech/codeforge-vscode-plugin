@@ -14,7 +14,7 @@ const fs = require("fs").promises;
 const sinon = require("sinon");
 
 // Import the extension module
-const myExtension = require("../../extension");
+const myExtension = require("../../src/extension");
 
 suite("CodeForge Extension Core Test Suite", () => {
   vscode.window.showInformationMessage("Start all tests.");

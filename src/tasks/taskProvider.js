@@ -1,5 +1,5 @@
 const vscode = require("vscode");
-const dockerOperations = require("./dockerOperations");
+const dockerOperations = require("../core/dockerOperations");
 const path = require("path");
 const fs = require("fs").promises;
 
