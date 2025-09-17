@@ -52,6 +52,7 @@
     "onCommand:codeforge.listContainers",
     "onCommand:codeforge.terminateAllContainers",
     "onCommand:codeforge.cleanupOrphaned",
+    "onCommand:codeforge.runFuzzingTests",
     "workspaceContains:.codeforge/Dockerfile",
     "onTaskType:codeforge"
   ],
@@ -89,6 +90,10 @@
       {
         "command": "codeforge.cleanupOrphaned",
         "title": "CodeForge: Cleanup Orphaned Containers"
+      },
+      {
+        "command": "codeforge.runFuzzingTests",
+        "title": "CodeForge: Run Fuzzing Tests"
       }
     ],
     "taskDefinitions": [
