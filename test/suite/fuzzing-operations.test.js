@@ -39,7 +39,7 @@ suite("Fuzzing Operations Test Suite", () => {
 
     test("createFuzzingDirectory should return correct path", async () => {
       const workspacePath = "/test/workspace";
-      const expectedPath = "/test/workspace/fuzzing";
+      const expectedPath = "/test/workspace/.codeforge/fuzzing";
 
       // Mock fs operations
       const fs = require("fs").promises;
