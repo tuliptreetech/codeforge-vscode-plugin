@@ -24,14 +24,21 @@ function safeFuzzingLog(outputChannel, message, show = false) {
  * @param {vscode.OutputChannel} outputChannel - Output channel for logging
  * @returns {Promise<string[]>} Array of preset names
  */
-async function discoverCMakePresets(workspacePath, containerName, outputChannel) {
+async function discoverCMakePresets(
+  workspacePath,
+  containerName,
+  outputChannel,
+) {
   return new Promise((resolve, reject) => {
-    safeFuzzingLog(outputChannel, "Executing cmake --list-presets in container...");
-    
+    safeFuzzingLog(
+      outputChannel,
+      "Executing cmake --list-presets in container...",
+    );
+
     const options = {
       removeAfterRun: true,
       mountWorkspace: true,
-      dockerCommand: "docker"
+      dockerCommand: "docker",
     };
 
     const dockerProcess = dockerOperations.runDockerCommandWithOutput(
@@ -39,7 +46,7 @@ async function discoverCMakePresets(workspacePath, containerName, outputChannel)
       containerName,
       "cmake . --list-presets",
       "/bin/bash",
-      options
+      options,
     );
 
     let stdout = "";
@@ -55,8 +62,13 @@ async function discoverCMakePresets(workspacePath, containerName, outputChannel)
 
     dockerProcess.on("close", (code) => {
       if (code !== 0) {
-        const error = new Error(`CMake preset discovery failed with exit code ${code}: ${stderr}`);
-        safeFuzzingLog(outputChannel, `CMake preset discovery error: ${error.message}`);
+        const error = new Error(
+          `CMake preset discovery failed with exit code ${code}: ${stderr}`,
+        );
+        safeFuzzingLog(
+          outputChannel,
+          `CMake preset discovery error: ${error.message}`,
+        );
         reject(error);
         return;
       }
@@ -64,9 +76,9 @@ async function discoverCMakePresets(workspacePath, containerName, outputChannel)
       try {
         // Parse the output to extract preset names
         // Skip the first line (header) and extract quoted preset names
-        const lines = stdout.trim().split('\n');
+        const lines = stdout.trim().split("\n");
         const presets = [];
-        
+
         for (let i = 1; i < lines.length; i++) {
           const line = lines[i].trim();
           // Look for quoted preset names using regex
@@ -76,19 +88,28 @@ async function discoverCMakePresets(workspacePath, containerName, outputChannel)
           }
         }
 
-        safeFuzzingLog(outputChannel, `Discovered ${presets.length} preset(s): ${presets.join(', ')}`);
+        safeFuzzingLog(
+          outputChannel,
+          `Discovered ${presets.length} preset(s): ${presets.join(", ")}`,
+        );
         resolve(presets);
-        
       } catch (parseError) {
-        const error = new Error(`Failed to parse CMake preset output: ${parseError.message}`);
+        const error = new Error(
+          `Failed to parse CMake preset output: ${parseError.message}`,
+        );
         safeFuzzingLog(outputChannel, `Parse error: ${error.message}`);
         reject(error);
       }
     });
 
     dockerProcess.on("error", (error) => {
-      const wrappedError = new Error(`Failed to execute CMake preset discovery: ${error.message}`);
-      safeFuzzingLog(outputChannel, `Docker execution error: ${wrappedError.message}`);
+      const wrappedError = new Error(
+        `Failed to execute CMake preset discovery: ${error.message}`,
+      );
+      safeFuzzingLog(
+        outputChannel,
+        `Docker execution error: ${wrappedError.message}`,
+      );
       reject(wrappedError);
     });
   });
@@ -102,25 +123,33 @@ async function discoverCMakePresets(workspacePath, containerName, outputChannel)
  * @param {vscode.OutputChannel} outputChannel - Output channel for logging
  * @returns {Promise<string>} Generator type ('ninja' or 'make')
  */
-async function detectCMakeGenerator(workspacePath, containerName, buildDir, outputChannel) {
+async function detectCMakeGenerator(
+  workspacePath,
+  containerName,
+  buildDir,
+  outputChannel,
+) {
   return new Promise((resolve, reject) => {
-    safeFuzzingLog(outputChannel, `Detecting CMake generator in ${buildDir}...`);
-    
+    safeFuzzingLog(
+      outputChannel,
+      `Detecting CMake generator in ${buildDir}...`,
+    );
+
     const options = {
       removeAfterRun: true,
       mountWorkspace: true,
-      dockerCommand: "docker"
+      dockerCommand: "docker",
     };
 
     // Check for Ninja build files first
     const checkCommand = `if [ -f "${buildDir}/build.ninja" ]; then echo "ninja"; elif [ -f "${buildDir}/Makefile" ]; then echo "make"; else echo "unknown"; fi`;
-    
+
     const checkProcess = dockerOperations.runDockerCommandWithOutput(
       workspacePath,
       containerName,
       checkCommand,
       "/bin/bash",
-      options
+      options,
     );
 
     let stdout = "";
@@ -137,7 +166,10 @@ async function detectCMakeGenerator(workspacePath, containerName, buildDir, outp
     checkProcess.on("close", (code) => {
       if (code !== 0) {
         const error = new Error(`Generator detection failed: ${stderr}`);
-        safeFuzzingLog(outputChannel, `Generator detection error: ${error.message}`);
+        safeFuzzingLog(
+          outputChannel,
+          `Generator detection error: ${error.message}`,
+        );
         reject(error);
         return;
       }
@@ -148,8 +180,13 @@ async function detectCMakeGenerator(workspacePath, containerName, buildDir, outp
     });
 
     checkProcess.on("error", (error) => {
-      const wrappedError = new Error(`Failed to detect generator: ${error.message}`);
-      safeFuzzingLog(outputChannel, `Generator detection error: ${wrappedError.message}`);
+      const wrappedError = new Error(
+        `Failed to detect generator: ${error.message}`,
+      );
+      safeFuzzingLog(
+        outputChannel,
+        `Generator detection error: ${wrappedError.message}`,
+      );
       reject(wrappedError);
     });
   });
@@ -163,22 +200,27 @@ async function detectCMakeGenerator(workspacePath, containerName, buildDir, outp
  * @param {vscode.OutputChannel} outputChannel - Output channel for logging
  * @returns {Promise<string[]>} Array of fuzz target names
  */
-async function discoverFuzzTargetsMake(workspacePath, containerName, buildDir, outputChannel) {
+async function discoverFuzzTargetsMake(
+  workspacePath,
+  containerName,
+  buildDir,
+  outputChannel,
+) {
   return new Promise((resolve, reject) => {
     const options = {
       removeAfterRun: true,
       mountWorkspace: true,
-      dockerCommand: "docker"
+      dockerCommand: "docker",
     };
 
     const helpCommand = `cmake --build "${buildDir}" --target help`;
-    
+
     const helpProcess = dockerOperations.runDockerCommandWithOutput(
       workspacePath,
       containerName,
       helpCommand,
       "/bin/bash",
-      options
+      options,
     );
 
     let helpStdout = "";
@@ -195,19 +237,22 @@ async function discoverFuzzTargetsMake(workspacePath, containerName, buildDir, o
     helpProcess.on("close", (helpCode) => {
       if (helpCode !== 0) {
         const error = new Error(`CMake help failed: ${helpStderr}`);
-        safeFuzzingLog(outputChannel, `Make help command error: ${error.message}`);
+        safeFuzzingLog(
+          outputChannel,
+          `Make help command error: ${error.message}`,
+        );
         reject(error);
         return;
       }
 
       try {
         // Parse the help output to find fuzz targets (Make format)
-        const lines = helpStdout.split('\n');
+        const lines = helpStdout.split("\n");
         const fuzzTargets = [];
-        
+
         for (const line of lines) {
           // Look for lines containing ": phony" (indicating a target)
-          if (line.includes(': phony')) {
+          if (line.includes(": phony")) {
             // Extract the target name (everything before the first colon)
             const targetMatch = line.match(/^([^:]+):/);
             if (targetMatch && targetMatch[1]) {
@@ -220,19 +265,28 @@ async function discoverFuzzTargetsMake(workspacePath, containerName, buildDir, o
           }
         }
 
-        safeFuzzingLog(outputChannel, `Found ${fuzzTargets.length} fuzz target(s) using Make: ${fuzzTargets.join(', ')}`);
+        safeFuzzingLog(
+          outputChannel,
+          `Found ${fuzzTargets.length} fuzz target(s) using Make: ${fuzzTargets.join(", ")}`,
+        );
         resolve(fuzzTargets);
-        
       } catch (parseError) {
-        const error = new Error(`Failed to parse Make help output: ${parseError.message}`);
+        const error = new Error(
+          `Failed to parse Make help output: ${parseError.message}`,
+        );
         safeFuzzingLog(outputChannel, `Make parse error: ${error.message}`);
         reject(error);
       }
     });
 
     helpProcess.on("error", (error) => {
-      const wrappedError = new Error(`Failed to execute Make help: ${error.message}`);
-      safeFuzzingLog(outputChannel, `Make execution error: ${wrappedError.message}`);
+      const wrappedError = new Error(
+        `Failed to execute Make help: ${error.message}`,
+      );
+      safeFuzzingLog(
+        outputChannel,
+        `Make execution error: ${wrappedError.message}`,
+      );
       reject(wrappedError);
     });
   });
@@ -246,22 +300,27 @@ async function discoverFuzzTargetsMake(workspacePath, containerName, buildDir, o
  * @param {vscode.OutputChannel} outputChannel - Output channel for logging
  * @returns {Promise<string[]>} Array of fuzz target names
  */
-async function discoverFuzzTargetsNinja(workspacePath, containerName, buildDir, outputChannel) {
+async function discoverFuzzTargetsNinja(
+  workspacePath,
+  containerName,
+  buildDir,
+  outputChannel,
+) {
   return new Promise((resolve, reject) => {
     const options = {
       removeAfterRun: true,
       mountWorkspace: true,
-      dockerCommand: "docker"
+      dockerCommand: "docker",
     };
 
     const ninjaCommand = `ninja -C "${buildDir}" -t targets all`;
-    
+
     const ninjaProcess = dockerOperations.runDockerCommandWithOutput(
       workspacePath,
       containerName,
       ninjaCommand,
       "/bin/bash",
-      options
+      options,
     );
 
     let ninjaStdout = "";
@@ -278,16 +337,19 @@ async function discoverFuzzTargetsNinja(workspacePath, containerName, buildDir, 
     ninjaProcess.on("close", (ninjaCode) => {
       if (ninjaCode !== 0) {
         const error = new Error(`Ninja targets failed: ${ninjaStderr}`);
-        safeFuzzingLog(outputChannel, `Ninja targets command error: ${error.message}`);
+        safeFuzzingLog(
+          outputChannel,
+          `Ninja targets command error: ${error.message}`,
+        );
         reject(error);
         return;
       }
 
       try {
         // Parse the ninja output to find fuzz targets (Ninja format)
-        const lines = ninjaStdout.split('\n');
+        const lines = ninjaStdout.split("\n");
         const fuzzTargets = [];
-        
+
         for (const line of lines) {
           const trimmedLine = line.trim();
           if (trimmedLine) {
@@ -304,19 +366,28 @@ async function discoverFuzzTargetsNinja(workspacePath, containerName, buildDir, 
           }
         }
 
-        safeFuzzingLog(outputChannel, `Found ${fuzzTargets.length} fuzz target(s) using Ninja: ${fuzzTargets.join(', ')}`);
+        safeFuzzingLog(
+          outputChannel,
+          `Found ${fuzzTargets.length} fuzz target(s) using Ninja: ${fuzzTargets.join(", ")}`,
+        );
         resolve(fuzzTargets);
-        
       } catch (parseError) {
-        const error = new Error(`Failed to parse Ninja targets output: ${parseError.message}`);
+        const error = new Error(
+          `Failed to parse Ninja targets output: ${parseError.message}`,
+        );
         safeFuzzingLog(outputChannel, `Ninja parse error: ${error.message}`);
         reject(error);
       }
     });
 
     ninjaProcess.on("error", (error) => {
-      const wrappedError = new Error(`Failed to execute Ninja targets: ${error.message}`);
-      safeFuzzingLog(outputChannel, `Ninja execution error: ${wrappedError.message}`);
+      const wrappedError = new Error(
+        `Failed to execute Ninja targets: ${error.message}`,
+      );
+      safeFuzzingLog(
+        outputChannel,
+        `Ninja execution error: ${wrappedError.message}`,
+      );
       reject(wrappedError);
     });
   });
@@ -332,26 +403,35 @@ async function discoverFuzzTargetsNinja(workspacePath, containerName, buildDir, 
  * @param {vscode.OutputChannel} outputChannel - Output channel for logging
  * @returns {Promise<string[]>} Array of fuzz target names
  */
-async function discoverFuzzTargets(workspacePath, containerName, preset, buildDir, outputChannel) {
+async function discoverFuzzTargets(
+  workspacePath,
+  containerName,
+  preset,
+  buildDir,
+  outputChannel,
+) {
   try {
-    safeFuzzingLog(outputChannel, `Discovering fuzz targets for preset ${preset}...`);
-    
+    safeFuzzingLog(
+      outputChannel,
+      `Discovering fuzz targets for preset ${preset}...`,
+    );
+
     const options = {
       removeAfterRun: true,
       mountWorkspace: true,
-      dockerCommand: "docker"
+      dockerCommand: "docker",
     };
 
     // First configure the preset
     const configureCommand = `cmake --preset "${preset}" -S . -B "${buildDir}"`;
-    
+
     await new Promise((resolve, reject) => {
       const configureProcess = dockerOperations.runDockerCommandWithOutput(
         workspacePath,
         containerName,
         configureCommand,
         "/bin/bash",
-        options
+        options,
       );
 
       let configureStderr = "";
@@ -362,43 +442,81 @@ async function discoverFuzzTargets(workspacePath, containerName, preset, buildDi
 
       configureProcess.on("close", (configureCode) => {
         if (configureCode !== 0) {
-          const error = new Error(`CMake configure failed for preset ${preset}: ${configureStderr}`);
+          const error = new Error(
+            `CMake configure failed for preset ${preset}: ${configureStderr}`,
+          );
           safeFuzzingLog(outputChannel, `Configure error: ${error.message}`);
           reject(error);
           return;
         }
 
-        safeFuzzingLog(outputChannel, `Successfully configured preset ${preset}`);
+        safeFuzzingLog(
+          outputChannel,
+          `Successfully configured preset ${preset}`,
+        );
         resolve();
       });
 
       configureProcess.on("error", (error) => {
-        const wrappedError = new Error(`Failed to execute CMake configure: ${error.message}`);
-        safeFuzzingLog(outputChannel, `Docker execution error: ${wrappedError.message}`);
+        const wrappedError = new Error(
+          `Failed to execute CMake configure: ${error.message}`,
+        );
+        safeFuzzingLog(
+          outputChannel,
+          `Docker execution error: ${wrappedError.message}`,
+        );
         reject(wrappedError);
       });
     });
 
     // Detect the generator type
-    const generator = await detectCMakeGenerator(workspacePath, containerName, buildDir, outputChannel);
+    const generator = await detectCMakeGenerator(
+      workspacePath,
+      containerName,
+      buildDir,
+      outputChannel,
+    );
 
     // Use the appropriate discovery method based on generator
     let fuzzTargets;
-    if (generator === 'ninja') {
-      fuzzTargets = await discoverFuzzTargetsNinja(workspacePath, containerName, buildDir, outputChannel);
-    } else if (generator === 'make') {
-      fuzzTargets = await discoverFuzzTargetsMake(workspacePath, containerName, buildDir, outputChannel);
+    if (generator === "ninja") {
+      fuzzTargets = await discoverFuzzTargetsNinja(
+        workspacePath,
+        containerName,
+        buildDir,
+        outputChannel,
+      );
+    } else if (generator === "make") {
+      fuzzTargets = await discoverFuzzTargetsMake(
+        workspacePath,
+        containerName,
+        buildDir,
+        outputChannel,
+      );
     } else {
       // Fallback to Make method for unknown generators
-      safeFuzzingLog(outputChannel, `Unknown generator '${generator}', falling back to Make method`);
-      fuzzTargets = await discoverFuzzTargetsMake(workspacePath, containerName, buildDir, outputChannel);
+      safeFuzzingLog(
+        outputChannel,
+        `Unknown generator '${generator}', falling back to Make method`,
+      );
+      fuzzTargets = await discoverFuzzTargetsMake(
+        workspacePath,
+        containerName,
+        buildDir,
+        outputChannel,
+      );
     }
 
-    safeFuzzingLog(outputChannel, `Total fuzz targets found for preset ${preset}: ${fuzzTargets.length}`);
+    safeFuzzingLog(
+      outputChannel,
+      `Total fuzz targets found for preset ${preset}: ${fuzzTargets.length}`,
+    );
     return fuzzTargets;
-
   } catch (error) {
-    safeFuzzingLog(outputChannel, `Error discovering fuzz targets: ${error.message}`);
+    safeFuzzingLog(
+      outputChannel,
+      `Error discovering fuzz targets: ${error.message}`,
+    );
     throw error;
   }
 }
@@ -411,36 +529,47 @@ async function discoverFuzzTargets(workspacePath, containerName, preset, buildDi
  * @param {vscode.OutputChannel} outputChannel - Output channel for logging
  * @returns {Promise<boolean>} True if preset is valid
  */
-async function validatePresetConfiguration(workspacePath, containerName, preset, outputChannel) {
+async function validatePresetConfiguration(
+  workspacePath,
+  containerName,
+  preset,
+  outputChannel,
+) {
   return new Promise((resolve) => {
     safeFuzzingLog(outputChannel, `Validating preset configuration: ${preset}`);
-    
+
     const options = {
       removeAfterRun: true,
       mountWorkspace: true,
-      dockerCommand: "docker"
+      dockerCommand: "docker",
     };
 
     // Create a temporary directory for validation
     const tempBuildDir = `/tmp/validate-${preset}-${Date.now()}`;
     const validateCommand = `mkdir -p "${tempBuildDir}" && cmake --preset "${preset}" -S . -B "${tempBuildDir}"`;
-    
+
     const validateProcess = dockerOperations.runDockerCommandWithOutput(
       workspacePath,
       containerName,
       validateCommand,
       "/bin/bash",
-      options
+      options,
     );
 
     validateProcess.on("close", (code) => {
       const isValid = code === 0;
-      safeFuzzingLog(outputChannel, `Preset ${preset} validation: ${isValid ? 'PASSED' : 'FAILED'}`);
+      safeFuzzingLog(
+        outputChannel,
+        `Preset ${preset} validation: ${isValid ? "PASSED" : "FAILED"}`,
+      );
       resolve(isValid);
     });
 
     validateProcess.on("error", (error) => {
-      safeFuzzingLog(outputChannel, `Preset ${preset} validation error: ${error.message}`);
+      safeFuzzingLog(
+        outputChannel,
+        `Preset ${preset} validation error: ${error.message}`,
+      );
       resolve(false);
     });
   });
@@ -449,5 +578,5 @@ async function validatePresetConfiguration(workspacePath, containerName, preset,
 module.exports = {
   discoverCMakePresets,
   discoverFuzzTargets,
-  validatePresetConfiguration
+  validatePresetConfiguration,
 };
