@@ -718,10 +718,14 @@ function activate(context) {
         }
 
         const workspacePath = workspaceFolder.uri.fsPath;
-        const containerName = dockerOperations.generateContainerName(workspacePath);
+        const containerName =
+          dockerOperations.generateContainerName(workspacePath);
 
         // Auto-initialize and build if needed
-        const initialized = await ensureInitializedAndBuilt(workspacePath, containerName);
+        const initialized = await ensureInitializedAndBuilt(
+          workspacePath,
+          containerName,
+        );
         if (!initialized) {
           return;
         }
@@ -741,22 +745,21 @@ function activate(context) {
                 outputChannel,
                 (message, increment) => {
                   progress.report({ message, increment });
-                }
+                },
               );
 
               // Show completion message
-              const message = results.crashes.length > 0
-                ? `Fuzzing completed with ${results.crashes.length} crash(es) found!`
-                : `Fuzzing completed successfully. ${results.executedFuzzers} fuzzer(s) executed.`;
+              const message =
+                results.crashes.length > 0
+                  ? `Fuzzing completed with ${results.crashes.length} crash(es) found!`
+                  : `Fuzzing completed successfully. ${results.executedFuzzers} fuzzer(s) executed.`;
 
               vscode.window.showInformationMessage(`CodeForge: ${message}`);
-
             } catch (error) {
               throw error;
             }
           },
         );
-
       } catch (error) {
         safeOutputLog(`Fuzzing failed: ${error.message}`, true);
         vscode.window.showErrorMessage(
