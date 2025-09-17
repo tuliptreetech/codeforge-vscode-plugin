@@ -89,7 +89,7 @@ console.log("=== Minimal Task Provider Test ===\n");
 
 try {
   // Load the task provider
-  const { CodeForgeTaskProvider } = require("../../taskProvider");
+  const { CodeForgeTaskProvider } = require("../../src/tasks/taskProvider");
   console.log("✅ CodeForgeTaskProvider loaded successfully\n");
 
   // Create mock context

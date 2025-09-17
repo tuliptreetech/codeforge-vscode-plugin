@@ -56,7 +56,7 @@
     "workspaceContains:.codeforge/Dockerfile",
     "onTaskType:codeforge"
   ],
-  "main": "./extension.js",
+  "main": "./src/extension.js",
   "contributes": {
     "commands": [
       {

@@ -15,7 +15,7 @@ const execAsync = promisify(exec);
 const path = require("path");
 
 // Import the docker operations module
-const dockerOps = require("../../dockerOperations");
+const dockerOps = require("../../src/core/dockerOperations");
 
 // Test workspace path
 const testWorkspace = path.resolve(__dirname, "../..");

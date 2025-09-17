@@ -13,8 +13,8 @@ const fs = require("fs").promises;
 const {
   CodeForgeTaskProvider,
   CodeForgeTaskTerminal,
-} = require("../../taskProvider");
-const dockerOperations = require("../../dockerOperations");
+} = require("../../src/tasks/taskProvider");
+const dockerOperations = require("../../src/core/dockerOperations");
 
 suite("Task Provider Test Suite", () => {
   let sandbox;

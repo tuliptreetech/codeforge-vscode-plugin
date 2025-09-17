@@ -92,7 +92,7 @@ check(
   hasTaskProviderImport,
   "CodeForgeTaskProvider is imported",
   "CodeForgeTaskProvider not imported in extension.js",
-  "Import CodeForgeTaskProvider from ./taskProvider.js",
+  "Import CodeForgeTaskProvider from ./tasks/taskProvider.js",
 );
 
 // Check for synchronous registration

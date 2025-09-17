@@ -1,6 +1,6 @@
 const vscode = require("vscode");
-const dockerOperations = require("./dockerOperations");
-const { CodeForgeTaskProvider } = require("./taskProvider");
+const dockerOperations = require("./core/dockerOperations");
+const { CodeForgeTaskProvider } = require("./tasks/taskProvider");
 const fs = require("fs").promises;
 const path = require("path");
 

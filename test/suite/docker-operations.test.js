@@ -8,7 +8,7 @@
 
 const assert = require("assert");
 const sinon = require("sinon");
-const dockerOperations = require("../../dockerOperations");
+const dockerOperations = require("../../src/core/dockerOperations");
 
 suite("Docker Operations Test Suite", () => {
   let sandbox;
@@ -22,7 +22,7 @@ suite("Docker Operations Test Suite", () => {
   });
 
   suite("Container Name Generation", () => {
-    const dockerOperations = require("../../dockerOperations");
+    const dockerOperations = require("../../src/core/dockerOperations");
 
     test("generateContainerName should create valid container names", () => {
       // Test various path formats
