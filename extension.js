@@ -704,6 +704,68 @@ function activate(context) {
     },
   );
 
+  // Register the run fuzzing tests command
+  let runFuzzingTestsCommand = vscode.commands.registerCommand(
+    "codeforge.runFuzzingTests",
+    async function () {
+      try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+          vscode.window.showErrorMessage(
+            "CodeForge: No workspace folder is open",
+          );
+          return;
+        }
+
+        const workspacePath = workspaceFolder.uri.fsPath;
+        const containerName = dockerOperations.generateContainerName(workspacePath);
+
+        // Auto-initialize and build if needed
+        const initialized = await ensureInitializedAndBuilt(workspacePath, containerName);
+        if (!initialized) {
+          return;
+        }
+
+        // Show progress notification following existing pattern
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "CodeForge: Running fuzzing tests...",
+            cancellable: false,
+          },
+          async (progress) => {
+            try {
+              const fuzzingOperations = require("./src/fuzzing/fuzzingOperations");
+              const results = await fuzzingOperations.runFuzzingTests(
+                workspacePath,
+                outputChannel,
+                (message, increment) => {
+                  progress.report({ message, increment });
+                }
+              );
+
+              // Show completion message
+              const message = results.crashes.length > 0
+                ? `Fuzzing completed with ${results.crashes.length} crash(es) found!`
+                : `Fuzzing completed successfully. ${results.executedFuzzers} fuzzer(s) executed.`;
+
+              vscode.window.showInformationMessage(`CodeForge: ${message}`);
+
+            } catch (error) {
+              throw error;
+            }
+          },
+        );
+
+      } catch (error) {
+        safeOutputLog(`Fuzzing failed: ${error.message}`, true);
+        vscode.window.showErrorMessage(
+          `CodeForge: Fuzzing failed - ${error.message}`,
+        );
+      }
+    },
+  );
+
   // Add all commands to subscriptions
   context.subscriptions.push(initializeCommand);
   context.subscriptions.push(buildEnvironmentCommand);
@@ -713,6 +775,7 @@ function activate(context) {
   context.subscriptions.push(listContainersCommand);
   context.subscriptions.push(terminateAllContainersCommand);
   context.subscriptions.push(cleanupOrphanedCommand);
+  context.subscriptions.push(runFuzzingTestsCommand);
 
   // Register check Docker command (not shown in command palette)
   let checkDockerCommand = vscode.commands.registerCommand(
