@@ -32,6 +32,7 @@ RUN apt-get install -y --no-install-recommends \\
     sloccount \\
     cppcheck cppcheck-gui \\
     clang clang-tidy clang-format libclang-rt-18-dev gdb \\
+    gdbserver \\
     ninja-build \\
     just \\
     python3-pip
@@ -405,6 +406,7 @@ function activate(context) {
         const dockerCommand = config.get("dockerCommand", "docker");
         const mountWorkspace = config.get("mountWorkspace", true);
 
+        /// CHANGE THIS TO use the terminal instead of the output channel
         if (showOutput) {
           safeOutputLog("", true); // Just show the output channel
         }
@@ -491,8 +493,8 @@ function activate(context) {
         }
 
         // Auto-generate label and description
-        const taskLabel = `Run in CodeForge: ${command}`;
-        const taskDetail = `Run '${command}' in CodeForge container`;
+        const taskLabel = `CodeForge: ${command}`;
+        const taskDetail = `Run command in CodeForge container`;
 
         // Create the task definition
         const taskDefinition = {
