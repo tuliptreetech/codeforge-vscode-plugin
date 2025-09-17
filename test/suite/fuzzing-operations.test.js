@@ -1,6 +1,7 @@
 const assert = require("assert");
 const vscode = require("vscode");
 const sinon = require("sinon");
+const path = require("path");
 const fuzzingOperations = require("../../src/fuzzing/fuzzingOperations");
 const dockerOperations = require("../../dockerOperations");
 
@@ -38,8 +39,8 @@ suite("Fuzzing Operations Test Suite", () => {
     });
 
     test("createFuzzingDirectory should return correct path", async () => {
-      const workspacePath = "/test/workspace";
-      const expectedPath = "/test/workspace/.codeforge/fuzzing";
+      const workspacePath = path.join("test", "workspace");
+      const expectedPath = path.join(workspacePath, ".codeforge", "fuzzing");
 
       // Mock fs operations
       const fs = require("fs").promises;
