@@ -718,10 +718,10 @@ function activate(context) {
         }
 
         const workspacePath = workspaceFolder.uri.fsPath;
-        const containerName =
-          dockerOperations.generateContainerName(workspacePath);
 
         // Auto-initialize and build if needed
+        const containerName =
+          dockerOperations.generateContainerName(workspacePath);
         const initialized = await ensureInitializedAndBuilt(
           workspacePath,
           containerName,
@@ -730,35 +730,32 @@ function activate(context) {
           return;
         }
 
-        // Show progress notification following existing pattern
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: "CodeForge: Running fuzzing tests...",
-            cancellable: false,
-          },
-          async (progress) => {
-            try {
-              const fuzzingOperations = require("./src/fuzzing/fuzzingOperations");
-              const results = await fuzzingOperations.runFuzzingTests(
-                workspacePath,
-                outputChannel,
-                (message, increment) => {
-                  progress.report({ message, increment });
-                },
-              );
+        // Import the fuzzing terminal
+        const {
+          CodeForgeFuzzingTerminal,
+        } = require("./fuzzing/fuzzingTerminal");
 
-              // Show completion message
-              const message =
-                results.crashes.length > 0
-                  ? `Fuzzing completed with ${results.crashes.length} crash(es) found!`
-                  : `Fuzzing completed successfully. ${results.executedFuzzers} fuzzer(s) executed.`;
+        // Create a unique terminal name with timestamp
+        const timestamp = new Date().toLocaleTimeString();
+        const terminalName = `CodeForge Fuzzing: ${timestamp}`;
 
-              vscode.window.showInformationMessage(`CodeForge: ${message}`);
-            } catch (error) {
-              throw error;
-            }
-          },
+        // Create the fuzzing terminal
+        const fuzzingTerminal = new CodeForgeFuzzingTerminal(workspacePath);
+
+        // Create the VSCode terminal with our custom implementation
+        const terminal = vscode.window.createTerminal({
+          name: terminalName,
+          pty: fuzzingTerminal,
+          scrollback: 3000, // Double the default scrollback (1000 -> 3000) for fuzzing output history
+        });
+
+        // Show the terminal immediately
+        terminal.show();
+
+        // Show brief notification that fuzzing has started
+        vscode.window.showInformationMessage(
+          "CodeForge: Fuzzing tests started in terminal",
+          { modal: false },
         );
       } catch (error) {
         safeOutputLog(`Fuzzing failed: ${error.message}`, true);
