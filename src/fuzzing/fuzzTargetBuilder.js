@@ -1,15 +1,28 @@
-const dockerOperations = require("../../dockerOperations");
+const dockerOperations = require("../core/dockerOperations");
 const path = require("path");
 
 /**
- * Safe wrapper for fuzzing output channel operations
+ * Safe wrapper for fuzzing terminal operations
+ * Works with both output channels and terminal instances
  */
-function safeFuzzingLog(outputChannel, message, show = false) {
+function safeFuzzingLog(terminal, message, show = false) {
   try {
-    if (outputChannel) {
-      outputChannel.appendLine(`[Fuzzing] ${message}`);
-      if (show) {
-        outputChannel.show();
+    if (terminal) {
+      if (typeof terminal.appendLine === "function") {
+        // Terminal instance
+        terminal.appendLine(`[Fuzzing] ${message}`);
+        if (show && typeof terminal.show === "function") {
+          terminal.show();
+        }
+      } else if (typeof terminal.writeRaw === "function") {
+        // Custom terminal with writeRaw method
+        terminal.writeRaw(`[Fuzzing] ${message}\n`, "\x1b[36m"); // Cyan color for fuzzing messages
+      } else {
+        // Fallback for output channel
+        terminal.appendLine(`[Fuzzing] ${message}`);
+        if (show) {
+          terminal.show();
+        }
       }
     }
   } catch (error) {
@@ -35,7 +48,7 @@ async function createTemporaryBuildDirectory(fuzzingDir, preset) {
  * @param {string} preset - CMake preset name
  * @param {string[]} targets - Array of target names to build
  * @param {string} buildDir - Build directory path
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<string[]>} Array of successfully built target names
  */
 async function buildFuzzTargets(
@@ -44,13 +57,13 @@ async function buildFuzzTargets(
   preset,
   targets,
   buildDir,
-  outputChannel,
+  terminal,
 ) {
   const builtTargets = [];
   const buildErrors = [];
 
   safeFuzzingLog(
-    outputChannel,
+    terminal,
     `Building ${targets.length} fuzz target(s) for preset ${preset}...`,
   );
 
@@ -61,13 +74,13 @@ async function buildFuzzTargets(
         containerName,
         target,
         buildDir,
-        outputChannel,
+        terminal,
       );
       builtTargets.push(target);
-      safeFuzzingLog(outputChannel, `Successfully built target: ${target}`);
+      safeFuzzingLog(terminal, `Successfully built target: ${target}`);
     } catch (error) {
       const errorMsg = `Failed to build target ${target}: ${error.message}`;
-      safeFuzzingLog(outputChannel, errorMsg);
+      safeFuzzingLog(terminal, errorMsg);
       buildErrors.push({
         target: target,
         error: error.message,
@@ -78,7 +91,7 @@ async function buildFuzzTargets(
 
   if (buildErrors.length > 0) {
     safeFuzzingLog(
-      outputChannel,
+      terminal,
       `Build completed with ${buildErrors.length} error(s) out of ${targets.length} target(s)`,
     );
   }
@@ -96,7 +109,7 @@ async function buildFuzzTargets(
  * @param {string} containerName - Docker container name
  * @param {string} target - Target name to build
  * @param {string} buildDir - Build directory path
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<void>}
  */
 async function buildSingleTarget(
@@ -104,10 +117,10 @@ async function buildSingleTarget(
   containerName,
   target,
   buildDir,
-  outputChannel,
+  terminal,
 ) {
   return new Promise((resolve, reject) => {
-    safeFuzzingLog(outputChannel, `Building target: ${target}`);
+    safeFuzzingLog(terminal, `Building target: ${target}`);
 
     const options = {
       removeAfterRun: true,
@@ -146,7 +159,7 @@ async function buildSingleTarget(
       }
 
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Build output for ${target}: ${stdout.slice(-200)}`,
       ); // Log last 200 chars
       resolve();
@@ -168,7 +181,7 @@ async function buildSingleTarget(
  * @param {string} buildDir - Build directory path
  * @param {string[]} targets - Array of built target names
  * @param {string} fuzzingDir - Central fuzzing directory
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<Object[]>} Array of copied fuzzer info objects
  */
 async function copyFuzzExecutables(
@@ -177,12 +190,12 @@ async function copyFuzzExecutables(
   buildDir,
   targets,
   fuzzingDir,
-  outputChannel,
+  terminal,
 ) {
   const copiedFuzzers = [];
 
   safeFuzzingLog(
-    outputChannel,
+    terminal,
     `Copying ${targets.length} executable(s) to central location...`,
   );
 
@@ -194,16 +207,16 @@ async function copyFuzzExecutables(
         buildDir,
         target,
         fuzzingDir,
-        outputChannel,
+        terminal,
       );
       copiedFuzzers.push(fuzzerInfo);
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Copied executable: ${target} -> ${fuzzerInfo.path}`,
       );
     } catch (error) {
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Failed to copy executable for ${target}: ${error.message}`,
       );
       // Continue with other executables
@@ -220,7 +233,7 @@ async function copyFuzzExecutables(
  * @param {string} buildDir - Build directory path
  * @param {string} target - Target name
  * @param {string} fuzzingDir - Central fuzzing directory
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<Object>} Fuzzer info object
  */
 async function copyExecutable(
@@ -229,7 +242,7 @@ async function copyExecutable(
   buildDir,
   target,
   fuzzingDir,
-  outputChannel,
+  terminal,
 ) {
   return new Promise((resolve, reject) => {
     const options = {
@@ -313,19 +326,19 @@ async function copyExecutable(
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string[]} buildDirs - Array of build directory paths to clean
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<void>}
  */
 async function cleanupBuildDirectories(
   workspacePath,
   containerName,
   buildDirs,
-  outputChannel,
+  terminal,
 ) {
   if (buildDirs.length === 0) return;
 
   safeFuzzingLog(
-    outputChannel,
+    terminal,
     `Cleaning up ${buildDirs.length} build director(ies)...`,
   );
 
@@ -348,13 +361,10 @@ async function cleanupBuildDirectories(
 
     cleanupProcess.on("close", (code) => {
       if (code === 0) {
-        safeFuzzingLog(
-          outputChannel,
-          "Build directories cleaned up successfully",
-        );
+        safeFuzzingLog(terminal, "Build directories cleaned up successfully");
       } else {
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           "Warning: Some build directories may not have been cleaned up properly",
         );
       }
@@ -362,7 +372,7 @@ async function cleanupBuildDirectories(
     });
 
     cleanupProcess.on("error", (error) => {
-      safeFuzzingLog(outputChannel, `Warning: Cleanup error: ${error.message}`);
+      safeFuzzingLog(terminal, `Warning: Cleanup error: ${error.message}`);
       resolve(); // Don't fail the entire process for cleanup errors
     });
   });

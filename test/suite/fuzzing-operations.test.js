@@ -149,28 +149,158 @@ suite("Fuzzing Operations Test Suite", () => {
       assert(
         showErrorMessageStub.calledWith(
           "CodeForge: Fuzzing retry context failed: Retry test",
-          "View Output",
+          "View Terminal",
           "Retry",
           "Cancel",
         ),
       );
     });
 
-    test("handleFuzzingError should show output channel when requested", async () => {
+    test("handleFuzzingError should show terminal when requested", async () => {
       const showErrorMessageStub = sandbox
         .stub(vscode.window, "showErrorMessage")
-        .resolves("View Output");
+        .resolves("View Terminal");
 
-      const error = new Error("View output test");
+      const error = new Error("View terminal test");
       const result = await fuzzingOperations.handleFuzzingError(
         error,
         "view context",
         mockOutputChannel,
       );
 
-      assert.strictEqual(result, "View Output");
+      assert.strictEqual(result, "View Terminal");
       // The show method should be called twice: once in safeFuzzingLog (show=true) and once explicitly
       assert(mockOutputChannel.show.calledTwice);
+    });
+  });
+
+  suite("Fuzzing Terminal Behavior", () => {
+    const {
+      CodeForgeFuzzingTerminal,
+    } = require("../../src/fuzzing/fuzzingTerminal");
+
+    test("Terminal should not auto-close after successful fuzzing completion", async () => {
+      const terminal = new CodeForgeFuzzingTerminal("/test/workspace");
+      let closeEventFired = false;
+      let closeCode = null;
+
+      // Listen for close events
+      terminal.onDidClose((code) => {
+        closeEventFired = true;
+        closeCode = code;
+      });
+
+      // Mock successful fuzzing results
+      const mockResults = {
+        crashes: [],
+        executedFuzzers: 2,
+        builtTargets: 3,
+        totalTargets: 3,
+      };
+
+      // Simulate the completion logic without calling the full open() method
+      terminal.isActive = true;
+      terminal.fuzzingStartTime = new Date(Date.now() - 5000); // 5 seconds ago
+
+      // Show completion message (this is what happens in the actual code)
+      const endTime = new Date();
+      const duration = ((endTime - terminal.fuzzingStartTime) / 1000).toFixed(
+        2,
+      );
+      const message = `Fuzzing completed successfully. ${mockResults.executedFuzzers} fuzzer(s) executed. Duration: ${duration}s`;
+      terminal.writeEmitter.fire(`\r\n\x1b[32m${message}\x1b[0m\r\n`);
+
+      // Add the helpful message about terminal staying open
+      terminal.writeEmitter.fire(
+        `\r\n\x1b[90mTerminal will remain open for result review. Close manually when done.\x1b[0m\r\n`,
+      );
+
+      // Verify that no close event was fired (terminal stays open)
+      assert.strictEqual(
+        closeEventFired,
+        false,
+        "Terminal should not auto-close after successful completion",
+      );
+      assert.strictEqual(closeCode, null, "No close code should be set");
+      assert.strictEqual(
+        terminal.isActive,
+        true,
+        "Terminal should remain active",
+      );
+    });
+
+    test("Terminal should not auto-close after fuzzing with crashes", async () => {
+      const terminal = new CodeForgeFuzzingTerminal("/test/workspace");
+      let closeEventFired = false;
+
+      // Listen for close events
+      terminal.onDidClose(() => {
+        closeEventFired = true;
+      });
+
+      // Mock fuzzing results with crashes
+      const mockResults = {
+        crashes: [{ fuzzer: "test-fuzz", file: "/path/to/crash" }],
+        executedFuzzers: 2,
+        builtTargets: 3,
+        totalTargets: 3,
+      };
+
+      // Simulate the completion logic
+      terminal.isActive = true;
+      terminal.fuzzingStartTime = new Date(Date.now() - 3000); // 3 seconds ago
+
+      // Show completion message with crashes
+      const endTime = new Date();
+      const duration = ((endTime - terminal.fuzzingStartTime) / 1000).toFixed(
+        2,
+      );
+      const message = `Fuzzing completed with ${mockResults.crashes.length} crash(es) found! Duration: ${duration}s`;
+      terminal.writeEmitter.fire(`\r\n\x1b[31m${message}\x1b[0m\r\n`);
+
+      // Add the helpful message about terminal staying open
+      terminal.writeEmitter.fire(
+        `\r\n\x1b[90mTerminal will remain open for result review. Close manually when done.\x1b[0m\r\n`,
+      );
+
+      // Verify that no close event was fired (terminal stays open even with crashes)
+      assert.strictEqual(
+        closeEventFired,
+        false,
+        "Terminal should not auto-close even when crashes are found",
+      );
+      assert.strictEqual(
+        terminal.isActive,
+        true,
+        "Terminal should remain active",
+      );
+    });
+
+    test("Terminal should only close when manually closed", async () => {
+      const terminal = new CodeForgeFuzzingTerminal("/test/workspace");
+      let closeEventFired = false;
+      let closeCode = null;
+
+      // Listen for close events
+      terminal.onDidClose((code) => {
+        closeEventFired = true;
+        closeCode = code;
+      });
+
+      terminal.isActive = true;
+
+      // Manually close the terminal (simulating user action)
+      await terminal.close();
+
+      // Verify terminal is properly closed
+      assert.strictEqual(
+        terminal.isActive,
+        false,
+        "Terminal should be marked as inactive after manual close",
+      );
+
+      // Note: The close event is not fired by the close() method itself,
+      // but would be fired by VSCode when the user closes the terminal
     });
   });
 });

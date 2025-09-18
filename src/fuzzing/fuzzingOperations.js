@@ -4,19 +4,31 @@ const path = require("path");
 const fs = require("fs").promises;
 
 /**
- * Safe wrapper for fuzzing output channel operations
- * Following the pattern from extension.js
+ * Safe wrapper for fuzzing terminal operations
+ * Works with both output channels and terminal instances
  */
-function safeFuzzingLog(outputChannel, message, show = false) {
+function safeFuzzingLog(terminal, message, show = false) {
   try {
-    if (outputChannel) {
-      outputChannel.appendLine(`[Fuzzing] ${message}`);
-      if (show) {
-        outputChannel.show();
+    if (terminal) {
+      if (typeof terminal.appendLine === "function") {
+        // Terminal instance
+        terminal.appendLine(`[Fuzzing] ${message}`);
+        if (show && typeof terminal.show === "function") {
+          terminal.show();
+        }
+      } else if (typeof terminal.writeRaw === "function") {
+        // Custom terminal with writeRaw method
+        terminal.writeRaw(`[Fuzzing] ${message}\n`, "\x1b[36m"); // Cyan color for fuzzing messages
+      } else {
+        // Fallback for output channel
+        terminal.appendLine(`[Fuzzing] ${message}`);
+        if (show) {
+          terminal.show();
+        }
       }
     }
   } catch (error) {
-    // Silently ignore if output channel is disposed
+    // Silently ignore if terminal is disposed
     console.log(`CodeForge Fuzzing: ${message}`);
   }
 }
@@ -25,23 +37,23 @@ function safeFuzzingLog(outputChannel, message, show = false) {
  * Handles fuzzing errors with user-friendly messages and recovery options
  * @param {Error} error - The error that occurred
  * @param {string} context - Context where the error occurred
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<string|undefined>} User's choice for error recovery
  */
-async function handleFuzzingError(error, context, outputChannel) {
+async function handleFuzzingError(error, context, terminal) {
   const errorMessage = `Fuzzing ${context} failed: ${error.message}`;
-  safeFuzzingLog(outputChannel, errorMessage, true);
+  safeFuzzingLog(terminal, errorMessage, true);
 
   // Show user-friendly error with actionable suggestions
   const action = await vscode.window.showErrorMessage(
     `CodeForge: ${errorMessage}`,
-    "View Output",
+    "View Terminal",
     "Retry",
     "Cancel",
   );
 
-  if (action === "View Output") {
-    outputChannel.show();
+  if (action === "View Terminal" && typeof terminal.show === "function") {
+    terminal.show();
   }
   return action;
 }
@@ -69,7 +81,7 @@ async function createFuzzingDirectory(workspacePath) {
  * Coordinates preset discovery, target building, and fuzzer execution
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @param {Function} progressCallback - Progress reporting callback
  * @param {Object} options - Fuzzing options
  * @returns {Promise<Object>} Fuzzing results summary
@@ -77,7 +89,7 @@ async function createFuzzingDirectory(workspacePath) {
 async function orchestrateFuzzingWorkflow(
   workspacePath,
   containerName,
-  outputChannel,
+  terminal,
   progressCallback,
   options = {},
 ) {
@@ -97,23 +109,23 @@ async function orchestrateFuzzingWorkflow(
 
   try {
     // Create fuzzing directory
-    safeFuzzingLog(outputChannel, "Creating fuzzing directory structure...");
+    safeFuzzingLog(terminal, "Creating fuzzing directory structure...");
     const fuzzingDir = await createFuzzingDirectory(workspacePath);
     progressCallback("Creating fuzzing directory", 5);
 
     // Discover CMake presets
-    safeFuzzingLog(outputChannel, "Discovering CMake presets...");
+    safeFuzzingLog(terminal, "Discovering CMake presets...");
     progressCallback("Discovering CMake presets", 10);
 
     const presets = await cmakePresetDiscovery.discoverCMakePresets(
       workspacePath,
       containerName,
-      outputChannel,
+      terminal,
     );
 
     results.totalPresets = presets.length;
     safeFuzzingLog(
-      outputChannel,
+      terminal,
       `Found ${presets.length} CMake preset(s): ${presets.join(", ")}`,
     );
 
@@ -131,7 +143,7 @@ async function orchestrateFuzzingWorkflow(
       const presetProgress = 20 + (i / presets.length) * 60; // 20-80% for preset processing
 
       try {
-        safeFuzzingLog(outputChannel, `Processing preset: ${preset}`);
+        safeFuzzingLog(terminal, `Processing preset: ${preset}`);
         progressCallback(`Processing preset: ${preset}`, presetProgress);
 
         // Create temporary build directory
@@ -146,12 +158,12 @@ async function orchestrateFuzzingWorkflow(
           containerName,
           preset,
           buildDir,
-          outputChannel,
+          terminal,
         );
 
         if (targets.length === 0) {
           safeFuzzingLog(
-            outputChannel,
+            terminal,
             `No fuzz targets found for preset ${preset} - skipping`,
           );
           continue;
@@ -159,7 +171,7 @@ async function orchestrateFuzzingWorkflow(
 
         results.totalTargets += targets.length;
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           `Found ${targets.length} fuzz target(s) for preset ${preset}: ${targets.join(", ")}`,
         );
 
@@ -170,7 +182,7 @@ async function orchestrateFuzzingWorkflow(
           preset,
           targets,
           buildDir,
-          outputChannel,
+          terminal,
         );
 
         results.builtTargets += builtTargets.length;
@@ -182,7 +194,7 @@ async function orchestrateFuzzingWorkflow(
           buildDir,
           builtTargets,
           fuzzingDir,
-          outputChannel,
+          terminal,
         );
 
         // Add to fuzzer collection
@@ -193,7 +205,7 @@ async function orchestrateFuzzingWorkflow(
         results.processedPresets++;
       } catch (error) {
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           `Error processing preset ${preset}: ${error.message}`,
         );
         results.errors.push({
@@ -207,7 +219,7 @@ async function orchestrateFuzzingWorkflow(
 
     // Execute fuzzers
     if (allFuzzers.size > 0) {
-      safeFuzzingLog(outputChannel, `Running ${allFuzzers.size} fuzzer(s)...`);
+      safeFuzzingLog(terminal, `Running ${allFuzzers.size} fuzzer(s)...`);
       progressCallback("Running fuzzers", 85);
 
       const fuzzingResults = await fuzzRunner.runAllFuzzers(
@@ -215,7 +227,7 @@ async function orchestrateFuzzingWorkflow(
         containerName,
         allFuzzers,
         fuzzingDir,
-        outputChannel,
+        terminal,
         options.fuzzingOptions || {},
       );
 
@@ -228,7 +240,7 @@ async function orchestrateFuzzingWorkflow(
 
     // Generate summary report
     const summary = generateFuzzingSummary(results);
-    safeFuzzingLog(outputChannel, summary, true);
+    safeFuzzingLog(terminal, summary, true);
 
     progressCallback("Fuzzing complete", 100);
     return results;
@@ -277,19 +289,19 @@ function generateFuzzingSummary(results) {
  * Main entry point for running fuzzing tests
  * Called from the VSCode command
  * @param {string} workspacePath - Path to the workspace
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @param {Function} progressCallback - Progress reporting callback
  * @param {Object} options - Fuzzing options
  * @returns {Promise<Object>} Fuzzing results
  */
 async function runFuzzingTests(
   workspacePath,
-  outputChannel,
+  terminal,
   progressCallback,
   options = {},
 ) {
   try {
-    safeFuzzingLog(outputChannel, "Starting fuzzing workflow...", true);
+    safeFuzzingLog(terminal, "Starting fuzzing workflow...", true);
 
     // Generate container name using existing pattern
     const containerName = dockerOperations.generateContainerName(workspacePath);
@@ -298,7 +310,7 @@ async function runFuzzingTests(
     const results = await orchestrateFuzzingWorkflow(
       workspacePath,
       containerName,
-      outputChannel,
+      terminal,
       progressCallback,
       options,
     );
@@ -309,15 +321,17 @@ async function runFuzzingTests(
         ? `Fuzzing completed with ${results.crashes.length} crash(es) found!`
         : `Fuzzing completed successfully. ${results.executedFuzzers} fuzzer(s) executed.`;
 
-    vscode.window.showInformationMessage(`CodeForge: ${message}`);
+    vscode.window.showInformationMessage(`CodeForge: ${message}`, {
+      modal: false,
+    });
 
     return results;
   } catch (error) {
-    const action = await handleFuzzingError(error, "workflow", outputChannel);
+    const action = await handleFuzzingError(error, "workflow", terminal);
     if (action === "Retry") {
       return runFuzzingTests(
         workspacePath,
-        outputChannel,
+        terminal,
         progressCallback,
         options,
       );

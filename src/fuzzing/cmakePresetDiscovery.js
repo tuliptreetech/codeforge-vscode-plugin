@@ -1,17 +1,31 @@
-const dockerOperations = require("../../dockerOperations");
+const dockerOperations = require("../core/dockerOperations");
 
 /**
- * Safe wrapper for fuzzing output channel operations
+ * Safe wrapper for fuzzing terminal operations
+ * Works with both output channels and terminal instances
  */
-function safeFuzzingLog(outputChannel, message, show = false) {
+function safeFuzzingLog(terminal, message, show = false) {
   try {
-    if (outputChannel) {
-      outputChannel.appendLine(`[Fuzzing] ${message}`);
-      if (show) {
-        outputChannel.show();
+    if (terminal) {
+      if (typeof terminal.appendLine === "function") {
+        // Terminal instance
+        terminal.appendLine(`[Fuzzing] ${message}`);
+        if (show && typeof terminal.show === "function") {
+          terminal.show();
+        }
+      } else if (typeof terminal.writeRaw === "function") {
+        // Custom terminal with writeRaw method
+        terminal.writeRaw(`[Fuzzing] ${message}\n`, "\x1b[36m"); // Cyan color for fuzzing messages
+      } else {
+        // Fallback for output channel
+        terminal.appendLine(`[Fuzzing] ${message}`);
+        if (show) {
+          terminal.show();
+        }
       }
     }
   } catch (error) {
+    // Silently ignore if terminal is disposed
     console.log(`CodeForge Fuzzing: ${message}`);
   }
 }
@@ -21,19 +35,12 @@ function safeFuzzingLog(outputChannel, message, show = false) {
  * Replicates the functionality of: cmake . --list-presets | tail +2 | awk -F'"' '{print $2}'
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<string[]>} Array of preset names
  */
-async function discoverCMakePresets(
-  workspacePath,
-  containerName,
-  outputChannel,
-) {
+async function discoverCMakePresets(workspacePath, containerName, terminal) {
   return new Promise((resolve, reject) => {
-    safeFuzzingLog(
-      outputChannel,
-      "Executing cmake --list-presets in container...",
-    );
+    safeFuzzingLog(terminal, "Executing cmake --list-presets in container...");
 
     const options = {
       removeAfterRun: true,
@@ -66,7 +73,7 @@ async function discoverCMakePresets(
           `CMake preset discovery failed with exit code ${code}: ${stderr}`,
         );
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           `CMake preset discovery error: ${error.message}`,
         );
         reject(error);
@@ -89,7 +96,7 @@ async function discoverCMakePresets(
         }
 
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           `Discovered ${presets.length} preset(s): ${presets.join(", ")}`,
         );
         resolve(presets);
@@ -97,7 +104,7 @@ async function discoverCMakePresets(
         const error = new Error(
           `Failed to parse CMake preset output: ${parseError.message}`,
         );
-        safeFuzzingLog(outputChannel, `Parse error: ${error.message}`);
+        safeFuzzingLog(terminal, `Parse error: ${error.message}`);
         reject(error);
       }
     });
@@ -107,7 +114,7 @@ async function discoverCMakePresets(
         `Failed to execute CMake preset discovery: ${error.message}`,
       );
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Docker execution error: ${wrappedError.message}`,
       );
       reject(wrappedError);
@@ -120,20 +127,17 @@ async function discoverCMakePresets(
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string} buildDir - Build directory path
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<string>} Generator type ('ninja' or 'make')
  */
 async function detectCMakeGenerator(
   workspacePath,
   containerName,
   buildDir,
-  outputChannel,
+  terminal,
 ) {
   return new Promise((resolve, reject) => {
-    safeFuzzingLog(
-      outputChannel,
-      `Detecting CMake generator in ${buildDir}...`,
-    );
+    safeFuzzingLog(terminal, `Detecting CMake generator in ${buildDir}...`);
 
     const options = {
       removeAfterRun: true,
@@ -166,16 +170,13 @@ async function detectCMakeGenerator(
     checkProcess.on("close", (code) => {
       if (code !== 0) {
         const error = new Error(`Generator detection failed: ${stderr}`);
-        safeFuzzingLog(
-          outputChannel,
-          `Generator detection error: ${error.message}`,
-        );
+        safeFuzzingLog(terminal, `Generator detection error: ${error.message}`);
         reject(error);
         return;
       }
 
       const generator = stdout.trim().toLowerCase();
-      safeFuzzingLog(outputChannel, `Detected generator: ${generator}`);
+      safeFuzzingLog(terminal, `Detected generator: ${generator}`);
       resolve(generator);
     });
 
@@ -184,7 +185,7 @@ async function detectCMakeGenerator(
         `Failed to detect generator: ${error.message}`,
       );
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Generator detection error: ${wrappedError.message}`,
       );
       reject(wrappedError);
@@ -197,14 +198,14 @@ async function detectCMakeGenerator(
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string} buildDir - Build directory path
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<string[]>} Array of fuzz target names
  */
 async function discoverFuzzTargetsMake(
   workspacePath,
   containerName,
   buildDir,
-  outputChannel,
+  terminal,
 ) {
   return new Promise((resolve, reject) => {
     const options = {
@@ -237,10 +238,7 @@ async function discoverFuzzTargetsMake(
     helpProcess.on("close", (helpCode) => {
       if (helpCode !== 0) {
         const error = new Error(`CMake help failed: ${helpStderr}`);
-        safeFuzzingLog(
-          outputChannel,
-          `Make help command error: ${error.message}`,
-        );
+        safeFuzzingLog(terminal, `Make help command error: ${error.message}`);
         reject(error);
         return;
       }
@@ -266,7 +264,7 @@ async function discoverFuzzTargetsMake(
         }
 
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           `Found ${fuzzTargets.length} fuzz target(s) using Make: ${fuzzTargets.join(", ")}`,
         );
         resolve(fuzzTargets);
@@ -274,7 +272,7 @@ async function discoverFuzzTargetsMake(
         const error = new Error(
           `Failed to parse Make help output: ${parseError.message}`,
         );
-        safeFuzzingLog(outputChannel, `Make parse error: ${error.message}`);
+        safeFuzzingLog(terminal, `Make parse error: ${error.message}`);
         reject(error);
       }
     });
@@ -283,10 +281,7 @@ async function discoverFuzzTargetsMake(
       const wrappedError = new Error(
         `Failed to execute Make help: ${error.message}`,
       );
-      safeFuzzingLog(
-        outputChannel,
-        `Make execution error: ${wrappedError.message}`,
-      );
+      safeFuzzingLog(terminal, `Make execution error: ${wrappedError.message}`);
       reject(wrappedError);
     });
   });
@@ -297,14 +292,14 @@ async function discoverFuzzTargetsMake(
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string} buildDir - Build directory path
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<string[]>} Array of fuzz target names
  */
 async function discoverFuzzTargetsNinja(
   workspacePath,
   containerName,
   buildDir,
-  outputChannel,
+  terminal,
 ) {
   return new Promise((resolve, reject) => {
     const options = {
@@ -338,7 +333,7 @@ async function discoverFuzzTargetsNinja(
       if (ninjaCode !== 0) {
         const error = new Error(`Ninja targets failed: ${ninjaStderr}`);
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           `Ninja targets command error: ${error.message}`,
         );
         reject(error);
@@ -367,7 +362,7 @@ async function discoverFuzzTargetsNinja(
         }
 
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           `Found ${fuzzTargets.length} fuzz target(s) using Ninja: ${fuzzTargets.join(", ")}`,
         );
         resolve(fuzzTargets);
@@ -375,7 +370,7 @@ async function discoverFuzzTargetsNinja(
         const error = new Error(
           `Failed to parse Ninja targets output: ${parseError.message}`,
         );
-        safeFuzzingLog(outputChannel, `Ninja parse error: ${error.message}`);
+        safeFuzzingLog(terminal, `Ninja parse error: ${error.message}`);
         reject(error);
       }
     });
@@ -385,7 +380,7 @@ async function discoverFuzzTargetsNinja(
         `Failed to execute Ninja targets: ${error.message}`,
       );
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Ninja execution error: ${wrappedError.message}`,
       );
       reject(wrappedError);
@@ -400,7 +395,7 @@ async function discoverFuzzTargetsNinja(
  * @param {string} containerName - Docker container name
  * @param {string} preset - CMake preset name
  * @param {string} buildDir - Build directory path
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<string[]>} Array of fuzz target names
  */
 async function discoverFuzzTargets(
@@ -408,11 +403,11 @@ async function discoverFuzzTargets(
   containerName,
   preset,
   buildDir,
-  outputChannel,
+  terminal,
 ) {
   try {
     safeFuzzingLog(
-      outputChannel,
+      terminal,
       `Discovering fuzz targets for preset ${preset}...`,
     );
 
@@ -445,15 +440,12 @@ async function discoverFuzzTargets(
           const error = new Error(
             `CMake configure failed for preset ${preset}: ${configureStderr}`,
           );
-          safeFuzzingLog(outputChannel, `Configure error: ${error.message}`);
+          safeFuzzingLog(terminal, `Configure error: ${error.message}`);
           reject(error);
           return;
         }
 
-        safeFuzzingLog(
-          outputChannel,
-          `Successfully configured preset ${preset}`,
-        );
+        safeFuzzingLog(terminal, `Successfully configured preset ${preset}`);
         resolve();
       });
 
@@ -462,7 +454,7 @@ async function discoverFuzzTargets(
           `Failed to execute CMake configure: ${error.message}`,
         );
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           `Docker execution error: ${wrappedError.message}`,
         );
         reject(wrappedError);
@@ -474,7 +466,7 @@ async function discoverFuzzTargets(
       workspacePath,
       containerName,
       buildDir,
-      outputChannel,
+      terminal,
     );
 
     // Use the appropriate discovery method based on generator
@@ -484,37 +476,37 @@ async function discoverFuzzTargets(
         workspacePath,
         containerName,
         buildDir,
-        outputChannel,
+        terminal,
       );
     } else if (generator === "make") {
       fuzzTargets = await discoverFuzzTargetsMake(
         workspacePath,
         containerName,
         buildDir,
-        outputChannel,
+        terminal,
       );
     } else {
       // Fallback to Make method for unknown generators
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Unknown generator '${generator}', falling back to Make method`,
       );
       fuzzTargets = await discoverFuzzTargetsMake(
         workspacePath,
         containerName,
         buildDir,
-        outputChannel,
+        terminal,
       );
     }
 
     safeFuzzingLog(
-      outputChannel,
+      terminal,
       `Total fuzz targets found for preset ${preset}: ${fuzzTargets.length}`,
     );
     return fuzzTargets;
   } catch (error) {
     safeFuzzingLog(
-      outputChannel,
+      terminal,
       `Error discovering fuzz targets: ${error.message}`,
     );
     throw error;
@@ -526,17 +518,17 @@ async function discoverFuzzTargets(
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string} preset - CMake preset name
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<boolean>} True if preset is valid
  */
 async function validatePresetConfiguration(
   workspacePath,
   containerName,
   preset,
-  outputChannel,
+  terminal,
 ) {
   return new Promise((resolve) => {
-    safeFuzzingLog(outputChannel, `Validating preset configuration: ${preset}`);
+    safeFuzzingLog(terminal, `Validating preset configuration: ${preset}`);
 
     const options = {
       removeAfterRun: true,
@@ -559,7 +551,7 @@ async function validatePresetConfiguration(
     validateProcess.on("close", (code) => {
       const isValid = code === 0;
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Preset ${preset} validation: ${isValid ? "PASSED" : "FAILED"}`,
       );
       resolve(isValid);
@@ -567,7 +559,7 @@ async function validatePresetConfiguration(
 
     validateProcess.on("error", (error) => {
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Preset ${preset} validation error: ${error.message}`,
       );
       resolve(false);

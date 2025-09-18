@@ -1,15 +1,28 @@
-const dockerOperations = require("../../dockerOperations");
+const dockerOperations = require("../core/dockerOperations");
 const path = require("path");
 
 /**
- * Safe wrapper for fuzzing output channel operations
+ * Safe wrapper for fuzzing terminal operations
+ * Works with both output channels and terminal instances
  */
-function safeFuzzingLog(outputChannel, message, show = false) {
+function safeFuzzingLog(terminal, message, show = false) {
   try {
-    if (outputChannel) {
-      outputChannel.appendLine(`[Fuzzing] ${message}`);
-      if (show) {
-        outputChannel.show();
+    if (terminal) {
+      if (typeof terminal.appendLine === "function") {
+        // Terminal instance
+        terminal.appendLine(`[Fuzzing] ${message}`);
+        if (show && typeof terminal.show === "function") {
+          terminal.show();
+        }
+      } else if (typeof terminal.writeRaw === "function") {
+        // Custom terminal with writeRaw method
+        terminal.writeRaw(`[Fuzzing] ${message}\n`, "\x1b[36m"); // Cyan color for fuzzing messages
+      } else {
+        // Fallback for output channel
+        terminal.appendLine(`[Fuzzing] ${message}`);
+        if (show) {
+          terminal.show();
+        }
       }
     }
   } catch (error) {
@@ -35,7 +48,7 @@ const DEFAULT_LIBFUZZER_OPTIONS = {
  * @param {string} containerName - Docker container name
  * @param {Map<string, string>} fuzzers - Map of fuzzer names to paths
  * @param {string} fuzzingDir - Base fuzzing directory
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @param {Object} options - Fuzzing options
  * @returns {Promise<Object>} Execution results
  */
@@ -44,7 +57,7 @@ async function runAllFuzzers(
   containerName,
   fuzzers,
   fuzzingDir,
-  outputChannel,
+  terminal,
   options = {},
 ) {
   const results = {
@@ -55,7 +68,7 @@ async function runAllFuzzers(
 
   const fuzzerArray = Array.from(fuzzers.entries());
   safeFuzzingLog(
-    outputChannel,
+    terminal,
     `Starting execution of ${fuzzerArray.length} fuzzer(s)...`,
   );
 
@@ -67,7 +80,7 @@ async function runAllFuzzers(
         fuzzerName,
         fuzzerPath,
         fuzzingDir,
-        outputChannel,
+        terminal,
         options,
       );
 
@@ -75,12 +88,12 @@ async function runAllFuzzers(
       results.crashes.push(...fuzzerResults.crashes);
 
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Completed fuzzer: ${fuzzerName} (${fuzzerResults.crashes.length} crashes found)`,
       );
     } catch (error) {
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Error running fuzzer ${fuzzerName}: ${error.message}`,
       );
       results.errors.push({
@@ -93,7 +106,7 @@ async function runAllFuzzers(
   }
 
   safeFuzzingLog(
-    outputChannel,
+    terminal,
     `Fuzzer execution complete: ${results.executed}/${fuzzerArray.length} executed, ${results.crashes.length} total crashes found`,
   );
   return results;
@@ -106,7 +119,7 @@ async function runAllFuzzers(
  * @param {string} fuzzerName - Name of the fuzzer
  * @param {string} fuzzerPath - Path to the fuzzer executable
  * @param {string} fuzzingDir - Base fuzzing directory
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @param {Object} options - Fuzzing options
  * @returns {Promise<Object>} Single fuzzer results
  */
@@ -116,21 +129,21 @@ async function runSingleFuzzer(
   fuzzerName,
   fuzzerPath,
   fuzzingDir,
-  outputChannel,
+  terminal,
   options = {},
 ) {
   const fuzzerOutputDir = path.join(fuzzingDir, `${fuzzerName}-output`);
   const corpusDir = path.join(fuzzerOutputDir, "corpus");
 
-  safeFuzzingLog(outputChannel, `Running fuzzer: ${fuzzerName}`);
-  safeFuzzingLog(outputChannel, `Output directory: ${fuzzerOutputDir}`);
+  safeFuzzingLog(terminal, `Running fuzzer: ${fuzzerName}`);
+  safeFuzzingLog(terminal, `Output directory: ${fuzzerOutputDir}`);
 
   // Create output directory
   await createFuzzerOutputDirectory(
     workspacePath,
     containerName,
     fuzzerOutputDir,
-    outputChannel,
+    terminal,
   );
 
   // Run the fuzzer
@@ -141,7 +154,7 @@ async function runSingleFuzzer(
     fuzzerPath,
     fuzzerOutputDir,
     corpusDir,
-    outputChannel,
+    terminal,
     options,
   );
 
@@ -151,7 +164,7 @@ async function runSingleFuzzer(
     containerName,
     fuzzerName,
     corpusDir,
-    outputChannel,
+    terminal,
   );
 
   return {
@@ -166,14 +179,14 @@ async function runSingleFuzzer(
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string} outputDir - Output directory path
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<void>}
  */
 async function createFuzzerOutputDirectory(
   workspacePath,
   containerName,
   outputDir,
-  outputChannel,
+  terminal,
 ) {
   return new Promise((resolve, reject) => {
     const options = {
@@ -214,7 +227,7 @@ async function createFuzzerOutputDirectory(
  * @param {string} fuzzerPath - Path to the fuzzer executable
  * @param {string} outputDir - Output directory
  * @param {string} corpusDir - Corpus directory
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @param {Object} options - Fuzzing options
  * @returns {Promise<Object>} Execution results
  */
@@ -225,7 +238,7 @@ async function executeFuzzer(
   fuzzerPath,
   outputDir,
   corpusDir,
-  outputChannel,
+  terminal,
   options = {},
 ) {
   return new Promise((resolve, reject) => {
@@ -246,7 +259,7 @@ async function executeFuzzer(
     // Change to output directory and run fuzzer
     const fuzzerCommand = `cd "${outputDir}" && ${envVars} "${fuzzerPath}" ${libfuzzerArgs} corpus`;
 
-    safeFuzzingLog(outputChannel, `Executing: ${fuzzerCommand}`);
+    safeFuzzingLog(terminal, `Executing: ${fuzzerCommand}`);
 
     const dockerOptions = {
       removeAfterRun: true,
@@ -272,7 +285,7 @@ async function executeFuzzer(
       const lines = output.trim().split("\n");
       lines.forEach((line) => {
         if (line.trim()) {
-          safeFuzzingLog(outputChannel, `[${fuzzerName}] ${line}`);
+          safeFuzzingLog(terminal, `[${fuzzerName}] ${line}`);
         }
       });
     });
@@ -284,12 +297,12 @@ async function executeFuzzer(
     fuzzerProcess.on("close", (code) => {
       // LibFuzzer may exit with non-zero code when finding crashes, which is expected
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Fuzzer ${fuzzerName} completed with exit code: ${code}`,
       );
 
       if (code !== 0 && stderr) {
-        safeFuzzingLog(outputChannel, `Fuzzer ${fuzzerName} stderr: ${stderr}`);
+        safeFuzzingLog(terminal, `Fuzzer ${fuzzerName} stderr: ${stderr}`);
       }
 
       resolve({
@@ -314,7 +327,7 @@ async function executeFuzzer(
  * @param {string} containerName - Docker container name
  * @param {string} fuzzerName - Name of the fuzzer
  * @param {string} corpusDir - Corpus directory path
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<Object[]>} Array of crash information
  */
 async function detectCrashes(
@@ -322,7 +335,7 @@ async function detectCrashes(
   containerName,
   fuzzerName,
   corpusDir,
-  outputChannel,
+  terminal,
 ) {
   return new Promise((resolve) => {
     const options = {
@@ -357,7 +370,7 @@ async function detectCrashes(
 
       if (crashFiles.length > 0 && crashFiles[0]) {
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           `Found ${crashFiles.length} crash file(s) for ${fuzzerName}`,
         );
 
@@ -367,10 +380,10 @@ async function detectCrashes(
             file: crashFile,
             relativePath: path.relative(corpusDir, crashFile),
           });
-          safeFuzzingLog(outputChannel, `Crash found: ${crashFile}`);
+          safeFuzzingLog(terminal, `Crash found: ${crashFile}`);
         });
       } else {
-        safeFuzzingLog(outputChannel, `No crashes found for ${fuzzerName}`);
+        safeFuzzingLog(terminal, `No crashes found for ${fuzzerName}`);
       }
 
       resolve(crashes);
@@ -378,7 +391,7 @@ async function detectCrashes(
 
     findProcess.on("error", (error) => {
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Warning: Could not check for crashes in ${fuzzerName}: ${error.message}`,
       );
       resolve([]); // Return empty array on error, don't fail the entire process
@@ -394,7 +407,7 @@ async function detectCrashes(
  * @param {string} fuzzerPath - Path to the fuzzer executable
  * @param {string} profileFile - Path to the profile file
  * @param {string} outputDir - Output directory
- * @param {vscode.OutputChannel} outputChannel - Output channel for logging
+ * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<string>} Path to coverage report
  */
 async function generateCoverageReport(
@@ -404,7 +417,7 @@ async function generateCoverageReport(
   fuzzerPath,
   profileFile,
   outputDir,
-  outputChannel,
+  terminal,
 ) {
   return new Promise((resolve, reject) => {
     const coverageReportPath = path.join(
@@ -436,13 +449,13 @@ async function generateCoverageReport(
     coverageProcess.on("close", (code) => {
       if (code === 0) {
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           `Coverage report generated: ${coverageReportPath}`,
         );
         resolve(coverageReportPath);
       } else {
         safeFuzzingLog(
-          outputChannel,
+          terminal,
           `Warning: Could not generate coverage report for ${fuzzerName}`,
         );
         resolve(null); // Return null but don't fail
@@ -451,7 +464,7 @@ async function generateCoverageReport(
 
     coverageProcess.on("error", (error) => {
       safeFuzzingLog(
-        outputChannel,
+        terminal,
         `Warning: Coverage generation error for ${fuzzerName}: ${error.message}`,
       );
       resolve(null); // Return null but don't fail
