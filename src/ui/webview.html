@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src vscode-resource: 'unsafe-inline'; script-src vscode-resource: 'unsafe-inline';"
+    />
+    <title>CodeForge Control Panel</title>
+    <link rel="stylesheet" href="webview.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Project Status Section -->
+      <section class="status-section">
+        <h2>Project Status</h2>
+        <div class="status-grid">
+          <div class="status-item">
+            <span class="status-label">CodeForge:</span>
+            <span class="status-value" id="codeforge-status"
+              >Not Initialized</span
+            >
+          </div>
+          <div class="status-item">
+            <span class="status-label">Docker Image:</span>
+            <span class="status-value" id="docker-status">Not Built</span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">Active Containers:</span>
+            <span class="status-value" id="container-count">0</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Quick Actions Section -->
+      <section class="actions-section">
+        <h2>Quick Actions</h2>
+        <div class="button-grid">
+          <button class="action-btn primary" id="initialize-btn">
+            <span class="btn-icon">🚀</span>
+            <span class="btn-text">Initialize CodeForge</span>
+          </button>
+          <button class="action-btn secondary" id="build-btn" disabled>
+            <span class="btn-icon">🔨</span>
+            <span class="btn-text">Build Docker Environment</span>
+          </button>
+          <button class="action-btn secondary" id="terminal-btn" disabled>
+            <span class="btn-icon">💻</span>
+            <span class="btn-text">Launch Terminal</span>
+          </button>
+          <button class="action-btn tertiary" id="fuzzing-btn" disabled>
+            <span class="btn-icon">🧪</span>
+            <span class="btn-text">Run Fuzzing Tests</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Advanced Operations Section -->
+      <section class="advanced-section">
+        <h2>Advanced Operations</h2>
+        <div class="button-grid">
+          <button class="action-btn outline" id="list-containers-btn">
+            <span class="btn-icon">📋</span>
+            <span class="btn-text">List Containers</span>
+          </button>
+          <button class="action-btn outline" id="run-command-btn" disabled>
+            <span class="btn-icon">⚡</span>
+            <span class="btn-text">Run Command</span>
+          </button>
+          <button class="action-btn danger" id="terminate-all-btn">
+            <span class="btn-icon">🛑</span>
+            <span class="btn-text">Terminate All</span>
+          </button>
+          <button class="action-btn outline" id="cleanup-btn">
+            <span class="btn-icon">🧹</span>
+            <span class="btn-text">Cleanup Orphaned</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Loading Overlay -->
+      <div class="loading-overlay" id="loading-overlay" style="display: none">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" id="loading-text">Processing...</div>
+      </div>
+    </div>
+
+    <script src="webview.js"></script>
+  </body>
+</html>

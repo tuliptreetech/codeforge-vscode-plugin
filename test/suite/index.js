@@ -26,6 +26,8 @@ function run() {
         "extension.test.js",
         "docker-operations.test.js",
         "task-provider.test.js",
+        "activity-bar-ui.test.js",
+        "command-handlers.test.js",
       ];
 
       const foundTestNames = files.map((f) => path.basename(f));
