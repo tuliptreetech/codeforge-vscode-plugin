@@ -24,52 +24,12 @@ body {
   position: relative;
 }
 
-/* Status Section */
-.status-section {
-  margin-bottom: 24px;
-}
-
-.status-section h2 {
-  margin: 0 0 12px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--vscode-foreground);
-}
-
-.status-grid {
-  display: grid;
-  gap: 8px;
-}
-
-.status-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background-color: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border);
-  border-radius: var(--border-radius);
-}
-
-.status-label {
-  font-weight: 500;
-  color: var(--vscode-foreground);
-}
-
-.status-value {
-  font-family: var(--vscode-editor-font-family);
-  color: var(--vscode-textPreformat-foreground);
-  font-size: 13px;
-}
-
 /* Actions Section */
-.actions-section,
-.advanced-section {
+.actions-section {
   margin-bottom: 24px;
 }
 
-.actions-section h2,
-.advanced-section h2 {
+.actions-section h2 {
   margin: 0 0 12px 0;
   font-size: 16px;
   font-weight: 600;

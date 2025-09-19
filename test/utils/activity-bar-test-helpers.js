@@ -266,7 +266,7 @@ function createMockWebviewMessages() {
   return {
     command: {
       type: "command",
-      command: "initialize",
+      command: "launchTerminal",
     },
     requestState: {
       type: "requestState",
