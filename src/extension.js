@@ -138,10 +138,11 @@ function activate(context) {
   // Register the hex document provider for read-only crash file viewing
   try {
     const hexDocumentProvider = new HexDocumentProvider();
-    const hexProviderDisposable = vscode.workspace.registerTextDocumentContentProvider(
-      'codeforge-hex',
-      hexDocumentProvider
-    );
+    const hexProviderDisposable =
+      vscode.workspace.registerTextDocumentContentProvider(
+        "codeforge-hex",
+        hexDocumentProvider,
+      );
 
     if (!hexProviderDisposable) {
       throw new Error("Failed to create hex document provider disposable");
