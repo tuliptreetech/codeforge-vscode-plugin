@@ -4,7 +4,7 @@
   "description": "Docker container management for development environments",
   "publisher": "TulipTreeTechnology",
   "version": "0.0.3",
-  "icon": "icon.png",
+  "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.103.0"
   },
@@ -53,35 +53,110 @@
     "onCommand:codeforge.terminateAllContainers",
     "onCommand:codeforge.cleanupOrphaned",
     "onCommand:codeforge.runFuzzingTests",
+    "onView:codeforge.controlPanel",
+    "onView:codeforge.activeContainers",
     "workspaceContains:.codeforge/Dockerfile",
     "onTaskType:codeforge"
   ],
   "main": "./src/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codeforge",
+          "title": "CodeForge",
+          "icon": "media/cf-hammer-vscode.svg",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
+    "views": {
+      "codeforge": [
+        {
+          "id": "codeforge.controlPanel",
+          "name": "Control Panel",
+          "type": "webview",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "id": "codeforge.activeContainers",
+          "name": "Active Containers",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "codeforge.initialize",
         "title": "CodeForge: Initialize CodeForge"
       },
       {
-        "command": "codeforge.buildEnvironment",
-        "title": "CodeForge: Build Docker Environment"
+        "command": "codeforge.buildDocker",
+        "title": "CodeForge: Build Docker Environment",
+        "icon": "$(tools)"
       },
       {
         "command": "codeforge.launchTerminal",
-        "title": "CodeForge: Launch Terminal in Container"
+        "title": "CodeForge: Launch Terminal in Container",
+        "icon": "$(terminal)"
       },
       {
         "command": "codeforge.runCommand",
-        "title": "CodeForge: Run Command in Container"
+        "title": "CodeForge: Run Command in Container",
+        "icon": "$(play)"
+      },
+      {
+        "command": "codeforge.runFuzzing",
+        "title": "CodeForge: Run Fuzzing Tests",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "codeforge.listContainers",
+        "title": "CodeForge: List Active Containers",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "codeforge.terminateAll",
+        "title": "CodeForge: Terminate All Containers",
+        "icon": "$(stop-circle)"
+      },
+      {
+        "command": "codeforge.cleanup",
+        "title": "CodeForge: Cleanup Orphaned Containers",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "codeforge.refreshContainers",
+        "title": "CodeForge: Refresh Container List",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "codeforge.terminateContainer",
+        "title": "CodeForge: Terminate Container",
+        "icon": "$(stop-circle)"
+      },
+      {
+        "command": "codeforge.showContainerLogs",
+        "title": "CodeForge: Show Container Logs",
+        "icon": "$(output)"
+      },
+      {
+        "command": "codeforge.connectToContainer",
+        "title": "CodeForge: Connect to Container",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "codeforge.inspectContainer",
+        "title": "CodeForge: Inspect Container",
+        "icon": "$(info)"
       },
       {
         "command": "codeforge.registerTask",
         "title": "CodeForge: Register Task"
       },
       {
-        "command": "codeforge.listContainers",
-        "title": "CodeForge: List Active Containers"
+        "command": "codeforge.buildEnvironment",
+        "title": "CodeForge: Build Docker Environment"
       },
       {
         "command": "codeforge.terminateAllContainers",
@@ -96,6 +171,42 @@
         "title": "CodeForge: Run Fuzzing Tests"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "codeforge.refreshContainers",
+          "when": "view == codeforge.activeContainers",
+          "group": "navigation"
+        },
+        {
+          "command": "codeforge.terminateAll",
+          "when": "view == codeforge.activeContainers",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "codeforge.connectToContainer",
+          "when": "view == codeforge.activeContainers && viewItem == container",
+          "group": "container@1"
+        },
+        {
+          "command": "codeforge.showContainerLogs",
+          "when": "view == codeforge.activeContainers && viewItem == container",
+          "group": "container@2"
+        },
+        {
+          "command": "codeforge.inspectContainer",
+          "when": "view == codeforge.activeContainers && viewItem == container",
+          "group": "container@3"
+        },
+        {
+          "command": "codeforge.terminateContainer",
+          "when": "view == codeforge.activeContainers && viewItem == container",
+          "group": "container@4"
+        }
+      ]
+    },
     "taskDefinitions": [
       {
         "type": "codeforge",

@@ -1,6 +1,11 @@
 const vscode = require("vscode");
 const dockerOperations = require("./core/dockerOperations");
 const { CodeForgeTaskProvider } = require("./tasks/taskProvider");
+const { CodeForgeWebviewProvider } = require("./ui/webviewProvider");
+const {
+  CodeForgeContainerTreeProvider,
+} = require("./ui/containerTreeProvider");
+const { CodeForgeCommandHandlers } = require("./ui/commandHandlers");
 const fs = require("fs").promises;
 const path = require("path");
 
@@ -60,6 +65,10 @@ USER $USERNAME
 
 let outputChannel;
 
+// Module-level storage for provider references
+let containerTreeProvider = null;
+let webviewProvider = null;
+
 /**
  * Safe wrapper for output channel operations
  */
@@ -81,9 +90,13 @@ function safeOutputLog(message, show = false) {
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
+  console.log("CodeForge: Extension activation started");
+
   // Create output channel for CodeForge
   outputChannel = vscode.window.createOutputChannel("CodeForge");
   context.subscriptions.push(outputChannel);
+
+  safeOutputLog("CodeForge: Extension activation started", true);
 
   // Register the task provider
   try {
@@ -101,6 +114,160 @@ function activate(context) {
   } catch (error) {
     vscode.window.showErrorMessage(
       `CodeForge: Failed to register task provider - ${error.message}`,
+    );
+  }
+
+  // Register the webview provider
+  try {
+    webviewProvider = new CodeForgeWebviewProvider(context);
+    const webviewProviderDisposable = vscode.window.registerWebviewViewProvider(
+      "codeforge.controlPanel",
+      webviewProvider,
+    );
+
+    if (!webviewProviderDisposable) {
+      throw new Error("Failed to create webview provider disposable");
+    }
+
+    context.subscriptions.push(webviewProviderDisposable);
+
+    safeOutputLog("CodeForge: ✓ Webview provider stored in module variable");
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `CodeForge: Failed to register webview provider - ${error.message}`,
+    );
+  }
+
+  // Register the container tree provider
+  safeOutputLog("CodeForge: Starting container tree provider registration...");
+  try {
+    safeOutputLog(
+      "CodeForge: Creating CodeForgeContainerTreeProvider instance...",
+    );
+    containerTreeProvider = new CodeForgeContainerTreeProvider();
+
+    safeOutputLog("CodeForge: Registering tree data provider with VS Code...");
+    const containerTreeProviderDisposable =
+      vscode.window.registerTreeDataProvider(
+        "codeforge.activeContainers",
+        containerTreeProvider,
+      );
+
+    if (!containerTreeProviderDisposable) {
+      throw new Error("Failed to create container tree provider disposable");
+    }
+    safeOutputLog("CodeForge: Tree data provider registered successfully");
+
+    context.subscriptions.push(containerTreeProviderDisposable);
+    safeOutputLog("CodeForge: Tree data provider added to subscriptions");
+
+    // Register container tree provider commands
+    safeOutputLog("CodeForge: Registering container tree provider commands...");
+    const terminateContainerCommand = vscode.commands.registerCommand(
+      "codeforge.terminateContainer",
+      (treeItem) => containerTreeProvider.terminateContainer(treeItem),
+    );
+
+    const showContainerLogsCommand = vscode.commands.registerCommand(
+      "codeforge.showContainerLogs",
+      (treeItem) => containerTreeProvider.showContainerLogs(treeItem),
+    );
+
+    const connectToContainerCommand = vscode.commands.registerCommand(
+      "codeforge.connectToContainer",
+      (treeItem) => containerTreeProvider.connectToContainer(treeItem),
+    );
+
+    const inspectContainerCommand = vscode.commands.registerCommand(
+      "codeforge.inspectContainer",
+      (treeItem) => containerTreeProvider.inspectContainer(treeItem),
+    );
+
+    context.subscriptions.push(terminateContainerCommand);
+    context.subscriptions.push(showContainerLogsCommand);
+    context.subscriptions.push(connectToContainerCommand);
+    context.subscriptions.push(inspectContainerCommand);
+    safeOutputLog("CodeForge: Container tree provider commands registered");
+
+    safeOutputLog(
+      "CodeForge: ✓ Container tree provider stored in module variable",
+    );
+
+    // Initial refresh to populate the tree view
+    setTimeout(() => {
+      console.log("CodeForge: Performing initial container refresh...");
+      safeOutputLog("CodeForge: Starting initial container refresh...");
+      containerTreeProvider.refresh().catch((error) => {
+        console.error("CodeForge: Initial container refresh failed:", error);
+        safeOutputLog(
+          `Initial container refresh failed: ${error.message}`,
+          true,
+        );
+      });
+    }, 1000); // Small delay to ensure everything is initialized
+  } catch (error) {
+    console.error(
+      "CodeForge: Container tree provider registration failed:",
+      error,
+    );
+    safeOutputLog(
+      `CRITICAL: Failed to register container tree provider: ${error.message}`,
+      true,
+    );
+    safeOutputLog(`Error stack: ${error.stack}`, true);
+    vscode.window.showErrorMessage(
+      `CodeForge: Failed to register container tree provider - ${error.message}`,
+    );
+    // Set to null on failure
+    containerTreeProvider = null;
+    safeOutputLog(
+      "CodeForge: Set containerTreeProvider to null due to registration failure",
+    );
+  }
+
+  // Create command handlers instance AFTER providers are stored in module variables
+  // This ensures that all providers are available when commands are executed
+  safeOutputLog("CodeForge: Starting command handlers registration...");
+  try {
+    safeOutputLog("CodeForge: Creating CodeForgeCommandHandlers instance...");
+    const commandHandlers = new CodeForgeCommandHandlers(
+      context,
+      outputChannel,
+      containerTreeProvider,
+      webviewProvider,
+    );
+
+    // Verify provider state before registering commands
+    safeOutputLog(
+      `CodeForge: Provider verification - containerTreeProvider: ${containerTreeProvider ? "PRESENT" : "NULL"}`,
+    );
+    safeOutputLog(
+      `CodeForge: Provider verification - webviewProvider: ${webviewProvider ? "PRESENT" : "NULL"}`,
+    );
+
+    // Register all command handlers from the command handlers module
+    safeOutputLog("CodeForge: Getting command handlers map...");
+    const handlers = commandHandlers.getCommandHandlers();
+    safeOutputLog(
+      `CodeForge: Found ${Object.keys(handlers).length} command handlers to register`,
+    );
+
+    for (const [commandName, handler] of Object.entries(handlers)) {
+      safeOutputLog(`CodeForge: Registering command: ${commandName}`);
+      const command = vscode.commands.registerCommand(commandName, handler);
+      context.subscriptions.push(command);
+    }
+
+    safeOutputLog("CodeForge: ✓ All command handlers registered successfully");
+  } catch (error) {
+    console.error("CodeForge: Command handlers registration failed:", error);
+    safeOutputLog(
+      `CRITICAL: Failed to register command handlers: ${error.message}`,
+      true,
+    );
+    safeOutputLog(`Error stack: ${error.stack}`, true);
+    vscode.window.showErrorMessage(
+      `CodeForge: Failed to register command handlers - ${error.message}`,
     );
   }
 
@@ -126,344 +293,7 @@ function activate(context) {
     }
   });
 
-  // Register the initialize command
-  let initializeCommand = vscode.commands.registerCommand(
-    "codeforge.initialize",
-    async function () {
-      try {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-          vscode.window.showErrorMessage(
-            "CodeForge: No workspace folder is open",
-          );
-          return;
-        }
-
-        const workspacePath = workspaceFolder.uri.fsPath;
-        const codeforgeDir = path.join(workspacePath, ".codeforge");
-        const dockerfilePath = path.join(codeforgeDir, "Dockerfile");
-
-        // Check if .codeforge directory already exists
-        try {
-          await fs.access(codeforgeDir);
-          const result = await vscode.window.showWarningMessage(
-            "CodeForge: .codeforge directory already exists. Do you want to overwrite it?",
-            "Yes",
-            "No",
-          );
-          if (result !== "Yes") {
-            return;
-          }
-        } catch (error) {
-          // Directory doesn't exist, which is fine
-        }
-
-        // Create .codeforge directory
-        await fs.mkdir(codeforgeDir, { recursive: true });
-        safeOutputLog(`Created directory: ${codeforgeDir}`);
-
-        // Write Dockerfile
-        await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
-        safeOutputLog(`Created Dockerfile: ${dockerfilePath}`);
-
-        vscode.window.showInformationMessage(
-          "CodeForge: Successfully initialized .codeforge directory",
-        );
-        safeOutputLog("", true); // Just show the output channel
-      } catch (error) {
-        safeOutputLog(`Error: ${error.message}`, true);
-        vscode.window.showErrorMessage(
-          `CodeForge: Failed to initialize - ${error.message}`,
-        );
-      }
-    },
-  );
-
-  // Register the build environment command
-  let buildEnvironmentCommand = vscode.commands.registerCommand(
-    "codeforge.buildEnvironment",
-    async function () {
-      try {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-          vscode.window.showErrorMessage(
-            "CodeForge: No workspace folder is open",
-          );
-          return;
-        }
-
-        const workspacePath = workspaceFolder.uri.fsPath;
-        const dockerfilePath = path.join(
-          workspacePath,
-          ".codeforge",
-          "Dockerfile",
-        );
-
-        // Check if Dockerfile exists
-        try {
-          await fs.access(dockerfilePath);
-        } catch (error) {
-          vscode.window.showErrorMessage(
-            'CodeForge: Dockerfile not found. Please run "Initialize CodeForge" first.',
-          );
-          return;
-        }
-
-        // Generate container name
-        const containerName =
-          dockerOperations.generateContainerName(workspacePath);
-        safeOutputLog(`Building Docker image: ${containerName}`, true);
-
-        // Show progress notification
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: "CodeForge: Building Docker environment...",
-            cancellable: false,
-          },
-          async (progress) => {
-            try {
-              // Build the Docker image
-              await dockerOperations.buildDockerImage(
-                workspacePath,
-                containerName,
-              );
-              outputChannel.appendLine(
-                `Successfully built Docker image: ${containerName}`,
-              );
-              vscode.window.showInformationMessage(
-                `CodeForge: Successfully built Docker image ${containerName}`,
-              );
-            } catch (error) {
-              throw error;
-            }
-          },
-        );
-      } catch (error) {
-        safeOutputLog(`Build failed: ${error.message}`, true);
-        vscode.window.showErrorMessage(
-          `CodeForge: Build failed - ${error.message}`,
-        );
-      }
-    },
-  );
-
-  // Register the launch terminal command
-  let launchTerminalCommand = vscode.commands.registerCommand(
-    "codeforge.launchTerminal",
-    async function () {
-      try {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-          vscode.window.showErrorMessage(
-            "CodeForge: No workspace folder is open",
-          );
-          return;
-        }
-
-        const workspacePath = workspaceFolder.uri.fsPath;
-        const containerName =
-          dockerOperations.generateContainerName(workspacePath);
-
-        // Auto-initialize and build if needed
-        const initialized = await ensureInitializedAndBuilt(
-          workspacePath,
-          containerName,
-        );
-        if (!initialized) {
-          return;
-        }
-
-        // Create a new terminal
-        // Get configuration
-        const config = vscode.workspace.getConfiguration("codeforge");
-        const dockerCommand = config.get("dockerCommand", "docker");
-        const removeAfterRun = config.get("removeContainersAfterRun", true);
-        const defaultShell = config.get("defaultShell", "/bin/bash");
-        const additionalArgs = config.get("additionalDockerRunArgs", []);
-        const mountWorkspace = config.get("mountWorkspace", true);
-
-        // Use dockerOperations to generate Docker run arguments
-        const options = {
-          interactive: true,
-          tty: true,
-          removeAfterRun: removeAfterRun,
-          mountWorkspace: mountWorkspace,
-          workingDir: workspacePath,
-          additionalArgs: additionalArgs,
-          shell: defaultShell,
-          enableTracking: true, // Always enable tracking for terminals
-          containerType: "terminal",
-        };
-
-        const shellArgs = dockerOperations.generateDockerRunArgs(
-          workspacePath,
-          containerName,
-          options,
-        );
-
-        const terminal = vscode.window.createTerminal({
-          name: `CodeForge: ${path.basename(workspacePath)}`,
-          shellPath: dockerCommand,
-          shellArgs: shellArgs,
-        });
-
-        terminal.show();
-
-        // Track the container after it's launched
-        const generatedName = options.generatedContainerName;
-        if (generatedName) {
-          // Always attempt to track, even with auto-remove (for the duration it's running)
-          dockerOperations
-            .trackLaunchedContainer(
-              generatedName,
-              workspacePath,
-              containerName,
-              "terminal",
-            )
-            .then((tracked) => {
-              if (tracked) {
-                safeOutputLog(
-                  `Launched and tracked terminal container: ${generatedName}`,
-                );
-                vscode.window.showInformationMessage(
-                  `CodeForge: Terminal container started and tracked: ${generatedName}`,
-                );
-              } else {
-                safeOutputLog(
-                  `Launched terminal but could not track container: ${generatedName}`,
-                );
-                if (!removeAfterRun) {
-                  vscode.window.showWarningMessage(
-                    `CodeForge: Terminal started but container tracking failed. Container may not appear in active list.`,
-                  );
-                }
-              }
-            })
-            .catch((error) => {
-              safeOutputLog(
-                `Error tracking terminal container: ${error.message}`,
-              );
-            });
-        } else {
-          safeOutputLog(
-            `Launched terminal in container: ${containerName} (no container name generated)`,
-          );
-        }
-      } catch (error) {
-        safeOutputLog(`Error: ${error.message}`, true);
-        vscode.window.showErrorMessage(
-          `CodeForge: Failed to launch terminal - ${error.message}`,
-        );
-      }
-    },
-  );
-
-  // Register the run command
-  let runCommandCommand = vscode.commands.registerCommand(
-    "codeforge.runCommand",
-    async function () {
-      try {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-          vscode.window.showErrorMessage(
-            "CodeForge: No workspace folder is open",
-          );
-          return;
-        }
-
-        const workspacePath = workspaceFolder.uri.fsPath;
-        const containerName =
-          dockerOperations.generateContainerName(workspacePath);
-
-        // Auto-initialize and build if needed
-        const initialized = await ensureInitializedAndBuilt(
-          workspacePath,
-          containerName,
-        );
-        if (!initialized) {
-          return;
-        }
-
-        // Prompt user for command
-        const command = await vscode.window.showInputBox({
-          prompt: "Enter command to run in container",
-          placeHolder: "e.g., ls -la, python script.py, make build",
-        });
-
-        if (!command) {
-          return;
-        }
-
-        safeOutputLog(`Running command in container: ${command}`);
-
-        // Get configuration
-        const config = vscode.workspace.getConfiguration("codeforge");
-        const removeAfterRun = config.get("removeContainersAfterRun", true);
-        const defaultShell = config.get("defaultShell", "/bin/bash");
-        const additionalArgs = config.get("additionalDockerRunArgs", []);
-        const showOutput = config.get("showOutputChannel", true);
-        const dockerCommand = config.get("dockerCommand", "docker");
-        const mountWorkspace = config.get("mountWorkspace", true);
-
-        /// CHANGE THIS TO use the terminal instead of the output channel
-        if (showOutput) {
-          safeOutputLog("", true); // Just show the output channel
-        }
-
-        // Use dockerOperations.runDockerCommandWithOutput for proper output capture
-        const dockerProcess = dockerOperations.runDockerCommandWithOutput(
-          workspacePath,
-          containerName,
-          command,
-          defaultShell,
-          {
-            removeAfterRun: removeAfterRun,
-            additionalArgs: additionalArgs,
-            dockerCommand: dockerCommand,
-            mountWorkspace: mountWorkspace,
-          },
-        );
-
-        // Capture output
-        dockerProcess.stdout.on("data", (data) => {
-          outputChannel.append(data.toString());
-        });
-
-        dockerProcess.stderr.on("data", (data) => {
-          outputChannel.append(data.toString());
-        });
-
-        dockerProcess.on("close", (code) => {
-          if (code === 0) {
-            safeOutputLog(`\nCommand completed successfully`);
-            vscode.window.showInformationMessage(
-              "CodeForge: Command completed successfully",
-            );
-          } else {
-            safeOutputLog(`\nCommand failed with exit code ${code}`);
-            vscode.window.showErrorMessage(
-              `CodeForge: Command failed with exit code ${code}`,
-            );
-          }
-        });
-
-        dockerProcess.on("error", (error) => {
-          safeOutputLog(`\nError: ${error.message}`);
-          vscode.window.showErrorMessage(
-            `CodeForge: Failed to run command - ${error.message}`,
-          );
-        });
-      } catch (error) {
-        safeOutputLog(`Error: ${error.message}`, true);
-        vscode.window.showErrorMessage(
-          `CodeForge: Failed to run command - ${error.message}`,
-        );
-      }
-    },
-  );
-
-  // Register the register task command
+  // Register the register task command (keeping this one as it's not in the command handlers)
   let registerTaskCommand = vscode.commands.registerCommand(
     "codeforge.registerTask",
     async function () {
@@ -575,207 +405,8 @@ function activate(context) {
     },
   );
 
-  // Register container management commands
-  let listContainersCommand = vscode.commands.registerCommand(
-    "codeforge.listContainers",
-    async function () {
-      try {
-        const containers = await dockerOperations.getContainerStatus();
-
-        if (containers.length === 0) {
-          vscode.window.showInformationMessage(
-            "CodeForge: No active containers tracked by this extension",
-          );
-          return;
-        }
-
-        // Format container information for display
-        const containerInfo = containers.map((c) => {
-          const status = c.running ? "🟢 Running" : "🔴 Stopped";
-          const age = Math.round(
-            (Date.now() - new Date(c.createdAt).getTime()) / 1000 / 60,
-          );
-          return `${status} | ${c.name} | Type: ${c.type} | Age: ${age}m | Image: ${c.image}`;
-        });
-
-        const selected = await vscode.window.showQuickPick(containerInfo, {
-          placeHolder: "Active containers (select to manage)",
-          canPickMany: false,
-        });
-
-        if (selected) {
-          // Extract container name from the selected item
-          const containerName = selected.split(" | ")[1];
-          const container = containers.find((c) => c.name === containerName);
-
-          if (container) {
-            const action = await vscode.window.showQuickPick(
-              ["Stop Container", "Stop and Remove Container", "Cancel"],
-              { placeHolder: `Action for ${container.name}` },
-            );
-
-            if (action === "Stop Container") {
-              await dockerOperations.stopContainer(container.id, false);
-              vscode.window.showInformationMessage(
-                `Stopped container: ${container.name}`,
-              );
-            } else if (action === "Stop and Remove Container") {
-              await dockerOperations.stopContainer(container.id, true);
-              vscode.window.showInformationMessage(
-                `Stopped and removed container: ${container.name}`,
-              );
-            }
-          }
-        }
-      } catch (error) {
-        safeOutputLog(`Error listing containers: ${error.message}`, true);
-        vscode.window.showErrorMessage(
-          `CodeForge: Failed to list containers - ${error.message}`,
-        );
-      }
-    },
-  );
-
-  let terminateAllContainersCommand = vscode.commands.registerCommand(
-    "codeforge.terminateAllContainers",
-    async function () {
-      try {
-        const containers = await dockerOperations.getActiveContainers();
-
-        if (containers.length === 0) {
-          vscode.window.showInformationMessage(
-            "CodeForge: No active containers to terminate",
-          );
-          return;
-        }
-
-        const results = await dockerOperations.terminateAllContainers(true);
-
-        if (results.succeeded > 0) {
-          vscode.window.showInformationMessage(
-            `CodeForge: Terminated ${results.succeeded} container(s)`,
-          );
-        }
-
-        if (results.failed > 0) {
-          vscode.window.showWarningMessage(
-            `CodeForge: Failed to terminate ${results.failed} container(s)`,
-          );
-        }
-
-        safeOutputLog(
-          `Container termination complete: ${results.succeeded} succeeded, ${results.failed} failed`,
-        );
-      } catch (error) {
-        safeOutputLog(`Error terminating containers: ${error.message}`, true);
-        vscode.window.showErrorMessage(
-          `CodeForge: Failed to terminate containers - ${error.message}`,
-        );
-      }
-    },
-  );
-
-  let cleanupOrphanedCommand = vscode.commands.registerCommand(
-    "codeforge.cleanupOrphaned",
-    async function () {
-      try {
-        const cleaned = await dockerOperations.cleanupOrphanedContainers();
-
-        if (cleaned > 0) {
-          vscode.window.showInformationMessage(
-            `CodeForge: Cleaned up ${cleaned} orphaned container(s) from tracking`,
-          );
-        } else {
-          vscode.window.showInformationMessage(
-            "CodeForge: No orphaned containers found",
-          );
-        }
-
-        safeOutputLog(`Cleaned up ${cleaned} orphaned container(s)`);
-      } catch (error) {
-        safeOutputLog(
-          `Error cleaning up orphaned containers: ${error.message}`,
-          true,
-        );
-        vscode.window.showErrorMessage(
-          `CodeForge: Failed to cleanup orphaned containers - ${error.message}`,
-        );
-      }
-    },
-  );
-
-  // Register the run fuzzing tests command
-  let runFuzzingTestsCommand = vscode.commands.registerCommand(
-    "codeforge.runFuzzingTests",
-    async function () {
-      try {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-          vscode.window.showErrorMessage(
-            "CodeForge: No workspace folder is open",
-          );
-          return;
-        }
-
-        const workspacePath = workspaceFolder.uri.fsPath;
-
-        // Auto-initialize and build if needed
-        const containerName =
-          dockerOperations.generateContainerName(workspacePath);
-        const initialized = await ensureInitializedAndBuilt(
-          workspacePath,
-          containerName,
-        );
-        if (!initialized) {
-          return;
-        }
-
-        // Import the fuzzing terminal
-        const {
-          CodeForgeFuzzingTerminal,
-        } = require("./fuzzing/fuzzingTerminal");
-
-        // Create a unique terminal name with timestamp
-        const timestamp = new Date().toLocaleTimeString();
-        const terminalName = `CodeForge Fuzzing: ${timestamp}`;
-
-        // Create the fuzzing terminal
-        const fuzzingTerminal = new CodeForgeFuzzingTerminal(workspacePath);
-
-        // Create the VSCode terminal with our custom implementation
-        const terminal = vscode.window.createTerminal({
-          name: terminalName,
-          pty: fuzzingTerminal,
-          scrollback: 3000, // Double the default scrollback (1000 -> 3000) for fuzzing output history
-        });
-
-        // Show the terminal immediately
-        terminal.show();
-
-        // Show brief notification that fuzzing has started
-        vscode.window.showInformationMessage(
-          "CodeForge: Fuzzing tests started in terminal",
-          { modal: false },
-        );
-      } catch (error) {
-        safeOutputLog(`Fuzzing failed: ${error.message}`, true);
-        vscode.window.showErrorMessage(
-          `CodeForge: Fuzzing failed - ${error.message}`,
-        );
-      }
-    },
-  );
-
-  // Add all commands to subscriptions
-  context.subscriptions.push(initializeCommand);
-  context.subscriptions.push(buildEnvironmentCommand);
-  context.subscriptions.push(launchTerminalCommand);
-  context.subscriptions.push(runCommandCommand);
+  // Add registerTask command to subscriptions (keeping this one as it's not in the command handlers)
   context.subscriptions.push(registerTaskCommand);
-  context.subscriptions.push(listContainersCommand);
-  context.subscriptions.push(terminateAllContainersCommand);
-  context.subscriptions.push(cleanupOrphanedCommand);
-  context.subscriptions.push(runFuzzingTestsCommand);
 
   // Register check Docker command (not shown in command palette)
   let checkDockerCommand = vscode.commands.registerCommand(
