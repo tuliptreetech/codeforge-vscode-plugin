@@ -513,58 +513,58 @@ class CodeForgeCommandHandlers {
       const buffer = await fs.readFile(filePath);
       const truncated = buffer.length > maxSize;
       const data = truncated ? buffer.slice(0, maxSize) : buffer;
-      
+
       let hexDump = `Hex View: ${path.basename(filePath)}\n`;
-      hexDump += `File Size: ${buffer.length} bytes${truncated ? ' (truncated to first 64KB)' : ''}\n`;
+      hexDump += `File Size: ${buffer.length} bytes${truncated ? " (truncated to first 64KB)" : ""}\n`;
       hexDump += `Path: ${filePath}\n`;
       hexDump += `Generated: ${new Date().toISOString()}\n\n`;
-      
+
       // Generate hex dump in standard format: offset | hex bytes | ASCII
       for (let i = 0; i < data.length; i += 16) {
         // Format offset (8 hex digits)
-        const offset = i.toString(16).padStart(8, '0');
-        
+        const offset = i.toString(16).padStart(8, "0");
+
         // Get 16 bytes (or remaining bytes)
         const chunk = data.slice(i, i + 16);
-        
+
         // Format hex bytes (2 hex digits per byte, space separated)
-        let hexBytes = '';
-        let asciiChars = '';
-        
+        let hexBytes = "";
+        let asciiChars = "";
+
         for (let j = 0; j < 16; j++) {
           if (j < chunk.length) {
             const byte = chunk[j];
-            hexBytes += byte.toString(16).padStart(2, '0');
-            
+            hexBytes += byte.toString(16).padStart(2, "0");
+
             // ASCII representation (printable chars or dot)
             if (byte >= 32 && byte <= 126) {
               asciiChars += String.fromCharCode(byte);
             } else {
-              asciiChars += '.';
+              asciiChars += ".";
             }
           } else {
-            hexBytes += '  '; // Empty space for missing bytes
-            asciiChars += ' ';
+            hexBytes += "  "; // Empty space for missing bytes
+            asciiChars += " ";
           }
-          
+
           // Add space after every byte, extra space after 8 bytes
           if (j < 15) {
-            hexBytes += ' ';
+            hexBytes += " ";
             if (j === 7) {
-              hexBytes += ' ';
+              hexBytes += " ";
             }
           }
         }
-        
+
         // Format: offset  hex_bytes  |ascii_chars|
         hexDump += `${offset}  ${hexBytes}  |${asciiChars}|\n`;
       }
-      
+
       if (truncated) {
         hexDump += `\n... (file truncated at ${maxSize} bytes)\n`;
         hexDump += `Total file size: ${buffer.length} bytes\n`;
       }
-      
+
       return hexDump;
     } catch (error) {
       throw new Error(`Failed to generate hex dump: ${error.message}`);
@@ -592,57 +592,69 @@ class CodeForgeCommandHandlers {
       // Get file stats for size information
       const stats = await fs.stat(filePath);
       const fileSize = stats.size;
-      
+
       // Log file information
-      this.safeOutputLog(`Opening crash file: ${crashId} (${path.basename(filePath)}, ${fileSize} bytes)`);
+      this.safeOutputLog(
+        `Opening crash file: ${crashId} (${path.basename(filePath)}, ${fileSize} bytes)`,
+      );
 
       // Check file size limit (1MB max with user warning)
       const maxFileSize = 1024 * 1024; // 1MB
       if (fileSize > maxFileSize) {
         const action = await vscode.window.showWarningMessage(
-          `CodeForge: Crash file is large (${Math.round(fileSize / 1024 / 1024 * 100) / 100}MB). This may take a moment to process and will be truncated to the first 64KB.`,
+          `CodeForge: Crash file is large (${Math.round((fileSize / 1024 / 1024) * 100) / 100}MB). This may take a moment to process and will be truncated to the first 64KB.`,
           { modal: false },
-          'Continue',
-          'Cancel'
+          "Continue",
+          "Cancel",
         );
-        
-        if (action !== 'Continue') {
-          this.safeOutputLog(`User cancelled viewing large crash file: ${crashId}`);
+
+        if (action !== "Continue") {
+          this.safeOutputLog(
+            `User cancelled viewing large crash file: ${crashId}`,
+          );
           return;
         }
       }
 
       // Create virtual URI for the read-only hex document
       const hexUri = HexDocumentProvider.createHexUri(filePath, crashId);
-      
-      this.safeOutputLog(`Opening read-only hex document for crash file: ${crashId}`);
-      
+
+      this.safeOutputLog(
+        `Opening read-only hex document for crash file: ${crashId}`,
+      );
+
       // Open the virtual document using the hex document provider
       const document = await vscode.workspace.openTextDocument(hexUri);
-      
+
       // Show the document in read-only mode
       const editor = await vscode.window.showTextDocument(document, {
         preview: false,
         preserveFocus: false,
-        viewColumn: vscode.ViewColumn.Active
+        viewColumn: vscode.ViewColumn.Active,
       });
-      
+
       // Move cursor to the start of actual hex content (after the header)
       if (editor) {
         // Position after the header comments (around line 8-10)
         const startOfHexContent = new vscode.Position(8, 0);
-        editor.selection = new vscode.Selection(startOfHexContent, startOfHexContent);
-        editor.revealRange(new vscode.Range(startOfHexContent, startOfHexContent));
+        editor.selection = new vscode.Selection(
+          startOfHexContent,
+          startOfHexContent,
+        );
+        editor.revealRange(
+          new vscode.Range(startOfHexContent, startOfHexContent),
+        );
       }
-      
-      this.safeOutputLog(`Opened crash file with read-only hex viewer: ${crashId}`);
-      
+
+      this.safeOutputLog(
+        `Opened crash file with read-only hex viewer: ${crashId}`,
+      );
+
       // Show success message
       vscode.window.showInformationMessage(
         `CodeForge: Crash file ${crashId} opened in read-only hex view`,
-        { modal: false }
+        { modal: false },
       );
-
     } catch (error) {
       this.safeOutputLog(`Error viewing crash: ${error.message}`, true);
       vscode.window.showErrorMessage(

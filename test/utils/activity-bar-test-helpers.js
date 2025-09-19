@@ -213,27 +213,25 @@ function createVSCodeMocks(sandbox) {
       file: sandbox
         .stub()
         .callsFake((path) => ({ fsPath: path, scheme: "file" })),
-      parse: sandbox
-        .stub()
-        .callsFake((uri) => {
-          // Parse the URI string to extract scheme and other components
-          if (typeof uri === 'string') {
-            const match = uri.match(/^([^:]+):/);
-            const scheme = match ? match[1] : 'file';
-            const queryMatch = uri.match(/\?(.+)$/);
-            const query = queryMatch ? queryMatch[1] : '';
-            const pathMatch = uri.match(/^[^:]+:([^?]+)/);
-            const path = pathMatch ? pathMatch[1] : uri;
-            return {
-              fsPath: uri,
-              scheme: scheme,
-              path: path,
-              query: query,
-              toString: () => uri
-            };
-          }
-          return { fsPath: uri, scheme: "file" };
-        }),
+      parse: sandbox.stub().callsFake((uri) => {
+        // Parse the URI string to extract scheme and other components
+        if (typeof uri === "string") {
+          const match = uri.match(/^([^:]+):/);
+          const scheme = match ? match[1] : "file";
+          const queryMatch = uri.match(/\?(.+)$/);
+          const query = queryMatch ? queryMatch[1] : "";
+          const pathMatch = uri.match(/^[^:]+:([^?]+)/);
+          const path = pathMatch ? pathMatch[1] : uri;
+          return {
+            fsPath: uri,
+            scheme: scheme,
+            path: path,
+            query: query,
+            toString: () => uri,
+          };
+        }
+        return { fsPath: uri, scheme: "file" };
+      }),
     },
 
     // TreeItem mock
