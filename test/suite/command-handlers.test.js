@@ -105,23 +105,27 @@ suite("Command Handlers Test Suite", () => {
 
   teardown(() => {
     console.log("[DEBUG] Tearing down test environment");
-    
+
     // Clear any pending timeouts
-    if (typeof global !== 'undefined' && global.setTimeout && global.clearTimeout) {
+    if (
+      typeof global !== "undefined" &&
+      global.setTimeout &&
+      global.clearTimeout
+    ) {
       // Clear any timeouts that might be running
       const highestTimeoutId = setTimeout(() => {}, 0);
       for (let i = 0; i <= highestTimeoutId; i++) {
         clearTimeout(i);
       }
     }
-    
+
     // Ensure webviewProvider is restored if it was modified
     if (mockContext && !mockContext.webviewProvider) {
       mockContext.webviewProvider = {
         _detectAndUpdateState: sandbox.stub(),
       };
     }
-    
+
     cleanupTestEnvironment(sandbox);
     console.log("[DEBUG] Test environment teardown complete");
   });
@@ -226,8 +230,11 @@ suite("Command Handlers Test Suite", () => {
 
     test("Should update webview state correctly", async () => {
       console.log("[DEBUG] Starting webview state update test");
-      console.log("[DEBUG] mockContext.webviewProvider:", mockContext.webviewProvider ? "exists" : "null");
-      
+      console.log(
+        "[DEBUG] mockContext.webviewProvider:",
+        mockContext.webviewProvider ? "exists" : "null",
+      );
+
       if (!mockContext.webviewProvider) {
         throw new Error("webviewProvider is null at test start");
       }
@@ -236,18 +243,21 @@ suite("Command Handlers Test Suite", () => {
 
       // Use proper async/await instead of setTimeout
       await new Promise((resolve) => setTimeout(resolve, 600));
-      
+
       console.log("[DEBUG] After waiting for async operation");
-      console.log("[DEBUG] mockContext.webviewProvider:", mockContext.webviewProvider ? "exists" : "null");
-      
+      console.log(
+        "[DEBUG] mockContext.webviewProvider:",
+        mockContext.webviewProvider ? "exists" : "null",
+      );
+
       if (!mockContext.webviewProvider) {
         throw new Error("webviewProvider became null during test execution");
       }
-      
+
       if (!mockContext.webviewProvider._detectAndUpdateState) {
         throw new Error("_detectAndUpdateState method is missing");
       }
-      
+
       assert.ok(
         mockContext.webviewProvider._detectAndUpdateState.called,
         "Should call webview state update",
@@ -258,14 +268,14 @@ suite("Command Handlers Test Suite", () => {
     test("Should handle missing webview provider gracefully", () => {
       console.log("[DEBUG] Testing missing webview provider");
       const originalProvider = mockContext.webviewProvider;
-      
+
       try {
         mockContext.webviewProvider = null;
 
         assert.doesNotThrow(() => {
           commandHandlers.updateWebviewState();
         }, "Should not throw when webview provider is missing");
-        
+
         console.log("[DEBUG] Missing webview provider test passed");
       } finally {
         // Restore the original provider to prevent interference with other tests
