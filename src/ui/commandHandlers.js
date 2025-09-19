@@ -2,6 +2,8 @@ const vscode = require("vscode");
 const dockerOperations = require("../core/dockerOperations");
 const fuzzingOperations = require("../fuzzing/fuzzingOperations");
 const { CodeForgeFuzzingTerminal } = require("../fuzzing/fuzzingTerminal");
+const { CrashDiscoveryService } = require("../fuzzing/crashDiscoveryService");
+const { HexDocumentProvider } = require("./hexDocumentProvider");
 const fs = require("fs").promises;
 const path = require("path");
 
@@ -69,6 +71,7 @@ class CodeForgeCommandHandlers {
     this.outputChannel = outputChannel;
     this.containerTreeProvider = containerTreeProvider;
     this.webviewProvider = webviewProvider;
+    this.crashDiscoveryService = new CrashDiscoveryService();
   }
 
   /**
@@ -450,6 +453,308 @@ class CodeForgeCommandHandlers {
   }
 
   /**
+   * Refresh crash data
+   */
+  async handleRefreshCrashes() {
+    try {
+      const { path: workspacePath } = this.getWorkspaceInfo();
+
+      // Set loading state
+      if (this.webviewProvider) {
+        this.webviewProvider._setCrashLoading(true);
+      }
+
+      // Discover crashes
+      const crashData =
+        await this.crashDiscoveryService.discoverCrashes(workspacePath);
+
+      // Update state
+      if (this.webviewProvider) {
+        this.webviewProvider._updateCrashState({
+          data: crashData,
+          lastUpdated: new Date().toISOString(),
+          isLoading: false,
+          error: null,
+        });
+      }
+
+      const totalCrashes = crashData.reduce(
+        (sum, fuzzer) => sum + fuzzer.crashes.length,
+        0,
+      );
+      this.safeOutputLog(
+        `Found ${crashData.length} fuzzer(s) with ${totalCrashes} total crashes`,
+      );
+
+      if (totalCrashes > 0) {
+        vscode.window.showInformationMessage(
+          `CodeForge: Found ${totalCrashes} crash${totalCrashes === 1 ? "" : "es"} across ${crashData.length} fuzzer${crashData.length === 1 ? "" : "s"}`,
+        );
+      }
+    } catch (error) {
+      if (this.webviewProvider) {
+        this.webviewProvider._setCrashLoading(false, error.message);
+      }
+      this.safeOutputLog(`Error refreshing crashes: ${error.message}`, true);
+      vscode.window.showErrorMessage(
+        `CodeForge: Failed to refresh crashes - ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Generate hex dump content for binary files
+   * @param {string} filePath - Path to the file to dump
+   * @param {number} maxSize - Maximum size to read (default 64KB)
+   * @returns {Promise<string>} Hex dump content
+   */
+  async generateHexDump(filePath, maxSize = 1024 * 64) {
+    try {
+      const buffer = await fs.readFile(filePath);
+      const truncated = buffer.length > maxSize;
+      const data = truncated ? buffer.slice(0, maxSize) : buffer;
+      
+      let hexDump = `Hex View: ${path.basename(filePath)}\n`;
+      hexDump += `File Size: ${buffer.length} bytes${truncated ? ' (truncated to first 64KB)' : ''}\n`;
+      hexDump += `Path: ${filePath}\n`;
+      hexDump += `Generated: ${new Date().toISOString()}\n\n`;
+      
+      // Generate hex dump in standard format: offset | hex bytes | ASCII
+      for (let i = 0; i < data.length; i += 16) {
+        // Format offset (8 hex digits)
+        const offset = i.toString(16).padStart(8, '0');
+        
+        // Get 16 bytes (or remaining bytes)
+        const chunk = data.slice(i, i + 16);
+        
+        // Format hex bytes (2 hex digits per byte, space separated)
+        let hexBytes = '';
+        let asciiChars = '';
+        
+        for (let j = 0; j < 16; j++) {
+          if (j < chunk.length) {
+            const byte = chunk[j];
+            hexBytes += byte.toString(16).padStart(2, '0');
+            
+            // ASCII representation (printable chars or dot)
+            if (byte >= 32 && byte <= 126) {
+              asciiChars += String.fromCharCode(byte);
+            } else {
+              asciiChars += '.';
+            }
+          } else {
+            hexBytes += '  '; // Empty space for missing bytes
+            asciiChars += ' ';
+          }
+          
+          // Add space after every byte, extra space after 8 bytes
+          if (j < 15) {
+            hexBytes += ' ';
+            if (j === 7) {
+              hexBytes += ' ';
+            }
+          }
+        }
+        
+        // Format: offset  hex_bytes  |ascii_chars|
+        hexDump += `${offset}  ${hexBytes}  |${asciiChars}|\n`;
+      }
+      
+      if (truncated) {
+        hexDump += `\n... (file truncated at ${maxSize} bytes)\n`;
+        hexDump += `Total file size: ${buffer.length} bytes\n`;
+      }
+      
+      return hexDump;
+    } catch (error) {
+      throw new Error(`Failed to generate hex dump: ${error.message}`);
+    }
+  }
+
+  /**
+   * View crash file using read-only hex document provider
+   */
+  async handleViewCrash(params) {
+    try {
+      const { crashId, filePath } = params;
+
+      if (!filePath) {
+        throw new Error("Crash file path not provided");
+      }
+
+      // Check if file exists
+      try {
+        await fs.access(filePath);
+      } catch (error) {
+        throw new Error(`Crash file not found: ${filePath}`);
+      }
+
+      // Get file stats for size information
+      const stats = await fs.stat(filePath);
+      const fileSize = stats.size;
+      
+      // Log file information
+      this.safeOutputLog(`Opening crash file: ${crashId} (${path.basename(filePath)}, ${fileSize} bytes)`);
+
+      // Check file size limit (1MB max with user warning)
+      const maxFileSize = 1024 * 1024; // 1MB
+      if (fileSize > maxFileSize) {
+        const action = await vscode.window.showWarningMessage(
+          `CodeForge: Crash file is large (${Math.round(fileSize / 1024 / 1024 * 100) / 100}MB). This may take a moment to process and will be truncated to the first 64KB.`,
+          { modal: false },
+          'Continue',
+          'Cancel'
+        );
+        
+        if (action !== 'Continue') {
+          this.safeOutputLog(`User cancelled viewing large crash file: ${crashId}`);
+          return;
+        }
+      }
+
+      // Create virtual URI for the read-only hex document
+      const hexUri = HexDocumentProvider.createHexUri(filePath, crashId);
+      
+      this.safeOutputLog(`Opening read-only hex document for crash file: ${crashId}`);
+      
+      // Open the virtual document using the hex document provider
+      const document = await vscode.workspace.openTextDocument(hexUri);
+      
+      // Show the document in read-only mode
+      const editor = await vscode.window.showTextDocument(document, {
+        preview: false,
+        preserveFocus: false,
+        viewColumn: vscode.ViewColumn.Active
+      });
+      
+      // Move cursor to the start of actual hex content (after the header)
+      if (editor) {
+        // Position after the header comments (around line 8-10)
+        const startOfHexContent = new vscode.Position(8, 0);
+        editor.selection = new vscode.Selection(startOfHexContent, startOfHexContent);
+        editor.revealRange(new vscode.Range(startOfHexContent, startOfHexContent));
+      }
+      
+      this.safeOutputLog(`Opened crash file with read-only hex viewer: ${crashId}`);
+      
+      // Show success message
+      vscode.window.showInformationMessage(
+        `CodeForge: Crash file ${crashId} opened in read-only hex view`,
+        { modal: false }
+      );
+
+    } catch (error) {
+      this.safeOutputLog(`Error viewing crash: ${error.message}`, true);
+      vscode.window.showErrorMessage(
+        `CodeForge: Failed to open crash file - ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Analyze crash (placeholder for future implementation)
+   */
+  async handleAnalyzeCrash(params) {
+    try {
+      const { crashId, fuzzerName, filePath } = params;
+
+      // Future: Integration with debugging tools, crash analysis, etc.
+      this.safeOutputLog(
+        `Crash analysis requested for ${crashId} from ${fuzzerName}`,
+      );
+
+      vscode.window
+        .showInformationMessage(
+          `CodeForge: Crash analysis for ${crashId} from ${fuzzerName} - Feature coming soon!`,
+          "View File",
+        )
+        .then((selection) => {
+          if (selection === "View File") {
+            this.handleViewCrash({ crashId, filePath });
+          }
+        });
+    } catch (error) {
+      this.safeOutputLog(`Error analyzing crash: ${error.message}`, true);
+      vscode.window.showErrorMessage(
+        `CodeForge: Failed to analyze crash - ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Clear crashes for a fuzzer
+   */
+  async handleClearCrashes(params) {
+    try {
+      const { fuzzerName } = params;
+      const { path: workspacePath } = this.getWorkspaceInfo();
+
+      if (!fuzzerName) {
+        throw new Error("Fuzzer name not provided");
+      }
+
+      // Find the fuzzer output directory
+      const fuzzingDir = path.join(workspacePath, ".codeforge", "fuzzing");
+      const fuzzerOutputDir = path.join(
+        fuzzingDir,
+        `codeforge-${fuzzerName}-fuzz-output`,
+      );
+      const corpusDir = path.join(fuzzerOutputDir, "corpus");
+
+      try {
+        await fs.access(corpusDir);
+      } catch (error) {
+        // No corpus directory - nothing to clear
+        vscode.window.showInformationMessage(
+          `CodeForge: No crashes found for ${fuzzerName}`,
+        );
+        return;
+      }
+
+      // Find and delete crash files
+      const entries = await fs.readdir(corpusDir, { withFileTypes: true });
+      const crashFiles = entries
+        .filter((entry) => entry.isFile() && entry.name.startsWith("crash-"))
+        .map((entry) => path.join(corpusDir, entry.name));
+
+      if (crashFiles.length === 0) {
+        vscode.window.showInformationMessage(
+          `CodeForge: No crashes found for ${fuzzerName}`,
+        );
+        return;
+      }
+
+      // Delete crash files
+      let deletedCount = 0;
+      for (const crashFile of crashFiles) {
+        try {
+          await fs.unlink(crashFile);
+          deletedCount++;
+        } catch (error) {
+          this.safeOutputLog(
+            `Warning: Failed to delete ${crashFile}: ${error.message}`,
+          );
+        }
+      }
+
+      this.safeOutputLog(
+        `Cleared ${deletedCount} crash files for ${fuzzerName}`,
+      );
+      vscode.window.showInformationMessage(
+        `CodeForge: Cleared ${deletedCount} crash${deletedCount === 1 ? "" : "es"} for ${fuzzerName}`,
+      );
+
+      // Refresh crash data
+      await this.handleRefreshCrashes();
+    } catch (error) {
+      this.safeOutputLog(`Error clearing crashes: ${error.message}`, true);
+      vscode.window.showErrorMessage(
+        `CodeForge: Failed to clear crashes - ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * Update webview state if available
    */
   updateWebviewState() {
@@ -465,6 +770,10 @@ class CodeForgeCommandHandlers {
       "codeforge.launchTerminal": this.handleLaunchTerminal.bind(this),
       "codeforge.runFuzzingTests": this.handleRunFuzzing.bind(this),
       "codeforge.refreshContainers": this.handleRefreshContainers.bind(this),
+      "codeforge.refreshCrashes": this.handleRefreshCrashes.bind(this),
+      "codeforge.viewCrash": this.handleViewCrash.bind(this),
+      "codeforge.analyzeCrash": this.handleAnalyzeCrash.bind(this),
+      "codeforge.clearCrashes": this.handleClearCrashes.bind(this),
     };
   }
 }

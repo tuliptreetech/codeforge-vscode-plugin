@@ -3,6 +3,7 @@ const dockerOperations = require("./core/dockerOperations");
 const { CodeForgeTaskProvider } = require("./tasks/taskProvider");
 const { CodeForgeWebviewProvider } = require("./ui/webviewProvider");
 const { CodeForgeCommandHandlers } = require("./ui/commandHandlers");
+const { HexDocumentProvider } = require("./ui/hexDocumentProvider");
 const fs = require("fs").promises;
 const path = require("path");
 
@@ -131,6 +132,26 @@ function activate(context) {
   } catch (error) {
     vscode.window.showErrorMessage(
       `CodeForge: Failed to register webview provider - ${error.message}`,
+    );
+  }
+
+  // Register the hex document provider for read-only crash file viewing
+  try {
+    const hexDocumentProvider = new HexDocumentProvider();
+    const hexProviderDisposable = vscode.workspace.registerTextDocumentContentProvider(
+      'codeforge-hex',
+      hexDocumentProvider
+    );
+
+    if (!hexProviderDisposable) {
+      throw new Error("Failed to create hex document provider disposable");
+    }
+
+    context.subscriptions.push(hexProviderDisposable);
+    safeOutputLog("CodeForge: ✓ Hex document provider registered successfully");
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `CodeForge: Failed to register hex document provider - ${error.message}`,
     );
   }
 

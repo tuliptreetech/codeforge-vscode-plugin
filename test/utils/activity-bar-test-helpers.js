@@ -29,6 +29,31 @@ class MockWebview {
     this.postMessage.reset();
     this.asWebviewUri.reset();
   }
+
+  /**
+   * Helper to simulate receiving a message from the webview
+   */
+  simulateMessage(message) {
+    const handler = this.onDidReceiveMessage.getCall(0)?.args[0];
+    if (handler) {
+      return handler(message);
+    }
+  }
+
+  /**
+   * Helper to get the last posted message
+   */
+  getLastPostedMessage() {
+    const calls = this.postMessage.getCalls();
+    return calls.length > 0 ? calls[calls.length - 1].args[0] : null;
+  }
+
+  /**
+   * Helper to get all posted messages
+   */
+  getAllPostedMessages() {
+    return this.postMessage.getCalls().map((call) => call.args[0]);
+  }
 }
 
 /**
@@ -190,7 +215,25 @@ function createVSCodeMocks(sandbox) {
         .callsFake((path) => ({ fsPath: path, scheme: "file" })),
       parse: sandbox
         .stub()
-        .callsFake((uri) => ({ fsPath: uri, scheme: "file" })),
+        .callsFake((uri) => {
+          // Parse the URI string to extract scheme and other components
+          if (typeof uri === 'string') {
+            const match = uri.match(/^([^:]+):/);
+            const scheme = match ? match[1] : 'file';
+            const queryMatch = uri.match(/\?(.+)$/);
+            const query = queryMatch ? queryMatch[1] : '';
+            const pathMatch = uri.match(/^[^:]+:([^?]+)/);
+            const path = pathMatch ? pathMatch[1] : uri;
+            return {
+              fsPath: uri,
+              scheme: scheme,
+              path: path,
+              query: query,
+              toString: () => uri
+            };
+          }
+          return { fsPath: uri, scheme: "file" };
+        }),
     },
 
     // TreeItem mock
@@ -260,6 +303,53 @@ function createMockContainers() {
 }
 
 /**
+ * Create mock crash data for testing
+ */
+function createMockCrashData() {
+  return [
+    {
+      fuzzerName: "libfuzzer",
+      crashes: [
+        {
+          id: "crash-abc123",
+          filePath:
+            "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/corpus/crash-abc123",
+          hash: "abc123def456",
+          size: 1024,
+          timestamp: "2024-01-15T10:30:00.000Z",
+        },
+        {
+          id: "crash-def456",
+          filePath:
+            "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/corpus/crash-def456",
+          hash: "def456ghi789",
+          size: 2048,
+          timestamp: "2024-01-15T11:45:00.000Z",
+        },
+      ],
+      outputDir:
+        "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output",
+      lastScan: "2024-01-15T12:00:00.000Z",
+    },
+    {
+      fuzzerName: "afl",
+      crashes: [
+        {
+          id: "crash-ghi789",
+          filePath:
+            "/test/workspace/.codeforge/fuzzing/codeforge-afl-fuzz-output/corpus/crash-ghi789",
+          hash: "ghi789jkl012",
+          size: 512,
+          timestamp: "2024-01-15T09:15:00.000Z",
+        },
+      ],
+      outputDir: "/test/workspace/.codeforge/fuzzing/codeforge-afl-fuzz-output",
+      lastScan: "2024-01-15T12:00:00.000Z",
+    },
+  ];
+}
+
+/**
  * Create mock webview messages for testing
  */
 function createMockWebviewMessages() {
@@ -275,6 +365,37 @@ function createMockWebviewMessages() {
       type: "unknown",
       data: "test",
     },
+    // Crash-related messages
+    refreshCrashes: {
+      type: "command",
+      command: "refreshCrashes",
+    },
+    viewCrash: {
+      type: "command",
+      command: "viewCrash",
+      params: {
+        crashId: "crash-abc123",
+        filePath:
+          "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/corpus/crash-abc123",
+      },
+    },
+    analyzeCrash: {
+      type: "command",
+      command: "analyzeCrash",
+      params: {
+        crashId: "crash-abc123",
+        fuzzerName: "libfuzzer",
+        filePath:
+          "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/corpus/crash-abc123",
+      },
+    },
+    clearCrashes: {
+      type: "command",
+      command: "clearCrashes",
+      params: {
+        fuzzerName: "libfuzzer",
+      },
+    },
   };
 }
 
@@ -289,7 +410,9 @@ function createFileSystemMocks(sandbox) {
     mkdir: sandbox.stub(fs, "mkdir"),
     writeFile: sandbox.stub(fs, "writeFile"),
     readFile: sandbox.stub(fs, "readFile"),
+    readdir: sandbox.stub(fs, "readdir"),
     stat: sandbox.stub(fs, "stat"),
+    unlink: sandbox.stub(fs, "unlink"),
   };
 }
 
@@ -354,12 +477,84 @@ function createDockerOperationsMocks(sandbox) {
 }
 
 /**
+ * Mock CrashDiscoveryService operations
+ */
+function createCrashDiscoveryServiceMocks(sandbox) {
+  const mockFunctions = {
+    discoverCrashes: sandbox.stub().resolves(createMockCrashData()),
+    findFuzzerDirectories: sandbox
+      .stub()
+      .resolves([
+        "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output",
+        "/test/workspace/.codeforge/fuzzing/codeforge-afl-fuzz-output",
+      ]),
+    extractFuzzerName: sandbox.stub().callsFake((dir) => {
+      const match = dir.match(/codeforge-(.+)-fuzz-output/);
+      return match ? match[1] : "unknown";
+    }),
+    extractFuzzerNameFromPath: sandbox.stub().callsFake((filePath) => {
+      const match = filePath.match(/codeforge-(.+)-fuzz-output/);
+      return match ? match[1] : "unknown";
+    }),
+    findCrashFiles: sandbox.stub().resolves([
+      {
+        id: "crash-abc123",
+        filePath:
+          "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/corpus/crash-abc123",
+        hash: "abc123def456",
+        size: 1024,
+        timestamp: "2024-01-15T10:30:00.000Z",
+      },
+    ]),
+    parseCrashFile: sandbox.stub().resolves({
+      id: "crash-abc123",
+      filePath:
+        "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/corpus/crash-abc123",
+      hash: "abc123def456",
+      size: 1024,
+      timestamp: "2024-01-15T10:30:00.000Z",
+    }),
+  };
+
+  // Try to stub the actual module if it exists
+  try {
+    const {
+      CrashDiscoveryService,
+    } = require("../../src/fuzzing/crashDiscoveryService");
+    Object.keys(mockFunctions).forEach((methodName) => {
+      if (typeof CrashDiscoveryService.prototype[methodName] === "function") {
+        try {
+          if (!CrashDiscoveryService.prototype[methodName].isSinonProxy) {
+            sandbox
+              .stub(CrashDiscoveryService.prototype, methodName)
+              .callsFake(mockFunctions[methodName]);
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to stub CrashDiscoveryService.${methodName}:`,
+            error.message,
+          );
+        }
+      }
+    });
+  } catch (error) {
+    console.warn(
+      "CrashDiscoveryService module not available for stubbing:",
+      error.message,
+    );
+  }
+
+  return mockFunctions;
+}
+
+/**
  * Setup comprehensive test environment
  */
 function setupTestEnvironment(sandbox) {
   const vscodeMocks = createVSCodeMocks(sandbox);
   const fsMocks = createFileSystemMocks(sandbox);
   const dockerMocks = createDockerOperationsMocks(sandbox);
+  const crashMocks = createCrashDiscoveryServiceMocks(sandbox);
 
   // Apply VSCode mocks more carefully
   try {
@@ -444,7 +639,9 @@ function setupTestEnvironment(sandbox) {
     vscodeMocks,
     fsMocks,
     dockerMocks,
+    crashMocks,
     mockContainers: createMockContainers(),
+    mockCrashData: createMockCrashData(),
     mockMessages: createMockWebviewMessages(),
   };
 }
@@ -482,6 +679,124 @@ function assertWebviewHTML(html, expectedElements = []) {
 }
 
 /**
+ * Assert crash data structure is valid
+ */
+function assertCrashDataStructure(crashData) {
+  if (!Array.isArray(crashData)) {
+    throw new Error("Crash data should be an array");
+  }
+
+  crashData.forEach((fuzzerData, index) => {
+    if (!fuzzerData.fuzzerName || typeof fuzzerData.fuzzerName !== "string") {
+      throw new Error(
+        `Fuzzer data at index ${index} should have a valid fuzzerName`,
+      );
+    }
+    if (!Array.isArray(fuzzerData.crashes)) {
+      throw new Error(
+        `Fuzzer data at index ${index} should have crashes array`,
+      );
+    }
+    if (!fuzzerData.outputDir || typeof fuzzerData.outputDir !== "string") {
+      throw new Error(
+        `Fuzzer data at index ${index} should have a valid outputDir`,
+      );
+    }
+    if (!fuzzerData.lastScan || typeof fuzzerData.lastScan !== "string") {
+      throw new Error(
+        `Fuzzer data at index ${index} should have a valid lastScan timestamp`,
+      );
+    }
+
+    fuzzerData.crashes.forEach((crash, crashIndex) => {
+      if (!crash.id || typeof crash.id !== "string") {
+        throw new Error(`Crash at index ${crashIndex} should have a valid id`);
+      }
+      if (!crash.filePath || typeof crash.filePath !== "string") {
+        throw new Error(
+          `Crash at index ${crashIndex} should have a valid filePath`,
+        );
+      }
+      if (!crash.hash || typeof crash.hash !== "string") {
+        throw new Error(
+          `Crash at index ${crashIndex} should have a valid hash`,
+        );
+      }
+      if (typeof crash.size !== "number") {
+        throw new Error(
+          `Crash at index ${crashIndex} should have a valid size`,
+        );
+      }
+      if (!crash.timestamp || typeof crash.timestamp !== "string") {
+        throw new Error(
+          `Crash at index ${crashIndex} should have a valid timestamp`,
+        );
+      }
+    });
+  });
+}
+
+/**
+ * Assert webview state contains crash data
+ */
+function assertWebviewCrashState(state, expectedCrashCount = null) {
+  if (!state.crashes) {
+    throw new Error("State should contain crashes object");
+  }
+
+  const crashState = state.crashes;
+  if (typeof crashState.isLoading !== "boolean") {
+    throw new Error("Crash state should have isLoading boolean");
+  }
+  if (!Array.isArray(crashState.data)) {
+    throw new Error("Crash state should have data array");
+  }
+
+  if (expectedCrashCount !== null) {
+    const totalCrashes = crashState.data.reduce(
+      (sum, fuzzer) => sum + fuzzer.crashes.length,
+      0,
+    );
+    if (totalCrashes !== expectedCrashCount) {
+      throw new Error(
+        `Expected ${expectedCrashCount} crashes, got ${totalCrashes}`,
+      );
+    }
+  }
+
+  // Validate crash data structure
+  assertCrashDataStructure(crashState.data);
+}
+
+/**
+ * Assert webview received crash-related message
+ */
+function assertCrashMessage(webview, messageType, expectedData = {}) {
+  const messages = webview.getAllPostedMessages();
+  const crashMessage = messages.find(
+    (msg) =>
+      msg.type === messageType &&
+      (messageType !== "stateUpdate" || msg.state?.crashes),
+  );
+
+  if (!crashMessage) {
+    throw new Error(`Expected to find ${messageType} message with crash data`);
+  }
+
+  Object.keys(expectedData).forEach((key) => {
+    if (messageType === "stateUpdate" && key === "crashes") {
+      assertWebviewCrashState(crashMessage.state, expectedData[key]);
+    } else if (crashMessage[key] !== expectedData[key]) {
+      throw new Error(
+        `Expected ${key} to be ${expectedData[key]}, got ${crashMessage[key]}`,
+      );
+    }
+  });
+
+  return crashMessage;
+}
+
+/**
  * Wait for async operations to complete
  */
 function waitForAsync(ms = 100) {
@@ -516,12 +831,17 @@ module.exports = {
   MockTerminal,
   createVSCodeMocks,
   createMockContainers,
+  createMockCrashData,
   createMockWebviewMessages,
   createFileSystemMocks,
   createDockerOperationsMocks,
+  createCrashDiscoveryServiceMocks,
   setupTestEnvironment,
   cleanupTestEnvironment,
   assertWebviewHTML,
+  assertCrashDataStructure,
+  assertWebviewCrashState,
+  assertCrashMessage,
   waitForAsync,
   createMockExtensionContext,
 };
