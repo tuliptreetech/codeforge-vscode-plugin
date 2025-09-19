@@ -74,7 +74,6 @@
     updateButtonStates();
   }
 
-
   function updateButtonStates() {
     const { isLoading } = currentState;
     // All buttons are now enabled by default (no status dependencies)
@@ -95,7 +94,6 @@
         isLoading && getCurrentCommand() === "runFuzzingTests",
       );
     }
-
   }
 
   function toggleLoadingState(button, isLoading) {

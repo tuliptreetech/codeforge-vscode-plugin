@@ -96,7 +96,10 @@ suite("CodeForge Extension Core Test Suite", () => {
     test("Build command functionality removed", () => {
       // The build environment command has been removed from the extension
       // This test serves as documentation of the removal
-      assert.ok(true, "Build environment command functionality has been removed");
+      assert.ok(
+        true,
+        "Build environment command functionality has been removed",
+      );
     });
   });
 
@@ -142,7 +145,10 @@ suite("CodeForge Extension Core Test Suite", () => {
 
       // Test that commands don't throw unhandled errors
       // This is a basic test since the initialize command was removed
-      assert.ok(true, "Error handling test updated for simplified functionality");
+      assert.ok(
+        true,
+        "Error handling test updated for simplified functionality",
+      );
     });
   });
 

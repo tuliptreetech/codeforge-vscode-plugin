@@ -206,7 +206,6 @@ class CodeForgeCommandHandlers {
     }
   }
 
-
   /**
    * Launch terminal in container
    */
@@ -357,7 +356,6 @@ class CodeForgeCommandHandlers {
       );
     }
   }
-
 
   /**
    * Refresh container list
