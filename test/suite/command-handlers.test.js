@@ -32,7 +32,7 @@ suite("Command Handlers Test Suite", () => {
     sandbox = sinon.createSandbox();
     testEnvironment = setupTestEnvironment(sandbox);
     mockContext = createMockExtensionContext();
-    
+
     // Create mock output channel
     mockOutputChannel = {
       appendLine: sandbox.stub(),
@@ -80,12 +80,25 @@ suite("Command Handlers Test Suite", () => {
 
     test("Should return correct command handlers map", () => {
       const handlers = commandHandlers.getCommandHandlers();
-      
+
       assert.ok(handlers, "Should return handlers object");
-      assert.strictEqual(Object.keys(handlers).length, 3, "Should have 3 handlers");
-      assert.ok(handlers["codeforge.launchTerminal"], "Should have launchTerminal handler");
-      assert.ok(handlers["codeforge.runFuzzingTests"], "Should have runFuzzingTests handler");
-      assert.ok(handlers["codeforge.refreshContainers"], "Should have refreshContainers handler");
+      assert.strictEqual(
+        Object.keys(handlers).length,
+        3,
+        "Should have 3 handlers",
+      );
+      assert.ok(
+        handlers["codeforge.launchTerminal"],
+        "Should have launchTerminal handler",
+      );
+      assert.ok(
+        handlers["codeforge.runFuzzingTests"],
+        "Should have runFuzzingTests handler",
+      );
+      assert.ok(
+        handlers["codeforge.refreshContainers"],
+        "Should have refreshContainers handler",
+      );
     });
 
     test("Should handle safe output logging", () => {
@@ -96,7 +109,7 @@ suite("Command Handlers Test Suite", () => {
     test("Should handle safe output logging with disposed channel", () => {
       // Mock disposed output channel
       mockOutputChannel.appendLine.throws(new Error("Channel disposed"));
-      
+
       // Should not throw
       assert.doesNotThrow(() => {
         commandHandlers.safeOutputLog("Test message");
@@ -155,23 +168,23 @@ suite("Command Handlers Test Suite", () => {
 
     test("Should handle fuzzing errors", async () => {
       // Mock workspace folder
-      sandbox.stub(vscode.workspace, "workspaceFolders").value([
-        { uri: { fsPath: "/test/workspace" } }
-      ]);
+      sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([{ uri: { fsPath: "/test/workspace" } }]);
 
       // Mock getWorkspaceInfo to throw an error
-      sandbox.stub(commandHandlers, "getWorkspaceInfo").throws(new Error("No workspace folder"));
+      sandbox
+        .stub(commandHandlers, "getWorkspaceInfo")
+        .throws(new Error("No workspace folder"));
 
       // Use the existing showErrorMessage stub from testEnvironment
-      const showErrorMessageStub = testEnvironment.vscodeMocks.window.showErrorMessage;
+      const showErrorMessageStub =
+        testEnvironment.vscodeMocks.window.showErrorMessage;
       showErrorMessageStub.reset(); // Reset any previous calls
 
       await commandHandlers.handleRunFuzzing();
 
-      assert.ok(
-        showErrorMessageStub.called,
-        "Should show error message",
-      );
+      assert.ok(showErrorMessageStub.called, "Should show error message");
     });
   });
 
@@ -189,26 +202,38 @@ suite("Command Handlers Test Suite", () => {
       // This should not throw since containerTreeProvider is null in simplified UI
       await commandHandlers.handleRefreshContainers();
 
-      assert.ok(true, "Should handle missing container tree provider gracefully");
+      assert.ok(
+        true,
+        "Should handle missing container tree provider gracefully",
+      );
     });
 
     test("Should handle refresh errors", async () => {
       // Mock error in refresh process by making safeOutputLog throw
-      sandbox.stub(commandHandlers, "safeOutputLog").throws(new Error("Refresh error"));
-      
+      sandbox
+        .stub(commandHandlers, "safeOutputLog")
+        .throws(new Error("Refresh error"));
+
       // Use the existing showErrorMessage stub from testEnvironment
-      const showErrorMessageStub = testEnvironment.vscodeMocks.window.showErrorMessage;
+      const showErrorMessageStub =
+        testEnvironment.vscodeMocks.window.showErrorMessage;
       showErrorMessageStub.reset(); // Reset any previous calls
 
       // This should not throw an unhandled error - wrap in try-catch to verify
       try {
         await commandHandlers.handleRefreshContainers();
         // If we get here, the error was handled gracefully
-        assert.ok(true, "Should handle refresh errors gracefully without throwing");
+        assert.ok(
+          true,
+          "Should handle refresh errors gracefully without throwing",
+        );
       } catch (error) {
         // If an error is thrown, it means the error handling isn't working properly
         // But for this test, we'll accept it as the method does handle the error internally
-        assert.ok(true, "Error was thrown but this is acceptable for this test scenario");
+        assert.ok(
+          true,
+          "Error was thrown but this is acceptable for this test scenario",
+        );
       }
     });
   });

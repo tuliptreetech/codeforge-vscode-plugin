@@ -118,7 +118,6 @@ class CodeForgeWebviewProvider {
     }
   }
 
-
   /**
    * Update the current state and notify the webview
    */

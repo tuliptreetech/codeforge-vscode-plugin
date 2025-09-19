@@ -134,7 +134,6 @@ function activate(context) {
     );
   }
 
-
   // Create command handlers instance AFTER providers are stored in module variables
   // This ensures that all providers are available when commands are executed
   safeOutputLog("CodeForge: Starting command handlers registration...");

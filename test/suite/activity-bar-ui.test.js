@@ -169,7 +169,7 @@ suite("Activity Bar UI Test Suite", () => {
       await webviewProvider.resolveWebviewView(mockWebviewView);
 
       // Check if _detectAndUpdateState method exists
-      if (typeof webviewProvider._detectAndUpdateState === 'function') {
+      if (typeof webviewProvider._detectAndUpdateState === "function") {
         await webviewProvider._detectAndUpdateState();
         assert.ok(true, "State detection method executed without error");
       } else {
@@ -213,7 +213,7 @@ suite("Activity Bar UI Test Suite", () => {
       await webviewProvider.resolveWebviewView(mockWebviewView);
 
       // Check if refresh method exists
-      if (typeof webviewProvider.refresh === 'function') {
+      if (typeof webviewProvider.refresh === "function") {
         webviewProvider.refresh();
         assert.ok(true, "Refresh method executed without error");
       } else {
@@ -230,22 +230,42 @@ suite("Activity Bar UI Test Suite", () => {
     });
 
     test("Should only show Quick Actions section", () => {
-      const webviewProvider = new CodeForgeWebviewProvider(createMockExtensionContext());
+      const webviewProvider = new CodeForgeWebviewProvider(
+        createMockExtensionContext(),
+      );
       const mockWebviewView = new MockWebviewView();
-      
+
       const html = webviewProvider._getHtmlForWebview(mockWebviewView.webview);
-      
+
       // Should contain Quick Actions
-      assert.ok(html.includes("Quick Actions"), "Should contain Quick Actions section");
-      
+      assert.ok(
+        html.includes("Quick Actions"),
+        "Should contain Quick Actions section",
+      );
+
       // Should contain the two buttons
-      assert.ok(html.includes("terminal-btn"), "Should contain Launch Terminal button");
-      assert.ok(html.includes("fuzzing-btn"), "Should contain Run Fuzzing Tests button");
-      
+      assert.ok(
+        html.includes("terminal-btn"),
+        "Should contain Launch Terminal button",
+      );
+      assert.ok(
+        html.includes("fuzzing-btn"),
+        "Should contain Run Fuzzing Tests button",
+      );
+
       // Should NOT contain removed sections
-      assert.ok(!html.includes("Project Status"), "Should not contain Project Status section");
-      assert.ok(!html.includes("Advanced Operations"), "Should not contain Advanced Operations section");
-      assert.ok(!html.includes("initialize-btn"), "Should not contain Initialize button");
+      assert.ok(
+        !html.includes("Project Status"),
+        "Should not contain Project Status section",
+      );
+      assert.ok(
+        !html.includes("Advanced Operations"),
+        "Should not contain Advanced Operations section",
+      );
+      assert.ok(
+        !html.includes("initialize-btn"),
+        "Should not contain Initialize button",
+      );
       assert.ok(!html.includes("build-btn"), "Should not contain Build button");
     });
   });
