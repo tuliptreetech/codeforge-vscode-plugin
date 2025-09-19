@@ -4,27 +4,15 @@
 
   // State management
   let currentState = {
-    isInitialized: false,
-    isBuilt: false,
-    containerCount: 0,
     isLoading: false,
   };
 
   // DOM elements
   const elements = {
-    initializeBtn: document.getElementById("initialize-btn"),
-    buildBtn: document.getElementById("build-btn"),
     terminalBtn: document.getElementById("terminal-btn"),
     fuzzingBtn: document.getElementById("fuzzing-btn"),
-    listContainersBtn: document.getElementById("list-containers-btn"),
-    runCommandBtn: document.getElementById("run-command-btn"),
-    terminateAllBtn: document.getElementById("terminate-all-btn"),
-    cleanupBtn: document.getElementById("cleanup-btn"),
     loadingOverlay: document.getElementById("loading-overlay"),
     loadingText: document.getElementById("loading-text"),
-    codeforgeStatus: document.getElementById("codeforge-status"),
-    dockerStatus: document.getElementById("docker-status"),
-    containerCount: document.getElementById("container-count"),
   };
 
   // Verify all elements exist
@@ -37,16 +25,6 @@
   }
 
   // Event listeners
-  if (elements.initializeBtn) {
-    elements.initializeBtn.addEventListener("click", () =>
-      executeCommand("initialize"),
-    );
-  }
-  if (elements.buildBtn) {
-    elements.buildBtn.addEventListener("click", () =>
-      executeCommand("buildEnvironment"),
-    );
-  }
   if (elements.terminalBtn) {
     elements.terminalBtn.addEventListener("click", () =>
       executeCommand("launchTerminal"),
@@ -55,26 +33,6 @@
   if (elements.fuzzingBtn) {
     elements.fuzzingBtn.addEventListener("click", () =>
       executeCommand("runFuzzingTests"),
-    );
-  }
-  if (elements.listContainersBtn) {
-    elements.listContainersBtn.addEventListener("click", () =>
-      executeCommand("listContainers"),
-    );
-  }
-  if (elements.runCommandBtn) {
-    elements.runCommandBtn.addEventListener("click", () =>
-      executeCommand("runCommand"),
-    );
-  }
-  if (elements.terminateAllBtn) {
-    elements.terminateAllBtn.addEventListener("click", () =>
-      executeCommand("terminateAllContainers"),
-    );
-  }
-  if (elements.cleanupBtn) {
-    elements.cleanupBtn.addEventListener("click", () =>
-      executeCommand("cleanupOrphaned"),
     );
   }
 
@@ -113,57 +71,17 @@
   function updateState(newState) {
     console.log("Updating state:", newState);
     currentState = { ...currentState, ...newState };
-    updateStatusDisplay();
     updateButtonStates();
   }
 
-  function updateStatusDisplay() {
-    if (elements.codeforgeStatus) {
-      const status = currentState.isInitialized
-        ? "Initialized"
-        : "Not Initialized";
-      elements.codeforgeStatus.textContent = status;
-      elements.codeforgeStatus.className =
-        "status-value " + (currentState.isInitialized ? "success" : "");
-    }
-
-    if (elements.dockerStatus) {
-      const status = currentState.isBuilt ? "Built" : "Not Built";
-      elements.dockerStatus.textContent = status;
-      elements.dockerStatus.className =
-        "status-value " + (currentState.isBuilt ? "success" : "");
-    }
-
-    if (elements.containerCount) {
-      elements.containerCount.textContent =
-        currentState.containerCount.toString();
-      elements.containerCount.className =
-        "status-value " + (currentState.containerCount > 0 ? "success" : "");
-    }
-  }
 
   function updateButtonStates() {
-    const { isInitialized, isBuilt, isLoading } = currentState;
+    const { isLoading } = currentState;
+    // All buttons are now enabled by default (no status dependencies)
 
     // Update button states based on current state
-    if (elements.initializeBtn) {
-      elements.initializeBtn.disabled = isLoading;
-      toggleLoadingState(
-        elements.initializeBtn,
-        isLoading && getCurrentCommand() === "initialize",
-      );
-    }
-
-    if (elements.buildBtn) {
-      elements.buildBtn.disabled = !isInitialized || isLoading;
-      toggleLoadingState(
-        elements.buildBtn,
-        isLoading && getCurrentCommand() === "buildEnvironment",
-      );
-    }
-
     if (elements.terminalBtn) {
-      elements.terminalBtn.disabled = !isBuilt || isLoading;
+      elements.terminalBtn.disabled = isLoading;
       toggleLoadingState(
         elements.terminalBtn,
         isLoading && getCurrentCommand() === "launchTerminal",
@@ -171,44 +89,13 @@
     }
 
     if (elements.fuzzingBtn) {
-      elements.fuzzingBtn.disabled = !isBuilt || isLoading;
+      elements.fuzzingBtn.disabled = isLoading;
       toggleLoadingState(
         elements.fuzzingBtn,
         isLoading && getCurrentCommand() === "runFuzzingTests",
       );
     }
 
-    if (elements.runCommandBtn) {
-      elements.runCommandBtn.disabled = !isBuilt || isLoading;
-      toggleLoadingState(
-        elements.runCommandBtn,
-        isLoading && getCurrentCommand() === "runCommand",
-      );
-    }
-
-    if (elements.listContainersBtn) {
-      elements.listContainersBtn.disabled = isLoading;
-      toggleLoadingState(
-        elements.listContainersBtn,
-        isLoading && getCurrentCommand() === "listContainers",
-      );
-    }
-
-    if (elements.terminateAllBtn) {
-      elements.terminateAllBtn.disabled = isLoading;
-      toggleLoadingState(
-        elements.terminateAllBtn,
-        isLoading && getCurrentCommand() === "terminateAllContainers",
-      );
-    }
-
-    if (elements.cleanupBtn) {
-      elements.cleanupBtn.disabled = isLoading;
-      toggleLoadingState(
-        elements.cleanupBtn,
-        isLoading && getCurrentCommand() === "cleanupOrphaned",
-      );
-    }
   }
 
   function toggleLoadingState(button, isLoading) {
@@ -227,14 +114,8 @@
   function getLoadingMessage(command) {
     currentCommand = command;
     const messages = {
-      initialize: "Initializing CodeForge...",
-      buildEnvironment: "Building Docker environment...",
       launchTerminal: "Launching terminal...",
       runFuzzingTests: "Running fuzzing tests...",
-      listContainers: "Listing containers...",
-      runCommand: "Running command...",
-      terminateAllContainers: "Terminating containers...",
-      cleanupOrphaned: "Cleaning up...",
     };
     return messages[command] || "Processing...";
   }
@@ -273,14 +154,6 @@
 
   // Keyboard shortcuts
   document.addEventListener("keydown", (event) => {
-    // Ctrl/Cmd + Enter to initialize
-    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-      if (!currentState.isInitialized && !currentState.isLoading) {
-        executeCommand("initialize");
-      }
-      event.preventDefault();
-    }
-
     // Escape to cancel loading (if possible)
     if (event.key === "Escape" && currentState.isLoading) {
       // Note: We can't actually cancel commands, but we can hide the loading state
@@ -313,24 +186,8 @@
   // Enhanced state update with announcements
   const originalUpdateState = updateState;
   updateState = function (newState) {
-    const wasInitialized = currentState.isInitialized;
-    const wasBuilt = currentState.isBuilt;
-    const oldContainerCount = currentState.containerCount;
-
     originalUpdateState(newState);
-
-    // Announce important state changes
-    if (!wasInitialized && currentState.isInitialized) {
-      announceStateChange("CodeForge has been initialized");
-    }
-    if (!wasBuilt && currentState.isBuilt) {
-      announceStateChange("Docker environment has been built");
-    }
-    if (oldContainerCount !== currentState.containerCount) {
-      announceStateChange(
-        `Container count changed to ${currentState.containerCount}`,
-      );
-    }
+    // Status-related announcements removed
   };
 
   // Request initial state
@@ -338,7 +195,6 @@
   vscode.postMessage({ type: "requestState" });
 
   // Initial UI update
-  updateStatusDisplay();
   updateButtonStates();
 
   // Periodic state refresh (every 30 seconds)

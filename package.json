@@ -77,11 +77,6 @@
           "name": "Control Panel",
           "type": "webview",
           "when": "workspaceFolderCount > 0"
-        },
-        {
-          "id": "codeforge.activeContainers",
-          "name": "Active Containers",
-          "when": "workspaceFolderCount > 0"
         }
       ]
     },

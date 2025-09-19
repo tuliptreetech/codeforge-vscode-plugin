@@ -12,9 +12,6 @@ class CodeForgeWebviewProvider {
     this._context = context;
     this._view = undefined;
     this._currentState = {
-      isInitialized: false,
-      isBuilt: false,
-      containerCount: 0,
       isLoading: false,
     };
 
@@ -49,8 +46,7 @@ class CodeForgeWebviewProvider {
       this._view = undefined;
     });
 
-    // Initial state update
-    this._detectAndUpdateState();
+    // Initial state update removed
   }
 
   /**
@@ -65,7 +61,11 @@ class CodeForgeWebviewProvider {
           await this._executeCommand(message.command);
           break;
         case "requestState":
-          await this._detectAndUpdateState();
+          // State detection removed - send current state
+          this._sendMessage({
+            type: "stateUpdate",
+            state: this._currentState,
+          });
           break;
         default:
           console.warn(`Unknown message type: ${message.type}`);
@@ -86,14 +86,8 @@ class CodeForgeWebviewProvider {
     try {
       // Map webview commands to VSCode commands
       const commandMap = {
-        initialize: "codeforge.initialize",
-        buildEnvironment: "codeforge.buildEnvironment",
         launchTerminal: "codeforge.launchTerminal",
         runFuzzingTests: "codeforge.runFuzzingTests",
-        listContainers: "codeforge.listContainers",
-        runCommand: "codeforge.runCommand",
-        terminateAllContainers: "codeforge.terminateAllContainers",
-        cleanupOrphaned: "codeforge.cleanupOrphaned",
         refreshContainers: "codeforge.refreshContainers",
       };
 
@@ -112,8 +106,7 @@ class CodeForgeWebviewProvider {
         command: command,
       });
 
-      // Update state after command execution
-      setTimeout(() => this._detectAndUpdateState(), 1000);
+      // State update after command execution removed
     } catch (error) {
       console.error(`Error executing command ${command}:`, error);
       this._sendMessage({
@@ -125,72 +118,6 @@ class CodeForgeWebviewProvider {
     }
   }
 
-  /**
-   * Detect current project state and update the webview
-   */
-  async _detectAndUpdateState() {
-    try {
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      if (!workspaceFolder) {
-        this._updateState({
-          isInitialized: false,
-          isBuilt: false,
-          containerCount: 0,
-        });
-        return;
-      }
-
-      const workspacePath = workspaceFolder.uri.fsPath;
-      const codeforgeDir = path.join(workspacePath, ".codeforge");
-      const dockerfilePath = path.join(codeforgeDir, "Dockerfile");
-
-      // Check if CodeForge is initialized
-      let isInitialized = false;
-      try {
-        await fs.access(dockerfilePath);
-        isInitialized = true;
-      } catch (error) {
-        // Dockerfile doesn't exist
-      }
-
-      // Check if Docker image is built
-      let isBuilt = false;
-      if (isInitialized) {
-        try {
-          const containerName =
-            dockerOperations.generateContainerName(workspacePath);
-          const config = vscode.workspace.getConfiguration("codeforge");
-          const dockerCommand = config.get("dockerCommand", "docker");
-
-          // Check if image exists
-          isBuilt = await dockerOperations.checkImageExists(
-            containerName,
-            dockerCommand,
-          );
-        } catch (error) {
-          console.warn("Error checking Docker image:", error);
-        }
-      }
-
-      // Get active container count
-      let containerCount = 0;
-      try {
-        const containers = await dockerOperations.getActiveContainers();
-        containerCount = containers.length;
-      } catch (error) {
-        console.warn("Error getting container count:", error);
-      }
-
-      // Update state
-      this._updateState({
-        isInitialized,
-        isBuilt,
-        containerCount,
-      });
-    } catch (error) {
-      console.error("Error detecting project state:", error);
-    }
-  }
 
   /**
    * Update the current state and notify the webview
@@ -242,37 +169,10 @@ class CodeForgeWebviewProvider {
 </head>
 <body>
     <div class="container">
-        <!-- Project Status Section -->
-        <section class="status-section">
-            <h2>Project Status</h2>
-            <div class="status-grid">
-                <div class="status-item">
-                    <span class="status-label">CodeForge:</span>
-                    <span class="status-value" id="codeforge-status">Not Initialized</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Docker Image:</span>
-                    <span class="status-value" id="docker-status">Not Built</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Active Containers:</span>
-                    <span class="status-value" id="container-count">0</span>
-                </div>
-            </div>
-        </section>
-
         <!-- Quick Actions Section -->
         <section class="actions-section">
             <h2>Quick Actions</h2>
             <div class="button-grid">
-                <button class="action-btn primary" id="initialize-btn">
-                    <span class="btn-icon">🚀</span>
-                    <span class="btn-text">Initialize CodeForge</span>
-                </button>
-                <button class="action-btn secondary" id="build-btn" disabled>
-                    <span class="btn-icon">🔨</span>
-                    <span class="btn-text">Build Docker Environment</span>
-                </button>
                 <button class="action-btn secondary" id="terminal-btn" disabled>
                     <span class="btn-icon">💻</span>
                     <span class="btn-text">Launch Terminal</span>
@@ -280,29 +180,6 @@ class CodeForgeWebviewProvider {
                 <button class="action-btn tertiary" id="fuzzing-btn" disabled>
                     <span class="btn-icon">🧪</span>
                     <span class="btn-text">Run Fuzzing Tests</span>
-                </button>
-            </div>
-        </section>
-
-        <!-- Advanced Operations Section -->
-        <section class="advanced-section">
-            <h2>Advanced Operations</h2>
-            <div class="button-grid">
-                <button class="action-btn outline" id="list-containers-btn">
-                    <span class="btn-icon">📋</span>
-                    <span class="btn-text">List Containers</span>
-                </button>
-                <button class="action-btn outline" id="run-command-btn" disabled>
-                    <span class="btn-icon">⚡</span>
-                    <span class="btn-text">Run Command</span>
-                </button>
-                <button class="action-btn danger" id="terminate-all-btn">
-                    <span class="btn-icon">🛑</span>
-                    <span class="btn-text">Terminate All</span>
-                </button>
-                <button class="action-btn outline" id="cleanup-btn">
-                    <span class="btn-icon">🧹</span>
-                    <span class="btn-text">Cleanup Orphaned</span>
                 </button>
             </div>
         </section>
@@ -336,7 +213,7 @@ class CodeForgeWebviewProvider {
    * Refresh the webview state (called externally)
    */
   refresh() {
-    this._detectAndUpdateState();
+    // State detection removed
   }
 
   /**

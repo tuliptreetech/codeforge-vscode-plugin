@@ -2,9 +2,6 @@ const vscode = require("vscode");
 const dockerOperations = require("./core/dockerOperations");
 const { CodeForgeTaskProvider } = require("./tasks/taskProvider");
 const { CodeForgeWebviewProvider } = require("./ui/webviewProvider");
-const {
-  CodeForgeContainerTreeProvider,
-} = require("./ui/containerTreeProvider");
 const { CodeForgeCommandHandlers } = require("./ui/commandHandlers");
 const fs = require("fs").promises;
 const path = require("path");
@@ -66,7 +63,6 @@ USER $USERNAME
 let outputChannel;
 
 // Module-level storage for provider references
-let containerTreeProvider = null;
 let webviewProvider = null;
 
 /**
@@ -138,92 +134,6 @@ function activate(context) {
     );
   }
 
-  // Register the container tree provider
-  safeOutputLog("CodeForge: Starting container tree provider registration...");
-  try {
-    safeOutputLog(
-      "CodeForge: Creating CodeForgeContainerTreeProvider instance...",
-    );
-    containerTreeProvider = new CodeForgeContainerTreeProvider();
-
-    safeOutputLog("CodeForge: Registering tree data provider with VS Code...");
-    const containerTreeProviderDisposable =
-      vscode.window.registerTreeDataProvider(
-        "codeforge.activeContainers",
-        containerTreeProvider,
-      );
-
-    if (!containerTreeProviderDisposable) {
-      throw new Error("Failed to create container tree provider disposable");
-    }
-    safeOutputLog("CodeForge: Tree data provider registered successfully");
-
-    context.subscriptions.push(containerTreeProviderDisposable);
-    safeOutputLog("CodeForge: Tree data provider added to subscriptions");
-
-    // Register container tree provider commands
-    safeOutputLog("CodeForge: Registering container tree provider commands...");
-    const terminateContainerCommand = vscode.commands.registerCommand(
-      "codeforge.terminateContainer",
-      (treeItem) => containerTreeProvider.terminateContainer(treeItem),
-    );
-
-    const showContainerLogsCommand = vscode.commands.registerCommand(
-      "codeforge.showContainerLogs",
-      (treeItem) => containerTreeProvider.showContainerLogs(treeItem),
-    );
-
-    const connectToContainerCommand = vscode.commands.registerCommand(
-      "codeforge.connectToContainer",
-      (treeItem) => containerTreeProvider.connectToContainer(treeItem),
-    );
-
-    const inspectContainerCommand = vscode.commands.registerCommand(
-      "codeforge.inspectContainer",
-      (treeItem) => containerTreeProvider.inspectContainer(treeItem),
-    );
-
-    context.subscriptions.push(terminateContainerCommand);
-    context.subscriptions.push(showContainerLogsCommand);
-    context.subscriptions.push(connectToContainerCommand);
-    context.subscriptions.push(inspectContainerCommand);
-    safeOutputLog("CodeForge: Container tree provider commands registered");
-
-    safeOutputLog(
-      "CodeForge: ✓ Container tree provider stored in module variable",
-    );
-
-    // Initial refresh to populate the tree view
-    setTimeout(() => {
-      console.log("CodeForge: Performing initial container refresh...");
-      safeOutputLog("CodeForge: Starting initial container refresh...");
-      containerTreeProvider.refresh().catch((error) => {
-        console.error("CodeForge: Initial container refresh failed:", error);
-        safeOutputLog(
-          `Initial container refresh failed: ${error.message}`,
-          true,
-        );
-      });
-    }, 1000); // Small delay to ensure everything is initialized
-  } catch (error) {
-    console.error(
-      "CodeForge: Container tree provider registration failed:",
-      error,
-    );
-    safeOutputLog(
-      `CRITICAL: Failed to register container tree provider: ${error.message}`,
-      true,
-    );
-    safeOutputLog(`Error stack: ${error.stack}`, true);
-    vscode.window.showErrorMessage(
-      `CodeForge: Failed to register container tree provider - ${error.message}`,
-    );
-    // Set to null on failure
-    containerTreeProvider = null;
-    safeOutputLog(
-      "CodeForge: Set containerTreeProvider to null due to registration failure",
-    );
-  }
 
   // Create command handlers instance AFTER providers are stored in module variables
   // This ensures that all providers are available when commands are executed
@@ -233,14 +143,11 @@ function activate(context) {
     const commandHandlers = new CodeForgeCommandHandlers(
       context,
       outputChannel,
-      containerTreeProvider,
+      null,
       webviewProvider,
     );
 
     // Verify provider state before registering commands
-    safeOutputLog(
-      `CodeForge: Provider verification - containerTreeProvider: ${containerTreeProvider ? "PRESENT" : "NULL"}`,
-    );
     safeOutputLog(
       `CodeForge: Provider verification - webviewProvider: ${webviewProvider ? "PRESENT" : "NULL"}`,
     );
