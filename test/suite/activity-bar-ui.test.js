@@ -22,9 +22,13 @@ const {
   MockWebviewView,
   createMockExtensionContext,
   createMockWebviewMessages,
+  createMockCrashData,
   setupTestEnvironment,
   cleanupTestEnvironment,
   assertWebviewHTML,
+  assertCrashDataStructure,
+  assertWebviewCrashState,
+  assertCrashMessage,
   waitForAsync,
 } = require("../utils/activity-bar-test-helpers");
 
@@ -63,6 +67,12 @@ suite("Activity Bar UI Test Suite", () => {
         webviewProvider._currentState,
         {
           isLoading: false,
+          crashes: {
+            isLoading: false,
+            lastUpdated: null,
+            data: [],
+            error: null,
+          },
         },
         "Initial state should be correct",
       );
@@ -152,6 +162,12 @@ suite("Activity Bar UI Test Suite", () => {
         webviewProvider._currentState,
         {
           isLoading: true,
+          crashes: {
+            isLoading: false,
+            lastUpdated: null,
+            data: [],
+            error: null,
+          },
         },
         "State should be updated correctly",
       );
@@ -295,6 +311,381 @@ suite("Activity Bar UI Test Suite", () => {
       });
 
       assert.ok(hasErrorResponse, "Should send error response to webview");
+    });
+  });
+
+  suite("Crash Display Tests", () => {
+    let webviewProvider;
+    let mockContext;
+    let mockWebviewView;
+
+    setup(() => {
+      mockContext = createMockExtensionContext();
+      webviewProvider = new CodeForgeWebviewProvider(mockContext);
+      mockWebviewView = new MockWebviewView();
+    });
+
+    test("Should initialize with correct crash state", () => {
+      assert.deepStrictEqual(
+        webviewProvider._currentState.crashes,
+        {
+          isLoading: false,
+          lastUpdated: null,
+          data: [],
+          error: null,
+        },
+        "Initial crash state should be correct",
+      );
+    });
+
+    test("Should handle crash-related messages", async () => {
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      const crashMessages = testEnvironment.mockMessages;
+
+      // Test refreshCrashes message
+      await webviewProvider._handleMessage(crashMessages.refreshCrashes);
+      assert.ok(
+        testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
+          "codeforge.refreshCrashes",
+        ),
+        "Should execute refreshCrashes command",
+      );
+
+      // Test viewCrash message
+      await webviewProvider._handleMessage(crashMessages.viewCrash);
+      assert.ok(
+        testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
+          "codeforge.viewCrash",
+          crashMessages.viewCrash.params,
+        ),
+        "Should execute viewCrash command with params",
+      );
+
+      // Test analyzeCrash message
+      await webviewProvider._handleMessage(crashMessages.analyzeCrash);
+      assert.ok(
+        testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
+          "codeforge.analyzeCrash",
+          crashMessages.analyzeCrash.params,
+        ),
+        "Should execute analyzeCrash command with params",
+      );
+
+      // Test clearCrashes message
+      await webviewProvider._handleMessage(crashMessages.clearCrashes);
+      assert.ok(
+        testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
+          "codeforge.clearCrashes",
+          crashMessages.clearCrashes.params,
+        ),
+        "Should execute clearCrashes command with params",
+      );
+    });
+
+    test("Should update crash state correctly", async () => {
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      const mockCrashData = createMockCrashData();
+      const crashState = {
+        data: mockCrashData,
+        lastUpdated: new Date().toISOString(),
+        isLoading: false,
+        error: null,
+      };
+
+      webviewProvider._updateCrashState(crashState);
+
+      assert.deepStrictEqual(
+        webviewProvider._currentState.crashes.data,
+        mockCrashData,
+        "Crash data should be updated",
+      );
+      assert.strictEqual(
+        webviewProvider._currentState.crashes.isLoading,
+        false,
+        "Loading state should be updated",
+      );
+      assert.strictEqual(
+        webviewProvider._currentState.crashes.error,
+        null,
+        "Error state should be updated",
+      );
+
+      // Verify state update message was sent
+      assertCrashMessage(mockWebviewView.webview, "stateUpdate");
+    });
+
+    test("Should set crash loading state correctly", async () => {
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      // Test loading state
+      webviewProvider._setCrashLoading(true);
+      assert.strictEqual(
+        webviewProvider._currentState.crashes.isLoading,
+        true,
+        "Should set loading to true",
+      );
+
+      // Test loading with error
+      const errorMessage = "Test error";
+      webviewProvider._setCrashLoading(false, errorMessage);
+      assert.strictEqual(
+        webviewProvider._currentState.crashes.isLoading,
+        false,
+        "Should set loading to false",
+      );
+      assert.strictEqual(
+        webviewProvider._currentState.crashes.error,
+        errorMessage,
+        "Should set error message",
+      );
+
+      // Verify state update messages were sent
+      const messages = mockWebviewView.webview.getAllPostedMessages();
+      const stateUpdateMessages = messages.filter(
+        (msg) => msg.type === "stateUpdate",
+      );
+      assert.ok(
+        stateUpdateMessages.length >= 2,
+        "Should send state update messages",
+      );
+    });
+
+    test("Should handle crash command execution errors", async () => {
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      // Mock command execution failure
+      testEnvironment.vscodeMocks.commands.executeCommand.rejects(
+        new Error("Crash command failed"),
+      );
+
+      const crashMessage = testEnvironment.mockMessages.refreshCrashes;
+      await webviewProvider._handleMessage(crashMessage);
+
+      // Verify error response
+      assert.ok(
+        mockWebviewView.webview.postMessage.calledWith(
+          sinon.match({
+            type: "commandComplete",
+            success: false,
+            command: "refreshCrashes",
+            error: "Crash command failed",
+          }),
+        ),
+        "Should send error message for failed crash command",
+      );
+    });
+
+    test("Should validate crash data structure", () => {
+      const mockCrashData = createMockCrashData();
+
+      // Should not throw for valid data
+      assert.doesNotThrow(() => {
+        assertCrashDataStructure(mockCrashData);
+      }, "Should accept valid crash data structure");
+
+      // Test invalid data structures
+      assert.throws(
+        () => {
+          assertCrashDataStructure("not an array");
+        },
+        /should be an array/,
+        "Should reject non-array data",
+      );
+
+      assert.throws(
+        () => {
+          assertCrashDataStructure([{ fuzzerName: 123 }]);
+        },
+        /should have a valid fuzzerName/,
+        "Should reject invalid fuzzerName",
+      );
+
+      assert.throws(
+        () => {
+          assertCrashDataStructure([
+            {
+              fuzzerName: "test",
+              crashes: "not an array",
+            },
+          ]);
+        },
+        /should have crashes array/,
+        "Should reject invalid crashes array",
+      );
+    });
+
+    test("Should validate webview crash state", () => {
+      const validState = {
+        crashes: {
+          isLoading: false,
+          data: createMockCrashData(),
+          lastUpdated: new Date().toISOString(),
+          error: null,
+        },
+      };
+
+      // Should not throw for valid state
+      assert.doesNotThrow(() => {
+        assertWebviewCrashState(validState, 3); // 2 crashes from libfuzzer + 1 from afl
+      }, "Should accept valid crash state");
+
+      // Test invalid states
+      assert.throws(
+        () => {
+          assertWebviewCrashState({});
+        },
+        /should contain crashes object/,
+        "Should reject state without crashes",
+      );
+
+      assert.throws(
+        () => {
+          assertWebviewCrashState({ crashes: { isLoading: "not boolean" } });
+        },
+        /should have isLoading boolean/,
+        "Should reject invalid isLoading",
+      );
+
+      assert.throws(
+        () => {
+          assertWebviewCrashState(validState, 5);
+        },
+        /Expected 5 crashes, got 3/,
+        "Should reject incorrect crash count",
+      );
+    });
+  });
+
+  suite("Crash Integration Tests", () => {
+    let webviewProvider;
+    let mockContext;
+    let mockWebviewView;
+
+    setup(() => {
+      mockContext = createMockExtensionContext();
+      webviewProvider = new CodeForgeWebviewProvider(mockContext);
+      mockWebviewView = new MockWebviewView();
+    });
+
+    test("Should integrate crash discovery service", async () => {
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      // Verify crash discovery service is initialized
+      assert.ok(
+        webviewProvider._crashDiscoveryService,
+        "Should have crash discovery service",
+      );
+    });
+
+    test("Should handle complete crash workflow", async () => {
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      // Simulate crash refresh workflow
+      const refreshMessage = testEnvironment.mockMessages.refreshCrashes;
+      await webviewProvider._handleMessage(refreshMessage);
+
+      // Verify command was executed
+      assert.ok(
+        testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
+          "codeforge.refreshCrashes",
+        ),
+        "Should execute refresh command",
+      );
+
+      // Simulate successful command completion
+      webviewProvider._updateCrashState({
+        data: createMockCrashData(),
+        lastUpdated: new Date().toISOString(),
+        isLoading: false,
+        error: null,
+      });
+
+      // Verify state was updated
+      assertWebviewCrashState(webviewProvider._currentState, 3);
+
+      // Simulate viewing a crash
+      const viewMessage = testEnvironment.mockMessages.viewCrash;
+      await webviewProvider._handleMessage(viewMessage);
+
+      assert.ok(
+        testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
+          "codeforge.viewCrash",
+          viewMessage.params,
+        ),
+        "Should execute view crash command",
+      );
+    });
+
+    test("Should handle crash state transitions", async () => {
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      // Initial state
+      assertWebviewCrashState(webviewProvider._currentState, 0);
+
+      // Loading state
+      webviewProvider._setCrashLoading(true);
+      assert.strictEqual(
+        webviewProvider._currentState.crashes.isLoading,
+        true,
+        "Should be in loading state",
+      );
+
+      // Success state
+      const mockCrashData = createMockCrashData();
+      webviewProvider._updateCrashState({
+        data: mockCrashData,
+        lastUpdated: new Date().toISOString(),
+        isLoading: false,
+        error: null,
+      });
+      assertWebviewCrashState(webviewProvider._currentState, 3);
+
+      // Error state
+      webviewProvider._setCrashLoading(false, "Test error");
+      assert.strictEqual(
+        webviewProvider._currentState.crashes.error,
+        "Test error",
+        "Should be in error state",
+      );
+    });
+
+    test("Should handle concurrent crash operations", async () => {
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      // Simulate multiple concurrent operations
+      const promises = [
+        webviewProvider._handleMessage(
+          testEnvironment.mockMessages.refreshCrashes,
+        ),
+        webviewProvider._handleMessage(testEnvironment.mockMessages.viewCrash),
+        webviewProvider._handleMessage(
+          testEnvironment.mockMessages.analyzeCrash,
+        ),
+      ];
+
+      await Promise.all(promises);
+
+      // Verify all commands were executed
+      assert.ok(
+        testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
+          "codeforge.refreshCrashes",
+        ),
+        "Should execute refresh command",
+      );
+      assert.ok(
+        testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
+          "codeforge.viewCrash",
+        ),
+        "Should execute view command",
+      );
+      assert.ok(
+        testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
+          "codeforge.analyzeCrash",
+        ),
+        "Should execute analyze command",
+      );
     });
   });
 });

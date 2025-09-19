@@ -5,6 +5,12 @@
   // State management
   let currentState = {
     isLoading: false,
+    crashes: {
+      isLoading: false,
+      lastUpdated: null,
+      data: [],
+      error: null,
+    },
   };
 
   // DOM elements
@@ -13,6 +19,8 @@
     fuzzingBtn: document.getElementById("fuzzing-btn"),
     loadingOverlay: document.getElementById("loading-overlay"),
     loadingText: document.getElementById("loading-text"),
+    refreshCrashesBtn: document.getElementById("refresh-crashes-btn"),
+    crashesContent: document.getElementById("crashes-content"),
   };
 
   // Verify all elements exist
@@ -35,20 +43,26 @@
       executeCommand("runFuzzingTests"),
     );
   }
+  if (elements.refreshCrashesBtn) {
+    elements.refreshCrashesBtn.addEventListener("click", () =>
+      executeCommand("refreshCrashes"),
+    );
+  }
 
   // Command execution
-  function executeCommand(command) {
+  function executeCommand(command, params = {}) {
     if (currentState.isLoading) {
       console.log("Command ignored - already loading");
       return;
     }
 
-    console.log(`Executing command: ${command}`);
+    console.log(`Executing command: ${command}`, params);
     setLoading(true, getLoadingMessage(command));
 
     vscode.postMessage({
       type: "command",
       command: command,
+      params: params,
     });
   }
 
@@ -72,6 +86,7 @@
     console.log("Updating state:", newState);
     currentState = { ...currentState, ...newState };
     updateButtonStates();
+    updateCrashDisplay();
   }
 
   function updateButtonStates() {
@@ -114,6 +129,10 @@
     const messages = {
       launchTerminal: "Launching terminal...",
       runFuzzingTests: "Running fuzzing tests...",
+      refreshCrashes: "Scanning for crashes...",
+      viewCrash: "Opening crash file...",
+      analyzeCrash: "Analyzing crash...",
+      clearCrashes: "Clearing crashes...",
     };
     return messages[command] || "Processing...";
   }
@@ -181,12 +200,148 @@
     }, 1000);
   }
 
-  // Enhanced state update with announcements
-  const originalUpdateState = updateState;
-  updateState = function (newState) {
-    originalUpdateState(newState);
-    // Status-related announcements removed
-  };
+  // Enhanced state update with announcements - removed duplicate declaration
+
+  // Crash display management
+  function updateCrashDisplay() {
+    if (!elements.crashesContent) return;
+
+    const { crashes } = currentState;
+
+    if (crashes.isLoading) {
+      elements.crashesContent.innerHTML = `
+        <div class="crashes-loading">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Scanning for crashes...</div>
+        </div>
+      `;
+      return;
+    }
+
+    if (crashes.error) {
+      elements.crashesContent.innerHTML = `
+        <div class="crashes-error">
+          <div class="error-icon">⚠️</div>
+          <div class="error-text">Failed to load crash data</div>
+          <button class="retry-btn" onclick="executeCommand('refreshCrashes')">Retry</button>
+        </div>
+      `;
+      return;
+    }
+
+    if (!crashes.data || crashes.data.length === 0) {
+      elements.crashesContent.innerHTML = `
+        <div class="no-crashes-state">
+          <div class="empty-icon">🎯</div>
+          <div class="empty-text">No crashes found</div>
+          <div class="empty-subtext">Run fuzzing tests to discover crashes</div>
+        </div>
+      `;
+      return;
+    }
+
+    // Render crash data
+    let html = "";
+    crashes.data.forEach((fuzzerData) => {
+      html += renderFuzzerGroup(fuzzerData);
+    });
+    elements.crashesContent.innerHTML = html;
+
+    // Add event listeners for crash actions
+    addCrashEventListeners();
+  }
+
+  function renderFuzzerGroup(fuzzerData) {
+    const crashCount = fuzzerData.crashes.length;
+    const crashText = crashCount === 1 ? "crash" : "crashes";
+
+    let crashItems = "";
+    fuzzerData.crashes.forEach((crash) => {
+      crashItems += `
+        <div class="crash-item" data-crash-id="${crash.id}">
+          <div class="crash-info">
+            <span class="crash-id">${crash.id}</span>
+            <span class="crash-size">${formatFileSize(crash.fileSize)}</span>
+          </div>
+          <div class="crash-actions">
+            <button class="crash-action-btn" data-action="view" data-crash-id="${crash.id}"
+                    data-file-path="${crash.filePath}" title="View crash">👁️</button>
+            <button class="crash-action-btn" data-action="analyze" data-crash-id="${crash.id}"
+                    data-fuzzer-name="${crash.fuzzerName}" data-file-path="${crash.filePath}" title="Analyze crash">🔍</button>
+          </div>
+        </div>
+      `;
+    });
+
+    return `
+      <div class="fuzzer-group" data-fuzzer="${fuzzerData.fuzzerName}">
+        <div class="fuzzer-header">
+          <div>
+            <span class="fuzzer-name">${fuzzerData.fuzzerName}</span>
+            <span class="crash-count">${crashCount} ${crashText}</span>
+          </div>
+          <div class="fuzzer-actions">
+            <button class="clear-all-btn" data-fuzzer="${fuzzerData.fuzzerName}" title="Clear all crashes for this fuzzer">Clear All</button>
+          </div>
+        </div>
+        <div class="crash-list">
+          ${crashItems}
+        </div>
+      </div>
+    `;
+  }
+
+  function addCrashEventListeners() {
+    // View crash buttons
+    document
+      .querySelectorAll('.crash-action-btn[data-action="view"]')
+      .forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const crashId = e.target.dataset.crashId;
+          const filePath = e.target.dataset.filePath;
+          executeCommand("viewCrash", { crashId, filePath });
+        });
+      });
+
+    // Analyze crash buttons
+    document
+      .querySelectorAll('.crash-action-btn[data-action="analyze"]')
+      .forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const crashId = e.target.dataset.crashId;
+          const fuzzerName = e.target.dataset.fuzzerName;
+          const filePath = e.target.dataset.filePath;
+          executeCommand("analyzeCrash", { crashId, fuzzerName, filePath });
+        });
+      });
+
+    // Clear all buttons
+    document.querySelectorAll(".clear-all-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const fuzzerName = e.target.dataset.fuzzer;
+        if (
+          confirm(
+            `Are you sure you want to clear all crashes for ${fuzzerName}?`,
+          )
+        ) {
+          executeCommand("clearCrashes", { fuzzerName });
+        }
+      });
+    });
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  }
+
+  // Initialize with initial state if available
+  if (window.initialState) {
+    currentState = { ...currentState, ...window.initialState };
+  }
 
   // Request initial state
   console.log("Requesting initial state");
@@ -194,6 +349,27 @@
 
   // Initial UI update
   updateButtonStates();
+  updateCrashDisplay();
+
+  // Auto-refresh crashes after fuzzing completes
+  let lastFuzzingState = false;
+  const baseUpdateState = updateState;
+  updateState = function (newState) {
+    const wasFuzzing = lastFuzzingState;
+    const isFuzzing =
+      newState.isLoading && getCurrentCommand() === "runFuzzingTests";
+
+    baseUpdateState(newState);
+
+    // If fuzzing just completed, refresh crashes
+    if (wasFuzzing && !isFuzzing) {
+      setTimeout(() => {
+        executeCommand("refreshCrashes");
+      }, 1000);
+    }
+
+    lastFuzzingState = isFuzzing;
+  };
 
   // Periodic state refresh (every 30 seconds)
   setInterval(() => {

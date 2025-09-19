@@ -2,6 +2,7 @@ const vscode = require("vscode");
 const path = require("path");
 const fs = require("fs").promises;
 const dockerOperations = require("../core/dockerOperations");
+const { CrashDiscoveryService } = require("../fuzzing/crashDiscoveryService");
 
 /**
  * CodeForge Webview View Provider
@@ -13,12 +14,23 @@ class CodeForgeWebviewProvider {
     this._view = undefined;
     this._currentState = {
       isLoading: false,
+      crashes: {
+        isLoading: false,
+        lastUpdated: null,
+        data: [],
+        error: null,
+      },
     };
+
+    // Initialize crash discovery service
+    this._crashDiscoveryService = new CrashDiscoveryService();
 
     // Bind methods to preserve 'this' context
     this.resolveWebviewView = this.resolveWebviewView.bind(this);
     this._handleMessage = this._handleMessage.bind(this);
     this._updateState = this._updateState.bind(this);
+    this._updateCrashState = this._updateCrashState.bind(this);
+    this._setCrashLoading = this._setCrashLoading.bind(this);
   }
 
   /**
@@ -58,7 +70,7 @@ class CodeForgeWebviewProvider {
     try {
       switch (message.type) {
         case "command":
-          await this._executeCommand(message.command);
+          await this._executeCommand(message.command, message.params);
           break;
         case "requestState":
           // State detection removed - send current state
@@ -82,13 +94,17 @@ class CodeForgeWebviewProvider {
   /**
    * Execute a command from the webview
    */
-  async _executeCommand(command) {
+  async _executeCommand(command, params = {}) {
     try {
       // Map webview commands to VSCode commands
       const commandMap = {
         launchTerminal: "codeforge.launchTerminal",
         runFuzzingTests: "codeforge.runFuzzingTests",
         refreshContainers: "codeforge.refreshContainers",
+        refreshCrashes: "codeforge.refreshCrashes",
+        viewCrash: "codeforge.viewCrash",
+        analyzeCrash: "codeforge.analyzeCrash",
+        clearCrashes: "codeforge.clearCrashes",
       };
 
       const vscodeCommand = commandMap[command];
@@ -96,8 +112,12 @@ class CodeForgeWebviewProvider {
         throw new Error(`Unknown command: ${command}`);
       }
 
-      // Execute the VSCode command
-      await vscode.commands.executeCommand(vscodeCommand);
+      // Execute the VSCode command with parameters
+      if (Object.keys(params).length > 0) {
+        await vscode.commands.executeCommand(vscodeCommand, params);
+      } else {
+        await vscode.commands.executeCommand(vscodeCommand);
+      }
 
       // Send success message
       this._sendMessage({
@@ -136,6 +156,32 @@ class CodeForgeWebviewProvider {
     if (this._view) {
       this._view.webview.postMessage(message);
     }
+  }
+
+  /**
+   * Update crash state and notify the webview
+   */
+  _updateCrashState(crashData) {
+    this._currentState.crashes = {
+      ...this._currentState.crashes,
+      ...crashData,
+    };
+    this._sendMessage({
+      type: "stateUpdate",
+      state: this._currentState,
+    });
+  }
+
+  /**
+   * Set crash loading state
+   */
+  _setCrashLoading(loading, error = null) {
+    this._currentState.crashes.isLoading = loading;
+    this._currentState.crashes.error = error;
+    this._sendMessage({
+      type: "stateUpdate",
+      state: this._currentState,
+    });
   }
 
   /**
@@ -183,6 +229,20 @@ class CodeForgeWebviewProvider {
             </div>
         </section>
 
+        <!-- Fuzzing Crashes Section -->
+        <section class="crashes-section" id="crashes-section">
+            <div class="section-header">
+                <h2>Fuzzing Crashes</h2>
+                <button class="refresh-btn" id="refresh-crashes-btn" title="Refresh crash data">
+                    <span class="btn-icon">🔄</span>
+                </button>
+            </div>
+            
+            <div class="crashes-content" id="crashes-content">
+                <!-- Dynamic content populated by JavaScript -->
+            </div>
+        </section>
+
         <!-- Loading Overlay -->
         <div class="loading-overlay" id="loading-overlay" style="display: none;">
             <div class="loading-spinner"></div>
@@ -190,6 +250,10 @@ class CodeForgeWebviewProvider {
         </div>
     </div>
 
+    <script nonce="${nonce}">
+        // Pass initial state to webview
+        window.initialState = ${JSON.stringify(this._currentState)};
+    </script>
     <script nonce="${nonce}" src="${jsUri}"></script>
 </body>
 </html>`;
