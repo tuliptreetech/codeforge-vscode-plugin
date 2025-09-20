@@ -40,13 +40,38 @@ suite("CrashDiscoveryService Tests", () => {
     });
 
     test("should extract fuzzer name correctly", () => {
-      const testDir = "/path/to/codeforge-test-fuzzer-fuzz-output";
+      const testDir = path.join(
+        "path",
+        "to",
+        "codeforge-test-fuzzer-fuzz-output",
+      );
       const fuzzerName = crashService.extractFuzzerName(testDir);
 
       assert.strictEqual(fuzzerName, "test-fuzzer");
     });
 
     test("should extract fuzzer name from path correctly", () => {
+      const testPath = path.join(
+        "workspace",
+        ".codeforge",
+        "fuzzing",
+        "codeforge-libfuzzer-fuzz-output",
+        "crash-abc123",
+      );
+      const fuzzerName = crashService.extractFuzzerNameFromPath(testPath);
+
+      assert.strictEqual(fuzzerName, "libfuzzer");
+    });
+
+    test("should extract fuzzer name from Windows path correctly", () => {
+      const testPath =
+        "C:\\workspace\\.codeforge\\fuzzing\\codeforge-libfuzzer-fuzz-output\\crash-abc123";
+      const fuzzerName = crashService.extractFuzzerNameFromPath(testPath);
+
+      assert.strictEqual(fuzzerName, "libfuzzer");
+    });
+
+    test("should extract fuzzer name from Unix path correctly", () => {
       const testPath =
         "/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/crash-abc123";
       const fuzzerName = crashService.extractFuzzerNameFromPath(testPath);
@@ -55,7 +80,7 @@ suite("CrashDiscoveryService Tests", () => {
     });
 
     test("should handle malformed directory names gracefully", () => {
-      const testDir = "/path/to/invalid-directory-name";
+      const testDir = path.join("path", "to", "invalid-directory-name");
       const fuzzerName = crashService.extractFuzzerName(testDir);
 
       assert.strictEqual(fuzzerName, "invalid-directory-name");
@@ -73,7 +98,7 @@ suite("CrashDiscoveryService Tests", () => {
       const originalFindFuzzerDirectories = testService.findFuzzerDirectories;
 
       testService.fs.access = async (dir) => {
-        if (dir.includes(".codeforge/fuzzing")) {
+        if (dir.includes(path.join(".codeforge", "fuzzing"))) {
           // Simulate that the directory exists
           return Promise.resolve();
         }
@@ -91,7 +116,46 @@ suite("CrashDiscoveryService Tests", () => {
         assert.fail("Should have thrown an error");
       } catch (error) {
         assert.strictEqual(
-          error.message.includes("Failed to scan for crashes"),
+          error.message.includes(
+            "Permission denied while scanning for crashes",
+          ),
+          true,
+        );
+      } finally {
+        // Restore original methods
+        testService.fs.access = originalAccess;
+        testService.findFuzzerDirectories = originalFindFuzzerDirectories;
+      }
+    });
+
+    test("should handle Windows permission errors gracefully", async () => {
+      // Test Windows-specific permission error handling
+      const testService = new CrashDiscoveryService();
+
+      const originalAccess = testService.fs.access;
+      const originalFindFuzzerDirectories = testService.findFuzzerDirectories;
+
+      testService.fs.access = async (dir) => {
+        if (dir.includes(path.join(".codeforge", "fuzzing"))) {
+          return Promise.resolve();
+        }
+        return originalAccess.call(testService.fs, dir);
+      };
+
+      testService.findFuzzerDirectories = async () => {
+        const error = new Error("Access denied");
+        error.code = "EBUSY";
+        throw error;
+      };
+
+      try {
+        await testService.discoverCrashes(testWorkspacePath);
+        assert.fail("Should have thrown an error");
+      } catch (error) {
+        assert.strictEqual(
+          error.message.includes(
+            "Permission denied while scanning for crashes",
+          ),
           true,
         );
       } finally {
