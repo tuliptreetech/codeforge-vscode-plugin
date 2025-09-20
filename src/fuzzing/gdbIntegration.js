@@ -189,9 +189,21 @@ class PathMapper {
       throw new Error("Both host path and workspace path are required");
     }
 
-    // Normalize paths to handle different path separators
-    const normalizedHostPath = path.resolve(hostPath);
-    const normalizedWorkspacePath = path.resolve(workspacePath);
+    // Normalize paths - handle Windows paths properly even on non-Windows systems
+    let normalizedHostPath, normalizedWorkspacePath;
+    
+    // Check if we're dealing with Windows-style paths (drive letter)
+    const isWindowsPath = /^[A-Za-z]:/.test(hostPath) || /^[A-Za-z]:/.test(workspacePath);
+    
+    if (isWindowsPath) {
+      // For Windows paths, normalize manually to avoid path.resolve() issues on non-Windows systems
+      normalizedHostPath = hostPath.replace(/\\/g, '/');
+      normalizedWorkspacePath = workspacePath.replace(/\\/g, '/');
+    } else {
+      // For Unix paths, use standard normalization
+      normalizedHostPath = path.resolve(hostPath);
+      normalizedWorkspacePath = path.resolve(workspacePath);
+    }
 
     // Check if the host path is within the workspace
     if (!normalizedHostPath.startsWith(normalizedWorkspacePath)) {
@@ -201,13 +213,18 @@ class PathMapper {
     }
 
     // Get the relative path from workspace root
-    const relativePath = path.relative(
-      normalizedWorkspacePath,
-      normalizedHostPath,
-    );
+    const relativePath = normalizedHostPath.substring(normalizedWorkspacePath.length);
+    const cleanRelativePath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
 
     // Map to container path (workspace is mounted at the same path in container)
-    return path.posix.join(normalizedWorkspacePath, relativePath);
+    // For containers, we need Unix-style paths regardless of host OS
+    const containerWorkspacePath = normalizedWorkspacePath.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '');
+    
+    if (cleanRelativePath) {
+      return path.posix.join(containerWorkspacePath, cleanRelativePath);
+    } else {
+      return containerWorkspacePath;
+    }
   }
 
   /**
