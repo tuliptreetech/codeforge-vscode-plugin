@@ -53,6 +53,12 @@ class CrashDiscoveryService {
       return crashData;
     } catch (error) {
       // Handle permission errors and other file system issues
+      // Check for both Unix and Windows permission error codes
+      if (this.isPermissionError(error)) {
+        throw new Error(
+          `Permission denied while scanning for crashes: ${error.message}`,
+        );
+      }
       throw new Error(`Failed to scan for crashes: ${error.message}`);
     }
   }
@@ -76,6 +82,13 @@ class CrashDiscoveryService {
         .map((entry) => this.path.join(fuzzingDir, entry.name));
     } catch (error) {
       if (error.code === "ENOENT") {
+        return [];
+      }
+      // Handle permission errors gracefully by returning empty array
+      if (this.isPermissionError(error)) {
+        console.warn(
+          `Permission denied accessing fuzzing directory: ${error.message}`,
+        );
         return [];
       }
       throw error;
@@ -131,6 +144,13 @@ class CrashDiscoveryService {
       if (error.code === "ENOENT") {
         return [];
       }
+      // Handle permission errors gracefully by returning empty array
+      if (this.isPermissionError(error)) {
+        console.warn(
+          `Permission denied accessing crash files: ${error.message}`,
+        );
+        return [];
+      }
       throw error;
     }
   }
@@ -170,7 +190,9 @@ class CrashDiscoveryService {
    * @returns {string} Fuzzer name
    */
   extractFuzzerNameFromPath(crashFilePath) {
-    const pathParts = crashFilePath.split(this.path.sep);
+    // Normalize path separators to handle both Windows and Unix paths
+    const normalizedPath = crashFilePath.replace(/[/\\]/g, this.path.sep);
+    const pathParts = normalizedPath.split(this.path.sep);
     const fuzzerDirIndex = pathParts.findIndex((part) =>
       part.match(/^codeforge-.+-fuzz-output$/),
     );
@@ -178,6 +200,35 @@ class CrashDiscoveryService {
       return this.extractFuzzerName(pathParts[fuzzerDirIndex]);
     }
     return "unknown";
+  }
+
+  /**
+   * Checks if an error is a permission-related error on any platform
+   * @param {Error} error - The error to check
+   * @returns {boolean} True if it's a permission error
+   */
+  isPermissionError(error) {
+    // Unix permission error codes
+    if (error.code === "EACCES" || error.code === "EPERM") {
+      return true;
+    }
+
+    // Windows permission error codes
+    if (error.code === "EBUSY" || error.code === "ENOTEMPTY") {
+      return true;
+    }
+
+    // Check error message for Windows permission patterns
+    const message = error.message.toLowerCase();
+    if (
+      message.includes("permission denied") ||
+      message.includes("access denied") ||
+      message.includes("operation not permitted")
+    ) {
+      return true;
+    }
+
+    return false;
   }
 }
 
