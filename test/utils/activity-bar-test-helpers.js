@@ -417,6 +417,12 @@ function createFileSystemMocks(sandbox) {
     readdir: sandbox.stub(fs, "readdir"),
     stat: sandbox.stub(fs, "stat"),
     unlink: sandbox.stub(fs, "unlink"),
+    constants: {
+      X_OK: 1, // Execute permission constant
+      R_OK: 4, // Read permission constant
+      W_OK: 2, // Write permission constant
+      F_OK: 0, // File exists constant
+    },
   };
 }
 
