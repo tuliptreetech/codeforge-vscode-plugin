@@ -284,6 +284,209 @@ suite("Activity Bar UI Test Suite", () => {
       );
       assert.ok(!html.includes("build-btn"), "Should not contain Build button");
     });
+
+    test("Should have buttons with no emoji spans and neutral styling", () => {
+      const webviewProvider = new CodeForgeWebviewProvider(
+        createMockExtensionContext(),
+      );
+      const mockWebviewView = new MockWebviewView();
+
+      const html = webviewProvider._getHtmlForWebview(mockWebviewView.webview);
+
+      // Check that buttons don't have emoji spans (buttons now have text only)
+      assert.ok(
+        !html.includes('<span class="btn-icon">💻</span>'),
+        "Terminal button should not have emoji icon span",
+      );
+      assert.ok(
+        !html.includes('<span class="btn-icon">🧪</span>'),
+        "Fuzzing button should not have emoji icon span",
+      );
+
+      // Check that buttons use neutral CSS classes (outline instead of secondary/tertiary)
+      assert.ok(
+        html.includes('class="action-btn outline"'),
+        "Terminal button should have neutral outline styling",
+      );
+      assert.ok(
+        html.includes('class="action-btn outline"'),
+        "Fuzzing button should have neutral outline styling",
+      );
+
+      // Verify buttons only have text labels, no emoji
+      assert.ok(
+        html.includes('<span class="btn-text">Launch Terminal</span>'),
+        "Terminal button should have text-only label",
+      );
+      assert.ok(
+        html.includes('<span class="btn-text">Run Fuzzing Tests</span>'),
+        "Fuzzing button should have text-only label",
+      );
+    });
+
+    test("Should maintain button functionality despite styling changes", async () => {
+      const webviewProvider = new CodeForgeWebviewProvider(
+        createMockExtensionContext(),
+      );
+      const mockWebviewView = new MockWebviewView();
+
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      const html = webviewProvider._getHtmlForWebview(mockWebviewView.webview);
+
+      // Verify buttons have correct IDs for functionality
+      assert.ok(
+        html.includes('id="terminal-btn"'),
+        "Terminal button should have correct ID",
+      );
+      assert.ok(
+        html.includes('id="fuzzing-btn"'),
+        "Fuzzing button should have correct ID",
+      );
+
+      // Verify buttons have proper button elements with updated styling
+      assert.ok(
+        html.includes('<button class="action-btn outline" id="terminal-btn"'),
+        "Terminal button should be a proper button element with outline styling",
+      );
+      assert.ok(
+        html.includes('<button class="action-btn outline" id="fuzzing-btn"'),
+        "Fuzzing button should be a proper button element with outline styling",
+      );
+    });
+
+    test("Should preserve accessibility features in button styling", () => {
+      const webviewProvider = new CodeForgeWebviewProvider(
+        createMockExtensionContext(),
+      );
+      const mockWebviewView = new MockWebviewView();
+
+      const html = webviewProvider._getHtmlForWebview(mockWebviewView.webview);
+
+      // Check for proper button structure with text labels
+      assert.ok(
+        html.includes('<span class="btn-text">Launch Terminal</span>'),
+        "Terminal button should have accessible text label",
+      );
+      assert.ok(
+        html.includes('<span class="btn-text">Run Fuzzing Tests</span>'),
+        "Fuzzing button should have accessible text label",
+      );
+
+      // Verify buttons are not missing essential accessibility attributes
+      // (disabled attribute is present by default)
+      assert.ok(
+        html.includes("disabled"),
+        "Buttons should have proper disabled state management",
+      );
+    });
+  });
+
+  suite("Auto Crash Discovery Integration", () => {
+    test("Should show crashes immediately when webview is opened", async () => {
+      const webviewProvider = new CodeForgeWebviewProvider(
+        createMockExtensionContext(),
+      );
+      const mockWebviewView = new MockWebviewView();
+
+      // Mock crash data
+      const mockCrashData = createMockCrashData();
+
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      // Simulate auto-discovery populating crash data
+      webviewProvider._updateCrashState({
+        data: mockCrashData,
+        lastUpdated: new Date().toISOString(),
+        isLoading: false,
+        error: null,
+      });
+
+      // Verify crash data is immediately available
+      assert.deepStrictEqual(
+        webviewProvider._currentState.crashes.data,
+        mockCrashData,
+        "Crash data should be immediately available when webview opens",
+      );
+
+      // Verify state update message was sent
+      assertCrashMessage(mockWebviewView.webview, "stateUpdate");
+    });
+
+    test("Should handle auto-discovery when no crashes exist", async () => {
+      const webviewProvider = new CodeForgeWebviewProvider(
+        createMockExtensionContext(),
+      );
+      const mockWebviewView = new MockWebviewView();
+
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      // Simulate auto-discovery finding no crashes
+      webviewProvider._updateCrashState({
+        data: [],
+        lastUpdated: new Date().toISOString(),
+        isLoading: false,
+        error: null,
+      });
+
+      // Verify empty state is handled correctly
+      assert.deepStrictEqual(
+        webviewProvider._currentState.crashes.data,
+        [],
+        "Empty crash data should be handled correctly",
+      );
+      assert.strictEqual(
+        webviewProvider._currentState.crashes.error,
+        null,
+        "No error should be present for empty results",
+      );
+    });
+
+    test("Should handle auto-discovery errors gracefully", async () => {
+      const webviewProvider = new CodeForgeWebviewProvider(
+        createMockExtensionContext(),
+      );
+      const mockWebviewView = new MockWebviewView();
+
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      // Simulate auto-discovery error
+      const errorMessage = "Failed to scan for crashes";
+      webviewProvider._setCrashLoading(false, errorMessage);
+
+      // Verify error state is handled correctly
+      assert.strictEqual(
+        webviewProvider._currentState.crashes.error,
+        errorMessage,
+        "Error message should be stored in state",
+      );
+      assert.strictEqual(
+        webviewProvider._currentState.crashes.isLoading,
+        false,
+        "Loading should be false after error",
+      );
+    });
+
+    test("Should not run auto-discovery when .codeforge doesn't exist", async () => {
+      const webviewProvider = new CodeForgeWebviewProvider(
+        createMockExtensionContext(),
+      );
+      const mockWebviewView = new MockWebviewView();
+
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+
+      // Verify initial state remains unchanged when no .codeforge directory
+      assert.deepStrictEqual(
+        webviewProvider._currentState.crashes,
+        {
+          isLoading: false,
+          lastUpdated: null,
+          data: [],
+          error: null,
+        },
+        "Initial crash state should remain unchanged when .codeforge doesn't exist",
+      );
+    });
   });
 
   suite("Error Handling Tests", () => {

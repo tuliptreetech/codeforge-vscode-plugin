@@ -481,6 +481,12 @@ body {
   color: var(--vscode-descriptionForeground);
 }
 
+.crash-date {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
 .crash-actions {
   display: flex;
   gap: 4px;

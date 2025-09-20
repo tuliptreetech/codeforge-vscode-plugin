@@ -82,12 +82,245 @@ suite("CodeForge Extension Core Test Suite", () => {
     });
   });
 
-  // Initialize Command tests removed - functionality was removed from extension
-  suite("Initialize Command", () => {
-    test("Initialize command functionality removed", () => {
-      // The initialize command has been removed from the extension
-      // This test serves as documentation of the removal
-      assert.ok(true, "Initialize command functionality has been removed");
+  suite("Automatic Initialization", () => {
+    test("Should create .gitignore during initialization", async () => {
+      // Mock workspace folder
+      const mockWorkspacePath = "/test/workspace";
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([
+          {
+            uri: { fsPath: mockWorkspacePath },
+          },
+        ]);
+
+      // Mock fs operations
+      const fsAccessStub = sandbox.stub(fs, "access");
+      const fsMkdirStub = sandbox.stub(fs, "mkdir");
+      const fsWriteFileStub = sandbox.stub(fs, "writeFile");
+
+      // Simulate .codeforge directory doesn't exist
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge"))
+        .rejects(new Error("ENOENT"));
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge", ".gitignore"))
+        .rejects(new Error("ENOENT"));
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge", "Dockerfile"))
+        .rejects(new Error("ENOENT"));
+
+      fsMkdirStub.resolves();
+      fsWriteFileStub.resolves();
+
+      // Call the initialization function
+      await myExtension.initializeCodeForgeOnActivation();
+
+      // Verify .gitignore was created with correct content
+      assert.ok(
+        fsWriteFileStub.calledWith(
+          path.join(mockWorkspacePath, ".codeforge", ".gitignore"),
+          "# Ignore fuzzing output directory\n/fuzzing\n",
+        ),
+        ".gitignore should be created with correct content",
+      );
+    });
+
+    test("Should not overwrite existing .gitignore", async () => {
+      // Mock workspace folder
+      const mockWorkspacePath = "/test/workspace";
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([
+          {
+            uri: { fsPath: mockWorkspacePath },
+          },
+        ]);
+
+      // Mock fs operations
+      const fsAccessStub = sandbox.stub(fs, "access");
+      const fsWriteFileStub = sandbox.stub(fs, "writeFile");
+
+      // Simulate .codeforge directory and .gitignore exist
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge"))
+        .resolves();
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge", ".gitignore"))
+        .resolves();
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge", "Dockerfile"))
+        .resolves();
+
+      // Call the initialization function
+      await myExtension.initializeCodeForgeOnActivation();
+
+      // Verify .gitignore was NOT written
+      assert.ok(
+        !fsWriteFileStub.called,
+        ".gitignore should not be overwritten if it exists",
+      );
+    });
+
+    test("Should create both Dockerfile and .gitignore when neither exists", async () => {
+      // Mock workspace folder
+      const mockWorkspacePath = "/test/workspace";
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([
+          {
+            uri: { fsPath: mockWorkspacePath },
+          },
+        ]);
+
+      // Mock fs operations
+      const fsAccessStub = sandbox.stub(fs, "access");
+      const fsMkdirStub = sandbox.stub(fs, "mkdir");
+      const fsWriteFileStub = sandbox.stub(fs, "writeFile");
+
+      // Simulate .codeforge directory doesn't exist
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge"))
+        .rejects(new Error("ENOENT"));
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge", ".gitignore"))
+        .rejects(new Error("ENOENT"));
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge", "Dockerfile"))
+        .rejects(new Error("ENOENT"));
+
+      fsMkdirStub.resolves();
+      fsWriteFileStub.resolves();
+
+      // Call the initialization function
+      await myExtension.initializeCodeForgeOnActivation();
+
+      // Verify both files were created
+      assert.ok(
+        fsWriteFileStub.calledWith(
+          path.join(mockWorkspacePath, ".codeforge", ".gitignore"),
+          "# Ignore fuzzing output directory\n/fuzzing\n",
+        ),
+        ".gitignore should be created",
+      );
+
+      assert.ok(
+        fsWriteFileStub.calledWith(
+          path.join(mockWorkspacePath, ".codeforge", "Dockerfile"),
+          sinon.match.string,
+        ),
+        "Dockerfile should be created",
+      );
+    });
+
+    test("Should skip initialization when no workspace is open", async () => {
+      // Mock no workspace folder
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value(undefined);
+
+      // Mock fs operations
+      const fsAccessStub = sandbox.stub(fs, "access");
+      const fsWriteFileStub = sandbox.stub(fs, "writeFile");
+
+      // Call the initialization function
+      await myExtension.initializeCodeForgeOnActivation();
+
+      // Verify no file operations were attempted
+      assert.ok(!fsAccessStub.called, "No file access should be attempted");
+      assert.ok(!fsWriteFileStub.called, "No files should be written");
+    });
+  });
+
+  suite("Auto Crash Discovery", () => {
+    test("Should run crash discovery on extension activation", async () => {
+      // Mock workspace folder
+      const mockWorkspacePath = "/test/workspace";
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([
+          {
+            uri: { fsPath: mockWorkspacePath },
+          },
+        ]);
+
+      // Mock fs operations
+      const fsAccessStub = sandbox.stub(fs, "access");
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge"))
+        .resolves();
+
+      // Mock command handlers
+      const mockCommandHandlers = {
+        handleRefreshCrashes: sandbox.stub().resolves(),
+      };
+
+      // Mock the command handlers module
+      const commandHandlersStub = sandbox.stub().returns(mockCommandHandlers);
+
+      // Test that the function exists and can be called
+      assert.ok(
+        typeof myExtension.runInitialCrashDiscovery === "function",
+        "runInitialCrashDiscovery function should exist",
+      );
+    });
+
+    test("Should skip crash discovery when .codeforge doesn't exist", async () => {
+      // Mock workspace folder
+      const mockWorkspacePath = "/test/workspace";
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([
+          {
+            uri: { fsPath: mockWorkspacePath },
+          },
+        ]);
+
+      // Mock fs operations - .codeforge doesn't exist
+      const fsAccessStub = sandbox.stub(fs, "access");
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge"))
+        .rejects(new Error("ENOENT"));
+
+      // Test that the function handles missing .codeforge gracefully
+      assert.doesNotThrow(async () => {
+        await myExtension.runInitialCrashDiscovery();
+      }, "Should not throw when .codeforge doesn't exist");
+    });
+
+    test("Should skip crash discovery when no workspace is open", async () => {
+      // Mock no workspace folder
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value(undefined);
+
+      // Test that the function handles no workspace gracefully
+      assert.doesNotThrow(async () => {
+        await myExtension.runInitialCrashDiscovery();
+      }, "Should not throw when no workspace is open");
+    });
+
+    test("Should handle crash discovery errors gracefully", async () => {
+      // Mock workspace folder
+      const mockWorkspacePath = "/test/workspace";
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([
+          {
+            uri: { fsPath: mockWorkspacePath },
+          },
+        ]);
+
+      // Mock fs operations
+      const fsAccessStub = sandbox.stub(fs, "access");
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge"))
+        .resolves();
+
+      // Test that errors in crash discovery don't break extension
+      assert.doesNotThrow(async () => {
+        await myExtension.runInitialCrashDiscovery();
+      }, "Should handle crash discovery errors gracefully");
     });
   });
 

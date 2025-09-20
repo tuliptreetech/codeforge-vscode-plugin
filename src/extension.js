@@ -7,6 +7,11 @@ const { HexDocumentProvider } = require("./ui/hexDocumentProvider");
 const fs = require("fs").promises;
 const path = require("path");
 
+// Embedded .gitignore content
+const GITIGNORE_CONTENT = `# Ignore fuzzing output directory
+/fuzzing
+`;
+
 // Embedded Dockerfile content
 const DOCKERFILE_CONTENT = `# specify the base image (latest ubuntu lts release as of Oct 2024)
 FROM ubuntu:24.04
@@ -93,7 +98,7 @@ function activate(context) {
   outputChannel = vscode.window.createOutputChannel("CodeForge");
   context.subscriptions.push(outputChannel);
 
-  safeOutputLog("CodeForge: Extension activation started", true);
+  safeOutputLog("CodeForge: Extension activation started", false);
 
   // Register the task provider
   try {
@@ -193,7 +198,7 @@ function activate(context) {
       `CRITICAL: Failed to register command handlers: ${error.message}`,
       true,
     );
-    safeOutputLog(`Error stack: ${error.stack}`, true);
+    safeOutputLog(`Error stack: ${error.stack}`, false);
     vscode.window.showErrorMessage(
       `CodeForge: Failed to register command handlers - ${error.message}`,
     );
@@ -201,6 +206,9 @@ function activate(context) {
 
   // Automatically initialize .codeforge directory on activation
   initializeCodeForgeOnActivation();
+
+  // Run crash discovery asynchronously after extension activation
+  runInitialCrashDiscovery();
 
   // Check if Docker is available
   const config = vscode.workspace.getConfiguration("codeforge");
@@ -325,7 +333,7 @@ function activate(context) {
 
         safeOutputLog(`Successfully registered task: ${taskLabel}`);
       } catch (error) {
-        safeOutputLog(`Error registering task: ${error.message}`, true);
+        safeOutputLog(`Error registering task: ${error.message}`, false);
         vscode.window.showErrorMessage(
           `CodeForge: Failed to register task - ${error.message}`,
         );
@@ -376,6 +384,7 @@ async function initializeCodeForgeOnActivation() {
 
     const workspacePath = workspaceFolder.uri.fsPath;
     const codeforgeDir = path.join(workspacePath, ".codeforge");
+    const gitignorePath = path.join(codeforgeDir, ".gitignore");
     const dockerfilePath = path.join(codeforgeDir, "Dockerfile");
 
     // Check if .codeforge directory exists
@@ -386,6 +395,18 @@ async function initializeCodeForgeOnActivation() {
     } catch (error) {
       // Directory doesn't exist
       dirExists = false;
+    }
+
+    // Check if .gitignore exists
+    let gitignoreExists = false;
+    if (dirExists) {
+      try {
+        await fs.access(gitignorePath);
+        gitignoreExists = true;
+      } catch (error) {
+        // .gitignore doesn't exist
+        gitignoreExists = false;
+      }
     }
 
     // Check if Dockerfile exists
@@ -400,8 +421,8 @@ async function initializeCodeForgeOnActivation() {
       }
     }
 
-    // If both directory and Dockerfile exist, nothing to do
-    if (dirExists && dockerfileExists) {
+    // If directory, .gitignore, and Dockerfile all exist, nothing to do
+    if (dirExists && gitignoreExists && dockerfileExists) {
       safeOutputLog(
         "CodeForge already initialized, skipping automatic initialization",
       );
@@ -414,14 +435,22 @@ async function initializeCodeForgeOnActivation() {
       safeOutputLog(`Auto-created .codeforge directory: ${codeforgeDir}`);
     }
 
+    // Create .gitignore if it doesn't exist
+    if (!gitignoreExists) {
+      await fs.writeFile(gitignorePath, GITIGNORE_CONTENT);
+      safeOutputLog(`Auto-created .gitignore: ${gitignorePath}`);
+    }
+
     // Create Dockerfile if it doesn't exist
     if (!dockerfileExists) {
       await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
       safeOutputLog(`Auto-created Dockerfile: ${dockerfilePath}`);
+    }
 
-      // Show a subtle notification that initialization occurred
+    // Show a subtle notification if any files were created
+    if (!dirExists || !gitignoreExists || !dockerfileExists) {
       vscode.window.showInformationMessage(
-        "CodeForge: Initialized .codeforge directory with Dockerfile",
+        "CodeForge: Initialized .codeforge directory with configuration files",
       );
     }
   } catch (error) {
@@ -527,11 +556,67 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
     outputChannel.appendLine(
       `Error in ensureInitializedAndBuilt: ${error.message}`,
     );
-    outputChannel.show();
+    // Don't automatically show output window - users can access it manually
     vscode.window.showErrorMessage(
       `CodeForge: Failed to initialize/build automatically - ${error.message}`,
     );
     return false;
+  }
+}
+/**
+ * Runs initial crash discovery asynchronously after extension activation
+ * This ensures crashes are available immediately when the webview is opened
+ */
+async function runInitialCrashDiscovery() {
+  try {
+    // Check if there's an open workspace
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      safeOutputLog(
+        "No workspace folder open, skipping initial crash discovery",
+      );
+      return;
+    }
+
+    const workspacePath = workspaceFolder.uri.fsPath;
+    const codeforgeDir = path.join(workspacePath, ".codeforge");
+
+    // Check if .codeforge directory exists
+    try {
+      await fs.access(codeforgeDir);
+    } catch (error) {
+      // .codeforge directory doesn't exist yet, skip crash discovery
+      safeOutputLog(
+        "CodeForge directory not found, skipping initial crash discovery",
+      );
+      return;
+    }
+
+    // Run crash discovery asynchronously without blocking extension activation
+    setTimeout(async () => {
+      try {
+        if (webviewProvider) {
+          safeOutputLog("Running initial crash discovery...");
+
+          // Use the command handler to refresh crashes
+          const { CodeForgeCommandHandlers } = require("./ui/commandHandlers");
+          const commandHandlers = new CodeForgeCommandHandlers(
+            null, // context not needed for this operation
+            outputChannel,
+            null, // containerTreeProvider not needed
+            webviewProvider,
+          );
+
+          await commandHandlers.handleRefreshCrashes();
+          safeOutputLog("Initial crash discovery completed");
+        }
+      } catch (error) {
+        safeOutputLog(`Error during initial crash discovery: ${error.message}`);
+        // Don't show error to user as this is a background operation
+      }
+    }, 1000); // Delay to ensure extension is fully activated
+  } catch (error) {
+    safeOutputLog(`Error setting up initial crash discovery: ${error.message}`);
   }
 }
 
@@ -568,4 +653,6 @@ async function deactivate() {
 module.exports = {
   activate,
   deactivate,
+  initializeCodeForgeOnActivation,
+  runInitialCrashDiscovery,
 };

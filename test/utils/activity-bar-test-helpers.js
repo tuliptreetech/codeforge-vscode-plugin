@@ -313,16 +313,20 @@ function createMockCrashData() {
           filePath:
             "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/corpus/crash-abc123",
           hash: "abc123def456",
-          size: 1024,
-          timestamp: "2024-01-15T10:30:00.000Z",
+          fileSize: 1024,
+          size: 1024, // Keep both for compatibility
+          createdAt: "2024-01-15T10:30:00.000Z",
+          timestamp: "2024-01-15T10:30:00.000Z", // Keep both for compatibility
         },
         {
           id: "crash-def456",
           filePath:
             "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/corpus/crash-def456",
           hash: "def456ghi789",
-          size: 2048,
-          timestamp: "2024-01-15T11:45:00.000Z",
+          fileSize: 2048,
+          size: 2048, // Keep both for compatibility
+          createdAt: "2024-01-15T11:45:00.000Z",
+          timestamp: "2024-01-15T11:45:00.000Z", // Keep both for compatibility
         },
       ],
       outputDir:
@@ -337,8 +341,10 @@ function createMockCrashData() {
           filePath:
             "/test/workspace/.codeforge/fuzzing/codeforge-afl-fuzz-output/corpus/crash-ghi789",
           hash: "ghi789jkl012",
-          size: 512,
-          timestamp: "2024-01-15T09:15:00.000Z",
+          fileSize: 512,
+          size: 512, // Keep both for compatibility
+          createdAt: "2024-01-15T09:15:00.000Z",
+          timestamp: "2024-01-15T09:15:00.000Z", // Keep both for compatibility
         },
       ],
       outputDir: "/test/workspace/.codeforge/fuzzing/codeforge-afl-fuzz-output",
