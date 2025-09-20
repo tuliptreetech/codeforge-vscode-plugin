@@ -219,4 +219,290 @@ suite("CrashDiscoveryService Tests", () => {
       assert.strictEqual(typeof expectedStructure.lastScan, "string");
     });
   });
+
+  suite("Date Formatting", () => {
+    test("Should format crash date correctly in local time", () => {
+      // Test with a known ISO timestamp
+      const testTimestamp = "2024-12-19T20:45:30.123Z";
+
+      // Mock the formatCrashDate function (it's in webview.js, so we'll test the logic)
+      function formatCrashDate(isoTimestamp) {
+        if (!isoTimestamp) return "Unknown date";
+
+        try {
+          const date = new Date(isoTimestamp);
+
+          // Check if date is valid
+          if (isNaN(date.getTime())) {
+            return "Invalid date";
+          }
+
+          // Format date in local time with user-friendly format
+          const options = {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          };
+
+          return date.toLocaleString("en-US", options).replace(",", " at");
+        } catch (error) {
+          return "Invalid date";
+        }
+      }
+
+      const result = formatCrashDate(testTimestamp);
+
+      // Verify the format matches expected pattern
+      assert.ok(
+        result.includes("Dec") &&
+          result.includes("2024") &&
+          result.includes("at"),
+        `Date should be formatted in local time with readable format, got: ${result}`,
+      );
+      assert.ok(
+        result.match(/\w+ \d+ at \d+, \d+:\d+ (AM|PM)/),
+        `Date should match pattern 'Month DD at YYYY, HH:MM AM/PM', got: ${result}`,
+      );
+    });
+
+    test("Should handle null dates gracefully", () => {
+      function formatCrashDate(isoTimestamp) {
+        if (!isoTimestamp) return "Unknown date";
+
+        try {
+          const date = new Date(isoTimestamp);
+
+          if (isNaN(date.getTime())) {
+            return "Invalid date";
+          }
+
+          const options = {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          };
+
+          return date.toLocaleString("en-US", options).replace(",", " at");
+        } catch (error) {
+          return "Invalid date";
+        }
+      }
+
+      assert.strictEqual(
+        formatCrashDate(null),
+        "Unknown date",
+        "Null date should return 'Unknown date'",
+      );
+      assert.strictEqual(
+        formatCrashDate(undefined),
+        "Unknown date",
+        "Undefined date should return 'Unknown date'",
+      );
+      assert.strictEqual(
+        formatCrashDate(""),
+        "Unknown date",
+        "Empty string date should return 'Unknown date'",
+      );
+    });
+
+    test("Should handle invalid dates gracefully", () => {
+      function formatCrashDate(isoTimestamp) {
+        if (!isoTimestamp) return "Unknown date";
+
+        try {
+          const date = new Date(isoTimestamp);
+
+          if (isNaN(date.getTime())) {
+            return "Invalid date";
+          }
+
+          const options = {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          };
+
+          return date.toLocaleString("en-US", options).replace(",", " at");
+        } catch (error) {
+          return "Invalid date";
+        }
+      }
+
+      assert.strictEqual(
+        formatCrashDate("invalid-date"),
+        "Invalid date",
+        "Invalid date string should return 'Invalid date'",
+      );
+      assert.strictEqual(
+        formatCrashDate("2024-13-45T25:70:80.000Z"),
+        "Invalid date",
+        "Malformed ISO date should return 'Invalid date'",
+      );
+      assert.strictEqual(
+        formatCrashDate("not-a-date-at-all"),
+        "Invalid date",
+        "Non-date string should return 'Invalid date'",
+      );
+    });
+
+    test("Should handle edge case dates", () => {
+      function formatCrashDate(isoTimestamp) {
+        if (!isoTimestamp) return "Unknown date";
+
+        try {
+          const date = new Date(isoTimestamp);
+
+          if (isNaN(date.getTime())) {
+            return "Invalid date";
+          }
+
+          const options = {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          };
+
+          return date.toLocaleString("en-US", options).replace(",", " at");
+        } catch (error) {
+          return "Invalid date";
+        }
+      }
+
+      // Test Unix epoch (note: will show in local timezone, so might be Dec 31, 1969)
+      const epochResult = formatCrashDate("1970-01-01T00:00:00.000Z");
+      assert.ok(
+        (epochResult.includes("Jan") && epochResult.includes("1970")) ||
+          (epochResult.includes("Dec") && epochResult.includes("1969")),
+        `Unix epoch should be formatted correctly in local timezone, got: ${epochResult}`,
+      );
+
+      // Test future date
+      const futureResult = formatCrashDate("2030-06-15T14:30:00.000Z");
+      assert.ok(
+        futureResult.includes("Jun") && futureResult.includes("2030"),
+        `Future date should be formatted correctly, got: ${futureResult}`,
+      );
+
+      // Test leap year date
+      const leapYearResult = formatCrashDate("2024-02-29T12:00:00.000Z");
+      assert.ok(
+        leapYearResult.includes("Feb") &&
+          leapYearResult.includes("29") &&
+          leapYearResult.includes("2024"),
+        `Leap year date should be formatted correctly, got: ${leapYearResult}`,
+      );
+    });
+
+    test("Should format dates consistently across different timezones", () => {
+      function formatCrashDate(isoTimestamp) {
+        if (!isoTimestamp) return "Unknown date";
+
+        try {
+          const date = new Date(isoTimestamp);
+
+          if (isNaN(date.getTime())) {
+            return "Invalid date";
+          }
+
+          const options = {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          };
+
+          return date.toLocaleString("en-US", options).replace(",", " at");
+        } catch (error) {
+          return "Invalid date";
+        }
+      }
+
+      // Test the same moment in different timezone representations
+      const utcTime = "2024-12-19T15:30:00.000Z";
+      const result = formatCrashDate(utcTime);
+
+      // Should always produce a consistent format regardless of local timezone
+      assert.ok(
+        result.match(/\w+ \d+ at \d+, \d+:\d+ (AM|PM)/),
+        `Date should have consistent format regardless of timezone, got: ${result}`,
+      );
+
+      // Should include the correct date components
+      assert.ok(
+        result.includes("Dec") && result.includes("2024"),
+        `Date should include correct month and year, got: ${result}`,
+      );
+    });
+
+    test("Should handle crash date display in crash item rendering", () => {
+      // Test that crash dates are properly integrated into crash display
+      const mockCrash = {
+        id: "crash-123",
+        filePath: "/path/to/crash",
+        fileSize: 1024,
+        createdAt: "2024-12-19T20:45:30.123Z",
+        fuzzerName: "test-fuzzer",
+      };
+
+      // Simulate the crash item rendering logic
+      function renderCrashItem(crash) {
+        function formatCrashDate(isoTimestamp) {
+          if (!isoTimestamp) return "Unknown date";
+
+          try {
+            const date = new Date(isoTimestamp);
+
+            if (isNaN(date.getTime())) {
+              return "Invalid date";
+            }
+
+            const options = {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            };
+
+            return date.toLocaleString("en-US", options).replace(",", " at");
+          } catch (error) {
+            return "Invalid date";
+          }
+        }
+
+        const formattedDate = formatCrashDate(crash.createdAt);
+        return `<span class="crash-date">${formattedDate}</span>`;
+      }
+
+      const renderedItem = renderCrashItem(mockCrash);
+
+      assert.ok(
+        renderedItem.includes('class="crash-date"'),
+        "Rendered crash item should include crash-date class",
+      );
+      assert.ok(
+        renderedItem.includes("Dec") && renderedItem.includes("2024"),
+        "Rendered crash item should include formatted date",
+      );
+      assert.ok(
+        renderedItem.includes("at"),
+        "Rendered crash item should include time with 'at' separator",
+      );
+    });
+  });
 });

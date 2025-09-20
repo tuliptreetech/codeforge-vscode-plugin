@@ -201,7 +201,7 @@ class CodeForgeCommandHandlers {
       this.outputChannel.appendLine(
         `Error in ensureInitializedAndBuilt: ${error.message}`,
       );
-      this.outputChannel.show();
+      // Don't automatically show output window - users can access it manually
       vscode.window.showErrorMessage(
         `CodeForge: Failed to initialize/build automatically - ${error.message}`,
       );
@@ -305,7 +305,7 @@ class CodeForgeCommandHandlers {
         );
       }
     } catch (error) {
-      this.safeOutputLog(`Error: ${error.message}`, true);
+      this.safeOutputLog(`Error: ${error.message}`, false);
       vscode.window.showErrorMessage(
         `CodeForge: Failed to launch terminal - ${error.message}`,
       );
@@ -353,7 +353,7 @@ class CodeForgeCommandHandlers {
         { modal: false },
       );
     } catch (error) {
-      this.safeOutputLog(`Fuzzing failed: ${error.message}`, true);
+      this.safeOutputLog(`Fuzzing failed: ${error.message}`, false);
       vscode.window.showErrorMessage(
         `CodeForge: Fuzzing failed - ${error.message}`,
       );
@@ -445,7 +445,7 @@ class CodeForgeCommandHandlers {
         `CRITICAL: Error refreshing containers: ${error.message}`,
         true,
       );
-      this.safeOutputLog(`Error stack: ${error.stack}`, true);
+      this.safeOutputLog(`Error stack: ${error.stack}`, false);
       vscode.window.showErrorMessage(
         `CodeForge: Failed to refresh containers - ${error.message}`,
       );
@@ -495,7 +495,7 @@ class CodeForgeCommandHandlers {
       if (this.webviewProvider) {
         this.webviewProvider._setCrashLoading(false, error.message);
       }
-      this.safeOutputLog(`Error refreshing crashes: ${error.message}`, true);
+      this.safeOutputLog(`Error refreshing crashes: ${error.message}`, false);
       vscode.window.showErrorMessage(
         `CodeForge: Failed to refresh crashes - ${error.message}`,
       );
@@ -656,7 +656,7 @@ class CodeForgeCommandHandlers {
         { modal: false },
       );
     } catch (error) {
-      this.safeOutputLog(`Error viewing crash: ${error.message}`, true);
+      this.safeOutputLog(`Error viewing crash: ${error.message}`, false);
       vscode.window.showErrorMessage(
         `CodeForge: Failed to open crash file - ${error.message}`,
       );
@@ -686,7 +686,7 @@ class CodeForgeCommandHandlers {
           }
         });
     } catch (error) {
-      this.safeOutputLog(`Error analyzing crash: ${error.message}`, true);
+      this.safeOutputLog(`Error analyzing crash: ${error.message}`, false);
       vscode.window.showErrorMessage(
         `CodeForge: Failed to analyze crash - ${error.message}`,
       );
@@ -759,7 +759,7 @@ class CodeForgeCommandHandlers {
       // Refresh crash data
       await this.handleRefreshCrashes();
     } catch (error) {
-      this.safeOutputLog(`Error clearing crashes: ${error.message}`, true);
+      this.safeOutputLog(`Error clearing crashes: ${error.message}`, false);
       vscode.window.showErrorMessage(
         `CodeForge: Failed to clear crashes - ${error.message}`,
       );

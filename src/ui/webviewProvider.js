@@ -58,7 +58,8 @@ class CodeForgeWebviewProvider {
       this._view = undefined;
     });
 
-    // Initial state update removed
+    // Trigger initial crash discovery when webview is first created (asynchronously)
+    setTimeout(() => this._performInitialCrashDiscovery(), 0);
   }
 
   /**
@@ -218,12 +219,10 @@ class CodeForgeWebviewProvider {
         <section class="actions-section">
             <h2>Quick Actions</h2>
             <div class="button-grid">
-                <button class="action-btn secondary" id="terminal-btn" disabled>
-                    <span class="btn-icon">💻</span>
+                <button class="action-btn outline" id="terminal-btn" disabled>
                     <span class="btn-text">Launch Terminal</span>
                 </button>
-                <button class="action-btn tertiary" id="fuzzing-btn" disabled>
-                    <span class="btn-icon">🧪</span>
+                <button class="action-btn outline" id="fuzzing-btn" disabled>
                     <span class="btn-text">Run Fuzzing Tests</span>
                 </button>
             </div>
@@ -277,6 +276,50 @@ class CodeForgeWebviewProvider {
    */
   refresh() {
     // State detection removed
+  }
+
+  /**
+   * Perform initial crash discovery when webview is first created
+   * This ensures crash data is available immediately when the user opens the panel
+   */
+  async _performInitialCrashDiscovery() {
+    try {
+      // Check if there's an open workspace
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        return;
+      }
+
+      const workspacePath = workspaceFolder.uri.fsPath;
+      const codeforgeDir = path.join(workspacePath, ".codeforge");
+
+      // Check if .codeforge directory exists
+      try {
+        await fs.access(codeforgeDir);
+      } catch (error) {
+        // .codeforge directory doesn't exist yet, skip crash discovery
+        return;
+      }
+
+      // Set loading state
+      this._setCrashLoading(true);
+
+      // Discover crashes
+      const crashData =
+        await this._crashDiscoveryService.discoverCrashes(workspacePath);
+
+      // Update state with discovered crashes
+      this._updateCrashState({
+        data: crashData,
+        lastUpdated: new Date().toISOString(),
+        isLoading: false,
+        error: null,
+      });
+    } catch (error) {
+      // Handle errors gracefully - don't show error messages for initial discovery
+      this._setCrashLoading(false, error.message);
+      console.warn(`Initial crash discovery failed: ${error.message}`);
+    }
   }
 
   /**

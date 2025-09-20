@@ -257,11 +257,13 @@
 
     let crashItems = "";
     fuzzerData.crashes.forEach((crash) => {
+      const formattedDate = formatCrashDate(crash.createdAt);
       crashItems += `
         <div class="crash-item" data-crash-id="${crash.id}">
           <div class="crash-info">
             <span class="crash-id">${crash.id}</span>
             <span class="crash-size">${formatFileSize(crash.fileSize)}</span>
+            <span class="crash-date">${formattedDate}</span>
           </div>
           <div class="crash-actions">
             <button class="crash-action-btn" data-action="view" data-crash-id="${crash.id}"
@@ -336,6 +338,35 @@
     const sizes = ["B", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  }
+
+  function formatCrashDate(isoTimestamp) {
+    if (!isoTimestamp) return "Unknown date";
+
+    try {
+      const date = new Date(isoTimestamp);
+
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return "Invalid date";
+      }
+
+      // Format date in local time with user-friendly format
+      // Example: "Dec 19, 2024 at 3:45 PM"
+      const options = {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      };
+
+      return date.toLocaleString("en-US", options).replace(",", " at");
+    } catch (error) {
+      console.warn("Failed to format crash date:", error);
+      return "Invalid date";
+    }
   }
 
   // Initialize with initial state if available
