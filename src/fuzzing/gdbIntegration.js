@@ -191,14 +191,15 @@ class PathMapper {
 
     // Normalize paths - handle Windows paths properly even on non-Windows systems
     let normalizedHostPath, normalizedWorkspacePath;
-    
+
     // Check if we're dealing with Windows-style paths (drive letter)
-    const isWindowsPath = /^[A-Za-z]:/.test(hostPath) || /^[A-Za-z]:/.test(workspacePath);
-    
+    const isWindowsPath =
+      /^[A-Za-z]:/.test(hostPath) || /^[A-Za-z]:/.test(workspacePath);
+
     if (isWindowsPath) {
       // For Windows paths, normalize manually to avoid path.resolve() issues on non-Windows systems
-      normalizedHostPath = hostPath.replace(/\\/g, '/');
-      normalizedWorkspacePath = workspacePath.replace(/\\/g, '/');
+      normalizedHostPath = hostPath.replace(/\\/g, "/");
+      normalizedWorkspacePath = workspacePath.replace(/\\/g, "/");
     } else {
       // For Unix paths, use standard normalization
       normalizedHostPath = path.resolve(hostPath);
@@ -213,15 +214,23 @@ class PathMapper {
     }
 
     // Get the relative path from workspace root
-    const relativePath = normalizedHostPath.substring(normalizedWorkspacePath.length);
-    const cleanRelativePath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
+    const relativePath = normalizedHostPath.substring(
+      normalizedWorkspacePath.length,
+    );
+    const cleanRelativePath = relativePath.startsWith("/")
+      ? relativePath.substring(1)
+      : relativePath;
 
     // Map to container path (workspace is mounted at the same path in container)
     // For containers, we need Unix-style paths regardless of host OS
-    const containerWorkspacePath = normalizedWorkspacePath.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '');
-    
+    const containerWorkspacePath = normalizedWorkspacePath
+      .replace(/\\/g, "/")
+      .replace(/^[A-Za-z]:/, "");
+
     if (cleanRelativePath) {
-      return path.posix.join(containerWorkspacePath, cleanRelativePath);
+      // Ensure cleanRelativePath also uses forward slashes for container compatibility
+      const normalizedRelativePath = cleanRelativePath.replace(/\\/g, "/");
+      return path.posix.join(containerWorkspacePath, normalizedRelativePath);
     } else {
       return containerWorkspacePath;
     }
