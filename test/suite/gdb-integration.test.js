@@ -483,9 +483,28 @@ suite("GDB Integration Test Suite", () => {
       // Should normalize paths and work correctly
       const result = pathMapper.mapHostToContainer(hostPath, workspacePath);
 
-      // Result should use normalized paths
-      assert.ok(result.includes("src"));
-      assert.ok(result.includes("main.cpp"));
+      // Result should be Unix-style container path (no drive letter, forward slashes)
+      assert.strictEqual(result, "/test/workspace/src/main.cpp");
+    });
+
+    test("Should handle Windows paths with mixed separators", () => {
+      const hostPath = "D:\\test\\workspace/src\\main.cpp";
+      const workspacePath = "D:\\test\\workspace";
+
+      const result = pathMapper.mapHostToContainer(hostPath, workspacePath);
+
+      // Should normalize to Unix-style container path
+      assert.strictEqual(result, "/test/workspace/src/main.cpp");
+    });
+
+    test("Should handle Windows paths with different drive letters", () => {
+      const hostPath = "E:\\project\\workspace\\deep\\nested\\file.txt";
+      const workspacePath = "E:\\project\\workspace";
+
+      const result = pathMapper.mapHostToContainer(hostPath, workspacePath);
+
+      // Should normalize to Unix-style container path
+      assert.strictEqual(result, "/project/workspace/deep/nested/file.txt");
     });
   });
 
