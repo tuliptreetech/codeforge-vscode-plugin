@@ -3,6 +3,7 @@ const dockerOperations = require("../core/dockerOperations");
 const fuzzingOperations = require("../fuzzing/fuzzingOperations");
 const { CodeForgeFuzzingTerminal } = require("../fuzzing/fuzzingTerminal");
 const { CrashDiscoveryService } = require("../fuzzing/crashDiscoveryService");
+const { GdbIntegration } = require("../fuzzing/gdbIntegration");
 const { HexDocumentProvider } = require("./hexDocumentProvider");
 const fs = require("fs").promises;
 const path = require("path");
@@ -72,6 +73,7 @@ class CodeForgeCommandHandlers {
     this.containerTreeProvider = containerTreeProvider;
     this.webviewProvider = webviewProvider;
     this.crashDiscoveryService = new CrashDiscoveryService();
+    this.gdbIntegration = new GdbIntegration(dockerOperations);
   }
 
   /**
@@ -669,22 +671,119 @@ class CodeForgeCommandHandlers {
   async handleAnalyzeCrash(params) {
     try {
       const { crashId, fuzzerName, filePath } = params;
+      const { path: workspacePath } = this.getWorkspaceInfo();
 
-      // Future: Integration with debugging tools, crash analysis, etc.
       this.safeOutputLog(
-        `Crash analysis requested for ${crashId} from ${fuzzerName}`,
+        `Starting GDB crash analysis for ${crashId} from ${fuzzerName}`,
       );
 
-      vscode.window
-        .showInformationMessage(
-          `CodeForge: Crash analysis for ${crashId} from ${fuzzerName} - Feature coming soon!`,
-          "View File",
-        )
-        .then((selection) => {
-          if (selection === "View File") {
-            this.handleViewCrash({ crashId, filePath });
-          }
-        });
+      // Validate parameters
+      if (!crashId || !fuzzerName || !filePath) {
+        throw new Error(
+          "Missing required parameters: crashId, fuzzerName, or filePath",
+        );
+      }
+
+      // Auto-initialize and build if needed
+      const containerName =
+        dockerOperations.generateContainerName(workspacePath);
+      const initialized = await this.ensureInitializedAndBuilt(
+        workspacePath,
+        containerName,
+      );
+      if (!initialized) {
+        return;
+      }
+
+      // Validate analysis requirements
+      const validation = await this.gdbIntegration.validateAnalysisRequirements(
+        workspacePath,
+        fuzzerName,
+        filePath,
+      );
+
+      if (!validation.valid) {
+        const errorMessage = `Cannot analyze crash: ${validation.issues.join(", ")}`;
+        this.safeOutputLog(errorMessage, false);
+        vscode.window.showErrorMessage(`CodeForge: ${errorMessage}`);
+        return;
+      }
+
+      // Perform GDB analysis
+      const analysisResult = await this.gdbIntegration.analyzeCrash(
+        workspacePath,
+        fuzzerName,
+        filePath,
+        {
+          removeAfterRun: true, // Clean up container after analysis
+          terminalName: `CodeForge GDB: ${fuzzerName} - ${crashId}`,
+        },
+      );
+
+      if (!analysisResult.success) {
+        throw new Error(analysisResult.error);
+      }
+
+      // Create the GDB terminal
+      const terminal = vscode.window.createTerminal({
+        name: analysisResult.terminalConfig.terminalName,
+        shellPath: analysisResult.terminalConfig.shellPath,
+        shellArgs: analysisResult.terminalConfig.shellArgs,
+      });
+
+      terminal.show();
+
+      // Track the container if needed
+      const generatedName =
+        analysisResult.terminalConfig.generatedContainerName;
+      if (generatedName) {
+        dockerOperations
+          .trackLaunchedContainer(
+            generatedName,
+            workspacePath,
+            containerName,
+            "gdb-analysis",
+          )
+          .then((tracked) => {
+            if (tracked) {
+              this.safeOutputLog(
+                `Launched and tracked GDB analysis container: ${generatedName}`,
+              );
+              vscode.window.showInformationMessage(
+                `CodeForge: GDB analysis started for ${crashId} from ${fuzzerName}`,
+              );
+            } else {
+              this.safeOutputLog(
+                `Launched GDB analysis but could not track container: ${generatedName}`,
+              );
+              vscode.window.showInformationMessage(
+                `CodeForge: GDB analysis started for ${crashId} from ${fuzzerName}`,
+              );
+            }
+            // Update webview state
+            this.updateWebviewState();
+          })
+          .catch((error) => {
+            this.safeOutputLog(
+              `Error tracking GDB analysis container: ${error.message}`,
+            );
+            // Still show success message as the analysis terminal was created
+            vscode.window.showInformationMessage(
+              `CodeForge: GDB analysis started for ${crashId} from ${fuzzerName}`,
+            );
+          });
+      } else {
+        this.safeOutputLog(
+          `Launched GDB analysis terminal for ${crashId} (no container name generated)`,
+        );
+        vscode.window.showInformationMessage(
+          `CodeForge: GDB analysis started for ${crashId} from ${fuzzerName}`,
+        );
+      }
+
+      this.safeOutputLog(
+        `GDB analysis terminal created successfully for ${crashId} from ${fuzzerName}`,
+      );
     } catch (error) {
       this.safeOutputLog(`Error analyzing crash: ${error.message}`, false);
       vscode.window.showErrorMessage(
