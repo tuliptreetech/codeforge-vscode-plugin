@@ -497,10 +497,6 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
       // Write Dockerfile
       await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
       outputChannel.appendLine(`Created Dockerfile: ${dockerfilePath}`);
-
-      vscode.window.showInformationMessage(
-        "CodeForge: Automatically initialized .codeforge directory",
-      );
     }
 
     // Check if Docker image exists

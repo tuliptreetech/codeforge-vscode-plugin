@@ -143,10 +143,6 @@ class CodeForgeCommandHandlers {
         // Write Dockerfile
         await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
         this.outputChannel.appendLine(`Created Dockerfile: ${dockerfilePath}`);
-
-        vscode.window.showInformationMessage(
-          "CodeForge: Automatically initialized .codeforge directory",
-        );
       }
 
       // Check if Docker image exists
@@ -176,9 +172,6 @@ class CodeForgeCommandHandlers {
               );
               this.outputChannel.appendLine(
                 `Successfully built Docker image: ${containerName}`,
-              );
-              vscode.window.showInformationMessage(
-                `CodeForge: Automatically built Docker image ${containerName}`,
               );
             } catch (error) {
               throw error;
@@ -280,9 +273,6 @@ class CodeForgeCommandHandlers {
               this.safeOutputLog(
                 `Launched and tracked terminal container: ${generatedName}`,
               );
-              vscode.window.showInformationMessage(
-                `CodeForge: Terminal container started and tracked: ${generatedName}`,
-              );
             } else {
               this.safeOutputLog(
                 `Launched terminal but could not track container: ${generatedName}`,
@@ -348,12 +338,6 @@ class CodeForgeCommandHandlers {
 
       // Show the terminal immediately
       terminal.show();
-
-      // Show brief notification that fuzzing has started
-      vscode.window.showInformationMessage(
-        "CodeForge: Fuzzing tests started in terminal",
-        { modal: false },
-      );
     } catch (error) {
       this.safeOutputLog(`Fuzzing failed: ${error.message}`, false);
       vscode.window.showErrorMessage(
@@ -434,9 +418,6 @@ class CodeForgeCommandHandlers {
       this.updateWebviewState();
       this.safeOutputLog("CodeForge: ✓ Webview state updated");
 
-      vscode.window.showInformationMessage(
-        "CodeForge: Container list refreshed",
-      );
       console.log("CodeForge: Container refresh completed successfully");
       this.safeOutputLog(
         "CodeForge: ✓ Container refresh operation completed successfully",
@@ -487,12 +468,6 @@ class CodeForgeCommandHandlers {
       this.safeOutputLog(
         `Found ${crashData.length} fuzzer(s) with ${totalCrashes} total crashes`,
       );
-
-      if (totalCrashes > 0) {
-        vscode.window.showInformationMessage(
-          `CodeForge: Found ${totalCrashes} crash${totalCrashes === 1 ? "" : "es"} across ${crashData.length} fuzzer${crashData.length === 1 ? "" : "s"}`,
-        );
-      }
     } catch (error) {
       if (this.webviewProvider) {
         this.webviewProvider._setCrashLoading(false, error.message);
@@ -651,12 +626,6 @@ class CodeForgeCommandHandlers {
       this.safeOutputLog(
         `Opened crash file with read-only hex viewer: ${crashId}`,
       );
-
-      // Show success message
-      vscode.window.showInformationMessage(
-        `CodeForge: Crash file ${crashId} opened in read-only hex view`,
-        { modal: false },
-      );
     } catch (error) {
       this.safeOutputLog(`Error viewing crash: ${error.message}`, false);
       vscode.window.showErrorMessage(
@@ -749,15 +718,9 @@ class CodeForgeCommandHandlers {
               this.safeOutputLog(
                 `Launched and tracked GDB analysis container: ${generatedName}`,
               );
-              vscode.window.showInformationMessage(
-                `CodeForge: GDB analysis started for ${crashId} from ${fuzzerName}`,
-              );
             } else {
               this.safeOutputLog(
                 `Launched GDB analysis but could not track container: ${generatedName}`,
-              );
-              vscode.window.showInformationMessage(
-                `CodeForge: GDB analysis started for ${crashId} from ${fuzzerName}`,
               );
             }
             // Update webview state
@@ -767,17 +730,10 @@ class CodeForgeCommandHandlers {
             this.safeOutputLog(
               `Error tracking GDB analysis container: ${error.message}`,
             );
-            // Still show success message as the analysis terminal was created
-            vscode.window.showInformationMessage(
-              `CodeForge: GDB analysis started for ${crashId} from ${fuzzerName}`,
-            );
           });
       } else {
         this.safeOutputLog(
           `Launched GDB analysis terminal for ${crashId} (no container name generated)`,
-        );
-        vscode.window.showInformationMessage(
-          `CodeForge: GDB analysis started for ${crashId} from ${fuzzerName}`,
         );
       }
 
@@ -850,9 +806,6 @@ class CodeForgeCommandHandlers {
 
       this.safeOutputLog(
         `Cleared ${deletedCount} crash files for ${fuzzerName}`,
-      );
-      vscode.window.showInformationMessage(
-        `CodeForge: Cleared ${deletedCount} crash${deletedCount === 1 ? "" : "es"} for ${fuzzerName}`,
       );
 
       // Refresh crash data

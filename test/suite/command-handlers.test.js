@@ -179,11 +179,6 @@ suite("Command Handlers Test Suite", () => {
       };
 
       await commandHandlers.handleRunFuzzing();
-
-      assert.ok(
-        testEnvironment.vscodeMocks.window.showInformationMessage.called,
-        "Should show success message",
-      );
     });
 
     test("Should handle fuzzing errors", async () => {
@@ -329,10 +324,6 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(
         mockOutputChannel.appendLine.called,
         "Should log crash discovery results",
-      );
-      assert.ok(
-        testEnvironment.vscodeMocks.window.showInformationMessage.called,
-        "Should show success message",
       );
     });
 
@@ -960,14 +951,6 @@ suite("Command Handlers Test Suite", () => {
         "Should track the GDB analysis container",
       );
 
-      // Verify success message
-      assert.ok(
-        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
-          sinon.match(/GDB analysis started for crash-abc123 from libfuzzer/),
-        ),
-        "Should show success message",
-      );
-
       // Verify logging
       assert.ok(
         mockOutputChannel.appendLine.calledWith(
@@ -1064,13 +1047,6 @@ suite("Command Handlers Test Suite", () => {
       // Wait for async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Should still show success message even if tracking fails
-      assert.ok(
-        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
-          sinon.match(/GDB analysis started/),
-        ),
-        "Should show success message despite tracking failure",
-      );
       assert.ok(
         mockOutputChannel.appendLine.calledWith(
           sinon.match(/Error tracking GDB analysis container/),
@@ -1114,12 +1090,6 @@ suite("Command Handlers Test Suite", () => {
       await commandHandlers.handleAnalyzeCrash(crashParams);
 
       // Should handle missing container name gracefully
-      assert.ok(
-        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
-          sinon.match(/GDB analysis started/),
-        ),
-        "Should show success message",
-      );
       assert.ok(
         mockOutputChannel.appendLine.calledWith(
           sinon.match(/no container name generated/),
@@ -1190,10 +1160,6 @@ suite("Command Handlers Test Suite", () => {
         2,
         "Should delete 2 crash files",
       );
-      assert.ok(
-        testEnvironment.vscodeMocks.window.showInformationMessage.called,
-        "Should show success message",
-      );
     });
 
     test("handleClearCrashes should handle no crashes found", async () => {
@@ -1244,12 +1210,6 @@ suite("Command Handlers Test Suite", () => {
           sinon.match(/Warning: Failed to delete/),
         ),
         "Should log deletion failures",
-      );
-      assert.ok(
-        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
-          sinon.match(/Cleared 1 crash/),
-        ),
-        "Should show partial success message",
       );
     });
 
@@ -1361,10 +1321,6 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(
         testEnvironment.crashMocks.discoverCrashes.called,
         "Should handle refresh operation",
-      );
-      assert.ok(
-        testEnvironment.vscodeMocks.window.showInformationMessage.called,
-        "Should handle analyze operation",
       );
     });
 
