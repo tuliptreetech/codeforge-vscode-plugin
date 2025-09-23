@@ -2,6 +2,7 @@ const vscode = require("vscode");
 const dockerOperations = require("../core/dockerOperations");
 const path = require("path");
 const fs = require("fs").promises;
+const { getOutputDirectory } = require("./fuzzingConfig");
 
 /**
  * Safe wrapper for fuzzing terminal operations
@@ -101,7 +102,15 @@ async function handleFuzzingError(error, context, terminal) {
  * @returns {Promise<string>} Path to the fuzzing directory
  */
 async function createFuzzingDirectory(workspacePath) {
-  const fuzzingDir = path.join(workspacePath, ".codeforge", "fuzzing");
+  let outputDir;
+  try {
+    outputDir = getOutputDirectory();
+  } catch (error) {
+    // Fall back to hardcoded path for backward compatibility
+    outputDir = ".codeforge/fuzzing";
+  }
+
+  const fuzzingDir = path.join(workspacePath, outputDir);
 
   try {
     await fs.access(fuzzingDir);

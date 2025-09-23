@@ -1,0 +1,106 @@
+{
+  // CodeForge Fuzzing Configuration Examples
+  // Copy these settings to your .vscode/settings.json file and customize as needed
+
+  // === QUICK TESTING CONFIGURATION ===
+  // Optimized for fast feedback during development
+  // Uncomment the section below for quick testing:
+  /*
+  "codeforge.fuzzing.libfuzzer.runs": 10,
+  "codeforge.fuzzing.libfuzzer.jobs": 4,
+  "codeforge.fuzzing.libfuzzer.maxTotalTime": 60,
+  "codeforge.fuzzing.libfuzzer.maxLen": 1024,
+  "codeforge.fuzzing.ignoreCrashes": false,
+  "codeforge.fuzzing.exitOnCrash": true,
+  "codeforge.fuzzing.minimizeCrashes": true,
+  "codeforge.fuzzing.memoryLimit": 1024,
+  "codeforge.fuzzing.timeoutPerRun": 10,
+  "codeforge.fuzzing.outputDirectory": ".codeforge/quick-fuzz",
+  "codeforge.fuzzing.preserveCorpus": false,
+  */
+
+  // === DEVELOPMENT CONFIGURATION (DEFAULT) ===
+  // Balanced settings for regular development work
+  "codeforge.fuzzing.libfuzzer.runs": 50,
+  "codeforge.fuzzing.libfuzzer.jobs": 8,
+  "codeforge.fuzzing.libfuzzer.maxTotalTime": 300,
+  "codeforge.fuzzing.libfuzzer.maxLen": 4096,
+  "codeforge.fuzzing.ignoreCrashes": true,
+  "codeforge.fuzzing.exitOnCrash": false,
+  "codeforge.fuzzing.minimizeCrashes": true,
+  "codeforge.fuzzing.memoryLimit": 2048,
+  "codeforge.fuzzing.timeoutPerRun": 25,
+  "codeforge.fuzzing.outputDirectory": ".codeforge/fuzzing",
+  "codeforge.fuzzing.preserveCorpus": true,
+
+  // === CI/CD CONFIGURATION ===
+  // Balanced configuration for automated testing environments
+  // Uncomment the section below for CI/CD:
+  /*
+  "codeforge.fuzzing.libfuzzer.runs": 100,
+  "codeforge.fuzzing.libfuzzer.jobs": 8,
+  "codeforge.fuzzing.libfuzzer.maxTotalTime": 600,
+  "codeforge.fuzzing.libfuzzer.maxLen": 4096,
+  "codeforge.fuzzing.ignoreCrashes": false,
+  "codeforge.fuzzing.exitOnCrash": true,
+  "codeforge.fuzzing.minimizeCrashes": true,
+  "codeforge.fuzzing.memoryLimit": 2048,
+  "codeforge.fuzzing.timeoutPerRun": 25,
+  "codeforge.fuzzing.outputDirectory": ".codeforge/ci-fuzz",
+  "codeforge.fuzzing.preserveCorpus": false,
+  */
+
+  // === THOROUGH ANALYSIS CONFIGURATION ===
+  // Comprehensive fuzzing for thorough vulnerability discovery
+  // Uncomment the section below for thorough analysis:
+  /*
+  "codeforge.fuzzing.libfuzzer.runs": 500,
+  "codeforge.fuzzing.libfuzzer.jobs": 16,
+  "codeforge.fuzzing.libfuzzer.maxTotalTime": 3600,
+  "codeforge.fuzzing.libfuzzer.maxLen": 16384,
+  "codeforge.fuzzing.ignoreCrashes": true,
+  "codeforge.fuzzing.exitOnCrash": false,
+  "codeforge.fuzzing.minimizeCrashes": true,
+  "codeforge.fuzzing.memoryLimit": 4096,
+  "codeforge.fuzzing.timeoutPerRun": 60,
+  "codeforge.fuzzing.outputDirectory": ".codeforge/thorough-fuzz",
+  "codeforge.fuzzing.preserveCorpus": true,
+  */
+
+  // === PARAMETER EXPLANATIONS ===
+  //
+  // LibFuzzer Execution Parameters:
+  // - runs: Number of fuzzing iterations (1-1000)
+  // - jobs: Parallel fuzzing processes (1-64, match CPU cores)
+  // - maxTotalTime: Total time limit in seconds (0 = unlimited)
+  // - maxLen: Maximum input size in bytes (1-1048576)
+  //
+  // Crash Handling:
+  // - ignoreCrashes: Continue fuzzing after crashes (true/false)
+  // - exitOnCrash: Stop on first crash (true/false, conflicts with ignoreCrashes)
+  // - minimizeCrashes: Automatically minimize crash inputs (true/false)
+  //
+  // Resource Management:
+  // - memoryLimit: Memory limit per process in MB (128-16384)
+  // - timeoutPerRun: Timeout per iteration in seconds (1-300)
+  //
+  // Directory Management:
+  // - outputDirectory: Where to store fuzzing outputs
+  // - preserveCorpus: Keep corpus between sessions (true/false)
+
+  // === ADDITIONAL CODEFORGE SETTINGS ===
+  // You can also configure other CodeForge settings here:
+
+  // Docker settings
+  "codeforge.dockerCommand": "docker",
+  "codeforge.removeContainersAfterRun": true,
+  "codeforge.mountWorkspace": true,
+  "codeforge.defaultShell": "/bin/bash",
+
+  // Port forwarding for development servers
+  "codeforge.defaultPortMappings": [
+    "3000:3000", // React/Node.js dev server
+    "8080:8080", // Common web server port
+    "9229:9229" // Node.js debugger
+  ]
+}

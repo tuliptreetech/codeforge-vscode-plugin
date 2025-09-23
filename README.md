@@ -308,6 +308,64 @@ CodeForge can be configured through VSCode settings:
 - `codeforge.workspaceMount`: Mount point for the workspace directory inside containers (default: `"/workspace"`)
 - `codeforge.terminateContainersOnDeactivate`: Automatically terminate all tracked containers when the extension is deactivated (default: `true`)
 
+### Fuzzing Configuration
+
+CodeForge provides comprehensive fuzzing configuration through VSCode settings. The fuzzing system supports fine-grained control over LibFuzzer execution, crash handling, resource management, and output directories.
+
+#### Quick Configuration Example
+
+```json
+{
+  "codeforge.fuzzing.libfuzzer.runs": 50,
+  "codeforge.fuzzing.libfuzzer.jobs": 8,
+  "codeforge.fuzzing.libfuzzer.maxTotalTime": 300,
+  "codeforge.fuzzing.memoryLimit": 2048,
+  "codeforge.fuzzing.ignoreCrashes": true,
+  "codeforge.fuzzing.outputDirectory": ".codeforge/fuzzing"
+}
+```
+
+#### Configuration Categories
+
+- **LibFuzzer Execution**: Control runs, parallel jobs, time limits, and input constraints
+- **Crash Handling**: Configure crash detection, processing, and analysis behavior
+- **Resource Management**: Set memory limits, timeouts, and performance constraints
+- **Directory Management**: Control output locations and corpus preservation
+
+#### Common Use Cases
+
+**Quick Testing** (fast feedback):
+
+```json
+{
+  "codeforge.fuzzing.libfuzzer.runs": 10,
+  "codeforge.fuzzing.libfuzzer.maxTotalTime": 60,
+  "codeforge.fuzzing.exitOnCrash": true
+}
+```
+
+**Comprehensive Analysis** (thorough testing):
+
+```json
+{
+  "codeforge.fuzzing.libfuzzer.runs": 500,
+  "codeforge.fuzzing.libfuzzer.maxTotalTime": 3600,
+  "codeforge.fuzzing.ignoreCrashes": true
+}
+```
+
+**CI/CD Integration** (automated testing):
+
+```json
+{
+  "codeforge.fuzzing.libfuzzer.runs": 100,
+  "codeforge.fuzzing.exitOnCrash": true,
+  "codeforge.fuzzing.preserveCorpus": false
+}
+```
+
+For complete configuration documentation, parameter reference, validation rules, troubleshooting, and advanced examples, see [Fuzzing Configuration Documentation](docs/FUZZING_CONFIGURATION.md).
+
 ## Release Notes
 
 ### 0.1.0

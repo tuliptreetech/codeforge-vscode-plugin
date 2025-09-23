@@ -1,5 +1,10 @@
 const dockerOperations = require("../core/dockerOperations");
 const path = require("path");
+const {
+  getLibFuzzerOptions,
+  validateConfig,
+  getConfigSummary,
+} = require("./fuzzingConfig");
 
 /**
  * Safe wrapper for fuzzing terminal operations
@@ -33,6 +38,7 @@ function safeFuzzingLog(terminal, message, show = false) {
 /**
  * Default LibFuzzer options matching the shell script
  * -fork=1 -ignore_crashes=1 -jobs=8 -runs=16 -create_missing_dirs=1
+ * @deprecated Use getLibFuzzerOptions() from fuzzingConfig instead
  */
 const DEFAULT_LIBFUZZER_OPTIONS = {
   fork: 1,
@@ -65,6 +71,17 @@ async function runAllFuzzers(
     crashes: [],
     errors: [],
   };
+
+  // Log configuration summary when fuzzing starts
+  try {
+    const configSummary = getConfigSummary();
+    safeFuzzingLog(terminal, configSummary);
+  } catch (error) {
+    safeFuzzingLog(
+      terminal,
+      `Warning: Could not load configuration summary: ${error.message}`,
+    );
+  }
 
   const fuzzerArray = Array.from(fuzzers.entries());
   safeFuzzingLog(
@@ -242,10 +259,25 @@ async function executeFuzzer(
   options = {},
 ) {
   return new Promise((resolve, reject) => {
-    const libfuzzerOptions = {
-      ...DEFAULT_LIBFUZZER_OPTIONS,
-      ...options.libfuzzer,
-    };
+    // Get LibFuzzer options from configuration service
+    let libfuzzerOptions;
+    try {
+      libfuzzerOptions = getLibFuzzerOptions();
+      // Allow runtime options to override configuration
+      if (options.libfuzzer) {
+        libfuzzerOptions = { ...libfuzzerOptions, ...options.libfuzzer };
+      }
+    } catch (error) {
+      safeFuzzingLog(
+        terminal,
+        `Configuration validation failed: ${error.message}`,
+      );
+      // Fall back to default options for backward compatibility
+      libfuzzerOptions = {
+        ...DEFAULT_LIBFUZZER_OPTIONS,
+        ...options.libfuzzer,
+      };
+    }
 
     // Build LibFuzzer command line arguments
     const libfuzzerArgs = Object.entries(libfuzzerOptions)

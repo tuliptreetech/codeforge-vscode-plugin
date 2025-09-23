@@ -102,11 +102,6 @@
         "icon": "$(play)"
       },
       {
-        "command": "codeforge.runFuzzing",
-        "title": "CodeForge: Run Fuzzing Tests",
-        "icon": "$(beaker)"
-      },
-      {
         "command": "codeforge.listContainers",
         "title": "CodeForge: List Active Containers",
         "icon": "$(list-unordered)"
@@ -304,6 +299,72 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically terminate all tracked containers when the extension is deactivated"
+        },
+        "codeforge.fuzzing.libfuzzer.runs": {
+          "type": "number",
+          "default": 16,
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Number of individual test runs per fuzzing job"
+        },
+        "codeforge.fuzzing.libfuzzer.jobs": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 64,
+          "description": "Number of parallel fuzzing jobs"
+        },
+        "codeforge.fuzzing.libfuzzer.maxTotalTime": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "description": "Maximum total fuzzing time in seconds (0 = unlimited)"
+        },
+        "codeforge.fuzzing.libfuzzer.maxLen": {
+          "type": "number",
+          "default": 4096,
+          "minimum": 1,
+          "maximum": 1048576,
+          "description": "Maximum length of test inputs in bytes"
+        },
+        "codeforge.fuzzing.ignoreCrashes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Continue fuzzing after finding crashes"
+        },
+        "codeforge.fuzzing.exitOnCrash": {
+          "type": "boolean",
+          "default": false,
+          "description": "Stop fuzzing immediately when first crash is found"
+        },
+        "codeforge.fuzzing.minimizeCrashes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically minimize crash inputs to find the smallest reproducing case"
+        },
+        "codeforge.fuzzing.memoryLimit": {
+          "type": "number",
+          "default": 2048,
+          "minimum": 128,
+          "maximum": 16384,
+          "description": "Memory limit per fuzzer process in MB"
+        },
+        "codeforge.fuzzing.timeoutPerRun": {
+          "type": "number",
+          "default": 25,
+          "minimum": 1,
+          "maximum": 300,
+          "description": "Timeout for individual test runs in seconds"
+        },
+        "codeforge.fuzzing.outputDirectory": {
+          "type": "string",
+          "default": ".codeforge/fuzzing",
+          "description": "Base directory for fuzzing outputs relative to workspace root"
+        },
+        "codeforge.fuzzing.preserveCorpus": {
+          "type": "boolean",
+          "default": true,
+          "description": "Keep corpus files between fuzzing sessions for improved coverage"
         }
       }
     }
