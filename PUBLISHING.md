@@ -50,10 +50,10 @@ To create a .vsix package for local distribution:
 vsce package
 ```
 
-This creates a file like `codeforge-0.0.1.vsix` that can be:
+This creates a file like `codeforge-0.1.0.vsix` that can be:
 
 - Shared directly with users
-- Installed using `code --install-extension codeforge-0.0.1.vsix`
+- Installed using `code --install-extension codeforge-0.1.0.vsix`
 - Uploaded to private extension registries
 
 ### Pre-publish Checklist
@@ -65,7 +65,7 @@ This creates a file like `codeforge-0.0.1.vsix` that can be:
 - [ ] Run all tests: `npm test`
 - [ ] Test extension manually in VS Code
 - [ ] Commit all changes
-- [ ] Create a git tag: `git tag v0.0.1`
+- [ ] Create a git tag: `git tag v0.1.0`
 
 ## Publishing to VS Code Marketplace
 

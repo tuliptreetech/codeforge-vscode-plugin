@@ -1,21 +1,78 @@
 # CodeForge
 
-Docker container management for development environments by Tulip Tree Technology.
+A comprehensive fuzzing and crash analysis platform for VSCode by Tulip Tree Technology.
+
+## Overview
+
+CodeForge is a powerful VSCode extension that combines Docker container management with advanced fuzzing capabilities and crash analysis tools. Originally designed for Docker-based development environments, CodeForge has evolved into a complete security testing platform that helps developers discover vulnerabilities through automated fuzzing and provides sophisticated crash analysis capabilities.
 
 ## Features
 
-CodeForge is a VSCode extension that simplifies Docker container management directly from the command palette. It provides the following features:
+CodeForge provides a comprehensive suite of tools for security testing and development:
 
-- **Initialize CodeForge**: Set up CodeForge in your workspace
+### Core Docker Management
+
+- **Initialize CodeForge**: Set up CodeForge in your workspace with Docker environment
 - **Build Docker Environment**: Build Docker containers for your development environment
 - **Launch Terminal in Container**: Open a terminal session inside a running container
 - **Run Command in Container**: Execute commands inside Docker containers
 - **Task Provider Integration**: Run VSCode tasks inside Docker containers seamlessly
 - **Port Forwarding**: Automatically forward ports from Docker containers to your host machine
 
-## Usage
+### Fuzzing Framework
+
+- **CMake Preset Discovery**: Automatic detection and parsing of CMake presets for fuzzing targets
+- **Fuzz Target Builder**: Cross-platform compilation support for fuzzing targets
+- **Fuzz Runner**: Configurable fuzzing execution with real-time monitoring
+- **Fuzzing Terminal**: Dedicated terminal experience with enhanced output handling
+- **Fuzzing Workflow Management**: Complete end-to-end fuzzing operations
+
+### Crash Analysis & Discovery
+
+- **Automated Crash Detection**: File system monitoring for crash discovery
+- **Crash Display UI**: Detailed crash information presentation and analysis
+- **Read-only Hex Viewer**: Examine crash dumps and binary data with integrated hex viewer
+- **Crash Investigation**: Advanced crash analysis workflows with detailed reporting
+
+### GDB Integration
+
+- **Cross-platform Debugging**: Comprehensive GDB integration with proper path handling
+- **Automated Debug Sessions**: Streamlined debugging session management for crash analysis
+- **Symbol Resolution**: Enhanced crash investigation with symbol information
+- **Debug Workflow Integration**: Seamless integration with crash analysis tools
+
+### Activity Bar Integration
+
+- **Custom CodeForge Interface**: Dedicated activity bar with hammer icon for easy access
+- **Webview Control Panel**: Interactive interface for managing all CodeForge operations
+- **Real-time Status Updates**: Live progress monitoring and status reporting
+- **Intuitive Workflow Controls**: Streamlined access to fuzzing and analysis tools
+
+## Getting Started
+
+### Activity Bar Interface
+
+CodeForge adds a custom activity bar icon (hammer) to VSCode that provides access to the main control panel. Click the CodeForge icon in the activity bar to open the interactive webview interface where you can:
+
+- Start fuzzing operations
+- Monitor active containers
+- Access crash analysis tools
+- Manage Docker environments
+- View real-time status updates
+
+### Command Palette Access
 
 Open the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on macOS) and type "CodeForge" to see all available commands.
+
+## Usage
+
+### Quick Start: Fuzzing Workflow
+
+1. **Initialize CodeForge**: Use `CodeForge: Initialize CodeForge` to set up your workspace
+2. **Open Control Panel**: Click the CodeForge hammer icon in the activity bar
+3. **Configure Fuzzing**: Use the webview interface to configure your fuzzing targets
+4. **Start Fuzzing**: Launch fuzzing operations directly from the control panel
+5. **Analyze Results**: View crash reports and analyze results using the integrated tools
 
 ### Quick Start: Register a Task
 
@@ -37,11 +94,66 @@ You can customize the generated task later by editing `.vscode/tasks.json` if ne
 
 ### Available Commands
 
+#### Core Commands
+
 1. `CodeForge: Initialize CodeForge` - Initialize CodeForge in your current workspace
 2. `CodeForge: Build Docker Environment` - Build the Docker environment based on your configuration
 3. `CodeForge: Launch Terminal in Container` - Open an interactive terminal in a Docker container
 4. `CodeForge: Run Command in Container` - Run a specific command inside a Docker container
 5. `CodeForge: Register Task` - **Recommended:** Quickly register a new CodeForge task
+
+#### Fuzzing Commands
+
+6. `CodeForge: Run Fuzzing Tests` - Start fuzzing operations with configured targets
+7. `CodeForge: List Active Containers` - View all currently running containers
+8. `CodeForge: Terminate All Containers` - Stop all running CodeForge containers
+9. `CodeForge: Cleanup Orphaned Containers` - Clean up orphaned or stale containers
+
+### Fuzzing Operations
+
+CodeForge provides comprehensive fuzzing capabilities through its integrated framework:
+
+#### CMake Integration
+
+CodeForge automatically discovers CMake presets configured for fuzzing:
+
+```json
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "fuzzing",
+      "displayName": "Fuzzing Build",
+      "description": "Build configuration for fuzzing targets"
+    }
+  ]
+}
+```
+
+#### Fuzzing Workflow
+
+1. **Target Discovery**: Automatic detection of fuzz targets in your project
+2. **Build Process**: Cross-platform compilation of fuzzing targets
+3. **Execution**: Configurable fuzzing runs with real-time monitoring
+4. **Crash Detection**: Automatic discovery and cataloging of crashes
+5. **Analysis**: Integrated crash analysis with GDB debugging support
+
+### Crash Analysis
+
+When crashes are detected, CodeForge provides comprehensive analysis tools:
+
+#### Crash Discovery
+
+- Automatic monitoring of fuzzing output directories
+- Real-time crash detection and cataloging
+- Crash file organization and management
+
+#### Crash Investigation
+
+- Detailed crash information display
+- Integrated hex viewer for examining crash dumps
+- GDB integration for deep crash analysis
+- Symbol resolution and stack trace analysis
 
 ### Task Provider
 
@@ -163,8 +275,10 @@ For comprehensive examples and detailed documentation, see [Task Provider Docume
 
 ## Requirements
 
-- Visual Studio Code v1.74.0 or higher
+- Visual Studio Code v1.103.0 or higher
 - Docker installed and running on your system
+- For fuzzing operations: CMake and appropriate build tools
+- For crash analysis: GDB (optional but recommended for enhanced debugging)
 
 ## Installation
 
@@ -178,6 +292,8 @@ This extension is currently in development. To install:
 
 CodeForge can be configured through VSCode settings:
 
+### Core Settings
+
 - `codeforge.dockerCommand`: The Docker command to use (default: `"docker"`)
 - `codeforge.removeContainersAfterRun`: Automatically remove containers after they exit (default: `true`)
 - `codeforge.additionalDockerRunArgs`: Additional arguments to pass to `docker run` commands (default: `[]`)
@@ -186,7 +302,32 @@ CodeForge can be configured through VSCode settings:
 - `codeforge.mountWorkspace`: Automatically mount the workspace directory in containers (default: `true`)
 - `codeforge.defaultPortMappings`: Default port mappings for all CodeForge tasks (default: `[]`)
 
+### Advanced Settings
+
+- `codeforge.defaultBaseImage`: Default base image for new Dockerfiles (default: `"ubuntu:24.04"`)
+- `codeforge.workspaceMount`: Mount point for the workspace directory inside containers (default: `"/workspace"`)
+- `codeforge.terminateContainersOnDeactivate`: Automatically terminate all tracked containers when the extension is deactivated (default: `true`)
+
 ## Release Notes
+
+### 0.1.0
+
+Major release transforming CodeForge into a comprehensive fuzzing and crash analysis platform:
+
+#### New Features
+
+- **Comprehensive Fuzzing Framework**: Complete fuzzing workflow with CMake preset discovery, fuzz target building, and automated fuzzing operations
+- **Activity Bar Integration**: Custom CodeForge hammer icon with webview control panel for intuitive access to all features
+- **Crash Analysis & Discovery System**: Automated crash detection, crash display UI, and read-only hex viewer for crash file examination
+- **GDB Integration**: Cross-platform debugging capabilities with automated crash analysis and symbol resolution
+- **Enhanced Terminal Experience**: Dedicated fuzzing terminals with improved output handling and status reporting
+
+#### Technical Improvements
+
+- **Project Restructure**: Complete reorganization into modular src/ directory structure for better maintainability
+- **Cross-Platform Compatibility**: Enhanced Windows path handling and compatibility fixes
+- **Comprehensive Test Coverage**: 164+ passing tests covering all new functionality and cross-platform scenarios
+- **UI/UX Enhancements**: Professional webview-based interface with improved styling and user experience
 
 ### 0.0.3
 

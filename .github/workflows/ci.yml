@@ -95,13 +95,13 @@ jobs:
 
       - name: Download extension icon
         run: |
-          curl -L -o icon.png http://images.tuliptreetech.com/code-forge-orange-circle.png
-          if [ ! -f icon.png ]; then
+          curl -L -o media/icon.png http://images.tuliptreetech.com/code-forge-orange-circle.png
+          if [ ! -f media/icon.png ]; then
             echo "Failed to download icon"
             exit 1
           fi
           echo "Icon downloaded successfully"
-          ls -la icon.png
+          ls -la media/icon.png
 
       - name: Package extension
         run: vsce package

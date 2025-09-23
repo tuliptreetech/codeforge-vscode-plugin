@@ -6,6 +6,88 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.0] - 2025-09-23
+
+### Added
+
+- **Comprehensive Fuzzing Framework**: Complete fuzzing workflow implementation with CMake preset discovery
+  - Automatic detection and parsing of CMake presets for fuzzing targets
+  - Integrated fuzz runner with configurable execution parameters
+  - Fuzz target builder with cross-platform compilation support
+  - Dedicated fuzzing terminal experience with enhanced output handling
+- **Activity Bar Integration**: Custom CodeForge hammer icon and webview control panel
+  - New activity bar view with intuitive fuzzing workflow controls
+  - Interactive webview interface for managing fuzzing operations
+  - Real-time status updates and progress monitoring
+- **Crash Analysis & Discovery System**: Advanced crash detection and analysis capabilities
+  - Automated crash discovery service with file system monitoring
+  - Crash display UI with detailed crash information presentation
+  - Read-only hex viewer for examining crash dumps and binary data
+  - Integration with crash analysis workflows
+- **GDB Integration**: Comprehensive crash analysis with debugger integration
+  - Cross-platform GDB integration with proper path handling
+  - Automated debugging session management for crash analysis
+  - Enhanced crash investigation capabilities with symbol resolution
+- **Enhanced Terminal Experience**: Dedicated fuzzing terminals with improved functionality
+  - Specialized terminal handling for fuzzing operations
+  - Better output parsing and status reporting
+  - Integrated terminal management for complex workflows
+
+### Enhanced
+
+- **Project Structure**: Complete reorganization into modular src/ directory structure
+  - Organized code into logical modules: src/core/, src/tasks/, src/fuzzing/, src/ui/
+  - Updated package.json main entry point to src/extension.js
+  - Improved code maintainability and extensibility
+- **Cross-Platform Compatibility**: Enhanced Windows path handling and compatibility fixes
+  - Resolved Windows-specific path resolution issues
+  - Improved cross-platform file system operations
+  - Better handling of Windows vs Unix path conventions
+- **UI/UX Improvements**: Cleaner interface design and improved user experience
+  - Enhanced button styling and visual feedback
+  - Improved webview layout and responsiveness
+  - Better error messaging and user guidance
+- **Test Coverage**: Comprehensive test suite with 164+ passing tests
+  - Complete test coverage for all new fuzzing functionality
+  - Integration tests for activity bar and UI components
+  - Cross-platform testing for Windows and Unix systems
+  - Automated testing for crash discovery and GDB integration
+
+### Fixed
+
+- **Windows CI Test Failures**: Resolved Windows-specific test execution issues
+- **Extension Packaging**: Fixed packaging and deployment pipeline issues
+- **Path Handling**: Improved cross-platform path resolution and normalization
+- **Resource Management**: Better cleanup of temporary files and processes
+
+### New Files Added
+
+- **Fuzzing Workflow Modules**: Complete set of fuzzing operation handlers
+  - fuzzingOperations.js - Core fuzzing workflow management
+  - fuzzRunner.js - Fuzz execution engine
+  - fuzzTargetBuilder.js - Target compilation and preparation
+  - cmakePresetDiscovery.js - CMake preset detection and parsing
+  - crashDiscoveryService.js - Crash detection and analysis
+  - gdbIntegration.js - Debugger integration for crash analysis
+  - fuzzingTerminal.js - Specialized terminal handling
+- **UI Components**: Modern webview-based user interface
+  - webviewProvider.js - Main webview container and lifecycle management
+  - commandHandlers.js - Command processing and execution
+  - hexDocumentProvider.js - Read-only hex viewer for binary data
+  - webview.html, webview.css, webview.js - Complete webview implementation
+- **Media Assets**: Custom CodeForge branding
+  - cf-hammer-vscode.svg - Activity bar icon
+- **Example Projects**: Reference implementation for fuzzing workflows
+  - examples/fuzzing/codeforge-cmake/ - Complete CMake fuzzing project example
+- **Comprehensive Test Suites**: Full test coverage for all new functionality
+  - Test files for all major components and integration scenarios
+  - Cross-platform compatibility testing
+  - UI and workflow integration tests
+
+### Context
+
+This major release transforms CodeForge from a basic Docker task runner into a comprehensive fuzzing and crash analysis platform, providing developers with powerful tools for security testing and vulnerability discovery.
+
 ## [0.0.3] - 2025-09-09
 
 ### Added
