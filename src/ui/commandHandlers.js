@@ -1,7 +1,10 @@
 const vscode = require("vscode");
 const dockerOperations = require("../core/dockerOperations");
 const fuzzingOperations = require("../fuzzing/fuzzingOperations");
-const { CodeForgeFuzzingTerminal } = require("../fuzzing/fuzzingTerminal");
+const {
+  CodeForgeFuzzingTerminal,
+  CodeForgeBuildTerminal,
+} = require("../fuzzing/fuzzingTerminal");
 const { CrashDiscoveryService } = require("../fuzzing/crashDiscoveryService");
 const { GdbIntegration } = require("../fuzzing/gdbIntegration");
 const { HexDocumentProvider } = require("./hexDocumentProvider");
@@ -343,6 +346,218 @@ class CodeForgeCommandHandlers {
       vscode.window.showErrorMessage(
         `CodeForge: Fuzzing failed - ${error.message}`,
       );
+    }
+  }
+
+  /**
+   * Build fuzzing targets only (without running fuzzers)
+   */
+  async handleBuildFuzzTargets() {
+    try {
+      const { path: workspacePath } = this.getWorkspaceInfo();
+
+      // Auto-initialize and build if needed
+      const containerName =
+        dockerOperations.generateContainerName(workspacePath);
+      const initialized = await this.ensureInitializedAndBuilt(
+        workspacePath,
+        containerName,
+      );
+      if (!initialized) {
+        return;
+      }
+
+      // Show initial progress notification
+      vscode.window.showInformationMessage(
+        "CodeForge: Starting fuzzing build process...",
+        { modal: false },
+      );
+
+      // Create a unique terminal name with timestamp
+      const timestamp = new Date().toLocaleTimeString();
+      const terminalName = `CodeForge Build: ${timestamp}`;
+
+      // Create the build terminal with enhanced error handling
+      const buildTerminal = new CodeForgeBuildTerminal(workspacePath);
+
+      // Set up build completion monitoring for user notifications
+      this.setupBuildNotifications(buildTerminal);
+
+      // Create the VSCode terminal with our custom implementation
+      const terminal = vscode.window.createTerminal({
+        name: terminalName,
+        pty: buildTerminal,
+        scrollback: 3000, // Double the default scrollback (1000 -> 3000) for build output history
+      });
+
+      // Show the terminal immediately
+      terminal.show();
+    } catch (error) {
+      this.safeOutputLog(`Fuzzing build failed: ${error.message}`, false);
+
+      // Enhanced error notification with actionable information
+      const errorMessage = this.generateUserFriendlyErrorMessage(error);
+      const actions = this.getBuildErrorActions(error);
+
+      const errorPromise = vscode.window.showErrorMessage(
+        `CodeForge: ${errorMessage}`,
+        ...actions,
+      );
+
+      if (errorPromise && typeof errorPromise.then === "function") {
+        errorPromise
+          .then((selectedAction) => {
+            if (selectedAction) {
+              this.handleBuildErrorAction(selectedAction, error);
+            }
+          })
+          .catch((err) => {
+            console.error("Error handling build error action:", err);
+          });
+      }
+    }
+  }
+
+  /**
+   * Sets up build completion notifications
+   * @param {CodeForgeBuildTerminal} buildTerminal - The build terminal instance
+   */
+  setupBuildNotifications(buildTerminal) {
+    // Monitor build completion through terminal events
+    const originalClose = buildTerminal.close.bind(buildTerminal);
+    buildTerminal.close = async function () {
+      // Check if build completed successfully or with errors
+      if (this.buildResults) {
+        const results = this.buildResults;
+
+        if (results.errors && results.errors.length > 0) {
+          if (results.builtTargets > 0) {
+            // Partial success
+            vscode.window
+              .showWarningMessage(
+                `CodeForge: Build completed with warnings. ${results.builtTargets} target(s) built, ${results.errors.length} error(s).`,
+                "View Details",
+                "Retry Build",
+              )
+              .then((action) => {
+                if (action === "Retry Build") {
+                  vscode.commands.executeCommand("codeforge.buildFuzzTargets");
+                }
+              });
+          } else {
+            // Complete failure
+            vscode.window
+              .showErrorMessage(
+                `CodeForge: Build failed. No targets were built. ${results.errors.length} error(s) encountered.`,
+                "View Details",
+                "Troubleshoot",
+                "Retry Build",
+              )
+              .then((action) => {
+                if (action === "Retry Build") {
+                  vscode.commands.executeCommand("codeforge.buildFuzzTargets");
+                } else if (action === "Troubleshoot") {
+                  vscode.window.showInformationMessage(
+                    "Common build issues:\n• Check CMakePresets.json configuration\n• Verify dependencies are installed\n• Ensure Docker container has required tools\n• Try cleaning build directories",
+                    { modal: true },
+                  );
+                }
+              });
+          }
+        } else if (results.builtTargets > 0) {
+          // Complete success
+          vscode.window
+            .showInformationMessage(
+              `CodeForge: Build successful! ${results.builtTargets} fuzz target(s) built and ready for fuzzing.`,
+              "Start Fuzzing",
+            )
+            .then((action) => {
+              if (action === "Start Fuzzing") {
+                vscode.commands.executeCommand("codeforge.startFuzzing");
+              }
+            });
+        }
+      }
+
+      return originalClose();
+    };
+  }
+
+  /**
+   * Generates user-friendly error messages from technical errors
+   * @param {Error} error - The technical error
+   * @returns {string} User-friendly error message
+   */
+  generateUserFriendlyErrorMessage(error) {
+    const message = error.message.toLowerCase();
+
+    if (message.includes("docker")) {
+      return "Docker connection failed. Please ensure Docker is running.";
+    }
+
+    if (message.includes("cmake")) {
+      return "CMake configuration error. Check your CMakePresets.json file.";
+    }
+
+    if (message.includes("permission")) {
+      return "Permission denied. Check file and directory permissions.";
+    }
+
+    if (message.includes("not found") || message.includes("no such file")) {
+      return "Required files or dependencies not found.";
+    }
+
+    return `Build initialization failed: ${error.message}`;
+  }
+
+  /**
+   * Gets appropriate actions for build errors
+   * @param {Error} error - The build error
+   * @returns {string[]} Array of action button labels
+   */
+  getBuildErrorActions(error) {
+    const message = error.message.toLowerCase();
+    const actions = ["View Logs"];
+
+    if (message.includes("docker")) {
+      actions.push("Check Docker");
+    }
+
+    if (message.includes("cmake") || message.includes("preset")) {
+      actions.push("Check CMake Config");
+    }
+
+    actions.push("Retry");
+    return actions;
+  }
+
+  /**
+   * Handles user actions from build error notifications
+   * @param {string} action - The selected action
+   * @param {Error} error - The original error
+   */
+  handleBuildErrorAction(action, error) {
+    switch (action) {
+      case "View Logs":
+        this.safeOutputLog(`Build Error Details: ${error.message}`, true);
+        break;
+      case "Check Docker":
+        vscode.window.showInformationMessage(
+          "Docker Troubleshooting:\n• Ensure Docker Desktop is running\n• Check Docker daemon is accessible\n• Verify Docker permissions",
+          { modal: true },
+        );
+        break;
+      case "Check CMake Config":
+        vscode.window.showInformationMessage(
+          "CMake Configuration:\n• Verify CMakePresets.json exists\n• Check preset configurations\n• Ensure all dependencies are specified",
+          { modal: true },
+        );
+        break;
+      case "Retry":
+        setTimeout(() => {
+          vscode.commands.executeCommand("codeforge.buildFuzzTargets");
+        }, 1000);
+        break;
     }
   }
 
@@ -833,6 +1048,7 @@ class CodeForgeCommandHandlers {
     return {
       "codeforge.launchTerminal": this.handleLaunchTerminal.bind(this),
       "codeforge.runFuzzingTests": this.handleRunFuzzing.bind(this),
+      "codeforge.buildFuzzingTests": this.handleBuildFuzzTargets.bind(this),
       "codeforge.refreshContainers": this.handleRefreshContainers.bind(this),
       "codeforge.refreshCrashes": this.handleRefreshCrashes.bind(this),
       "codeforge.viewCrash": this.handleViewCrash.bind(this),

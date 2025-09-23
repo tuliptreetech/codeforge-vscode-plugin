@@ -72,11 +72,11 @@ async function discoverCMakePresets(workspacePath, containerName, terminal) {
         const error = new Error(
           `CMake preset discovery failed with exit code ${code}: ${stderr}`,
         );
-        safeFuzzingLog(
-          terminal,
-          `CMake preset discovery error: ${error.message}`,
+        // Silently ignore preset discovery errors - log for debugging only
+        console.log(
+          `CodeForge Debug: CMake preset discovery failed: ${error.message}`,
         );
-        reject(error);
+        resolve([]); // Return empty array instead of rejecting
         return;
       }
 
@@ -113,11 +113,11 @@ async function discoverCMakePresets(workspacePath, containerName, terminal) {
       const wrappedError = new Error(
         `Failed to execute CMake preset discovery: ${error.message}`,
       );
-      safeFuzzingLog(
-        terminal,
-        `Docker execution error: ${wrappedError.message}`,
+      // Silently ignore preset discovery errors - log for debugging only
+      console.log(
+        `CodeForge Debug: Docker execution error during preset discovery: ${wrappedError.message}`,
       );
-      reject(wrappedError);
+      resolve([]); // Return empty array instead of rejecting
     });
   });
 }
@@ -170,8 +170,11 @@ async function detectCMakeGenerator(
     checkProcess.on("close", (code) => {
       if (code !== 0) {
         const error = new Error(`Generator detection failed: ${stderr}`);
-        safeFuzzingLog(terminal, `Generator detection error: ${error.message}`);
-        reject(error);
+        // Silently ignore generator detection errors - log for debugging only
+        console.log(
+          `CodeForge Debug: Generator detection failed: ${error.message}`,
+        );
+        resolve("make"); // Default to make generator
         return;
       }
 
@@ -184,11 +187,11 @@ async function detectCMakeGenerator(
       const wrappedError = new Error(
         `Failed to detect generator: ${error.message}`,
       );
-      safeFuzzingLog(
-        terminal,
-        `Generator detection error: ${wrappedError.message}`,
+      // Silently ignore generator detection errors - log for debugging only
+      console.log(
+        `CodeForge Debug: Generator detection error: ${wrappedError.message}`,
       );
-      reject(wrappedError);
+      resolve("make"); // Default to make generator
     });
   });
 }
@@ -238,8 +241,11 @@ async function discoverFuzzTargetsMake(
     helpProcess.on("close", (helpCode) => {
       if (helpCode !== 0) {
         const error = new Error(`CMake help failed: ${helpStderr}`);
-        safeFuzzingLog(terminal, `Make help command error: ${error.message}`);
-        reject(error);
+        // Silently ignore Make target discovery errors - log for debugging only
+        console.log(
+          `CodeForge Debug: Make help command failed: ${error.message}`,
+        );
+        resolve([]); // Return empty array instead of rejecting
         return;
       }
 
@@ -281,8 +287,11 @@ async function discoverFuzzTargetsMake(
       const wrappedError = new Error(
         `Failed to execute Make help: ${error.message}`,
       );
-      safeFuzzingLog(terminal, `Make execution error: ${wrappedError.message}`);
-      reject(wrappedError);
+      // Silently ignore Make target discovery errors - log for debugging only
+      console.log(
+        `CodeForge Debug: Make execution error: ${wrappedError.message}`,
+      );
+      resolve([]); // Return empty array instead of rejecting
     });
   });
 }
@@ -332,11 +341,11 @@ async function discoverFuzzTargetsNinja(
     ninjaProcess.on("close", (ninjaCode) => {
       if (ninjaCode !== 0) {
         const error = new Error(`Ninja targets failed: ${ninjaStderr}`);
-        safeFuzzingLog(
-          terminal,
-          `Ninja targets command error: ${error.message}`,
+        // Silently ignore Ninja target discovery errors - log for debugging only
+        console.log(
+          `CodeForge Debug: Ninja targets command failed: ${error.message}`,
         );
-        reject(error);
+        resolve([]); // Return empty array instead of rejecting
         return;
       }
 
@@ -379,11 +388,11 @@ async function discoverFuzzTargetsNinja(
       const wrappedError = new Error(
         `Failed to execute Ninja targets: ${error.message}`,
       );
-      safeFuzzingLog(
-        terminal,
-        `Ninja execution error: ${wrappedError.message}`,
+      // Silently ignore Ninja target discovery errors - log for debugging only
+      console.log(
+        `CodeForge Debug: Ninja execution error: ${wrappedError.message}`,
       );
-      reject(wrappedError);
+      resolve([]); // Return empty array instead of rejecting
     });
   });
 }
@@ -440,8 +449,11 @@ async function discoverFuzzTargets(
           const error = new Error(
             `CMake configure failed for preset ${preset}: ${configureStderr}`,
           );
-          safeFuzzingLog(terminal, `Configure error: ${error.message}`);
-          reject(error);
+          // Silently ignore configure errors during target discovery - log for debugging only
+          console.log(
+            `CodeForge Debug: CMake configure failed for preset ${preset}: ${error.message}`,
+          );
+          reject(error); // Still reject here as this will be caught by the outer try-catch
           return;
         }
 
@@ -453,11 +465,11 @@ async function discoverFuzzTargets(
         const wrappedError = new Error(
           `Failed to execute CMake configure: ${error.message}`,
         );
-        safeFuzzingLog(
-          terminal,
-          `Docker execution error: ${wrappedError.message}`,
+        // Silently ignore configure errors during target discovery - log for debugging only
+        console.log(
+          `CodeForge Debug: Docker execution error during configure: ${wrappedError.message}`,
         );
-        reject(wrappedError);
+        reject(wrappedError); // Still reject here as this will be caught by the outer try-catch
       });
     });
 
@@ -505,11 +517,12 @@ async function discoverFuzzTargets(
     );
     return fuzzTargets;
   } catch (error) {
-    safeFuzzingLog(
-      terminal,
-      `Error discovering fuzz targets: ${error.message}`,
+    // Silently ignore target discovery errors - these are part of normal discovery process
+    // Log for debugging but don't report to user or throw
+    console.log(
+      `CodeForge Debug: Target discovery failed for preset ${preset}: ${error.message}`,
     );
-    throw error;
+    return []; // Return empty array instead of throwing
   }
 }
 
