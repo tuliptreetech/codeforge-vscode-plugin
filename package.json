@@ -53,6 +53,7 @@
     "onCommand:codeforge.terminateAllContainers",
     "onCommand:codeforge.cleanupOrphaned",
     "onCommand:codeforge.runFuzzingTests",
+    "onCommand:codeforge.buildFuzzingTests",
     "onView:codeforge.controlPanel",
     "onView:codeforge.activeContainers",
     "workspaceContains:.codeforge/Dockerfile",
@@ -164,6 +165,11 @@
       {
         "command": "codeforge.runFuzzingTests",
         "title": "CodeForge: Run Fuzzing Tests"
+      },
+      {
+        "command": "codeforge.buildFuzzingTests",
+        "title": "CodeForge: Build Fuzzing Tests",
+        "icon": "$(tools)"
       }
     ],
     "menus": {

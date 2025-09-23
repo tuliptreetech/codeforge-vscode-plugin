@@ -88,8 +88,8 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(handlers, "Should return handlers object");
       assert.strictEqual(
         Object.keys(handlers).length,
-        7,
-        "Should have 7 handlers",
+        8,
+        "Should have 8 handlers",
       );
       assert.ok(
         handlers["codeforge.launchTerminal"],
@@ -118,6 +118,10 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(
         handlers["codeforge.clearCrashes"],
         "Should have clearCrashes handler",
+      );
+      assert.ok(
+        handlers["codeforge.buildFuzzingTests"],
+        "Should have buildFuzzingTests handler",
       );
     });
 
@@ -250,6 +254,112 @@ suite("Command Handlers Test Suite", () => {
           "Error was thrown but this is acceptable for this test scenario",
         );
       }
+    });
+  });
+
+  suite("handleBuildFuzzTargets Command", () => {
+    let mockTerminal;
+    let ensureInitializedStub;
+
+    setup(() => {
+      // Mock terminal
+      mockTerminal = {
+        show: sandbox.stub(),
+        sendText: sandbox.stub(),
+        dispose: sandbox.stub(),
+      };
+      testEnvironment.vscodeMocks.window.createTerminal.returns(mockTerminal);
+
+      // Mock workspace
+      sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([{ uri: { fsPath: "/test/workspace" } }]);
+
+      // Mock ensureInitializedAndBuilt method
+      ensureInitializedStub = sandbox
+        .stub(commandHandlers, "ensureInitializedAndBuilt")
+        .resolves(true);
+    });
+
+    test("should validate handleBuildFuzzTargets method exists", () => {
+      assert.strictEqual(
+        typeof commandHandlers.handleBuildFuzzTargets,
+        "function",
+        "handleBuildFuzzTargets should be a method",
+      );
+    });
+
+    test("should handle basic command execution structure", async () => {
+      // Mock to prevent actual execution
+      ensureInitializedStub.resolves(false);
+
+      await commandHandlers.handleBuildFuzzTargets();
+
+      // Verify initialization was attempted
+      assert(ensureInitializedStub.called);
+    });
+
+    test("should create terminal when initialization succeeds", async () => {
+      // Mock successful initialization
+      ensureInitializedStub.resolves(true);
+
+      await commandHandlers.handleBuildFuzzTargets();
+
+      // Verify terminal was created with custom pty
+      assert(
+        testEnvironment.vscodeMocks.window.createTerminal.calledWith(
+          sinon.match({
+            name: sinon.match(/CodeForge Build:/),
+            pty: sinon.match.object,
+            scrollback: 3000,
+          }),
+        ),
+      );
+      assert(mockTerminal.show.calledOnce);
+
+      // Verify the pty is an instance of CodeForgeBuildTerminal
+      const terminalCall =
+        testEnvironment.vscodeMocks.window.createTerminal.getCall(0);
+      const ptyInstance = terminalCall.args[0].pty;
+      assert(ptyInstance, "Terminal should have a pty instance");
+      assert(
+        typeof ptyInstance.open === "function",
+        "Pty should have an open method",
+      );
+      assert(
+        typeof ptyInstance.close === "function",
+        "Pty should have a close method",
+      );
+      assert(
+        typeof ptyInstance.handleInput === "function",
+        "Pty should have a handleInput method",
+      );
+    });
+
+    test("should handle workspace errors gracefully", async () => {
+      // Mock workspace error
+      sandbox
+        .stub(commandHandlers, "getWorkspaceInfo")
+        .throws(new Error("No workspace"));
+
+      await commandHandlers.handleBuildFuzzTargets();
+
+      // Verify error handling
+      assert(
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match(/No workspace/),
+        ),
+      );
+    });
+
+    test("should handle initialization failure", async () => {
+      // Mock initialization failure
+      ensureInitializedStub.resolves(false);
+
+      await commandHandlers.handleBuildFuzzTargets();
+
+      // Should return early without creating terminal
+      assert(testEnvironment.vscodeMocks.window.createTerminal.notCalled);
     });
   });
 
