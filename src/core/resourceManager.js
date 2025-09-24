@@ -1,0 +1,122 @@
+const fs = require("fs").promises;
+const path = require("path");
+const vscode = require("vscode");
+
+/**
+ * ResourceManager handles loading and dumping of extension resources like templates
+ */
+class ResourceManager {
+  /**
+   * Creates a new ResourceManager instance
+   * @param {string} extensionPath - The path to the extension directory
+   */
+  constructor(extensionPath) {
+    this.extensionPath = extensionPath;
+    this.resourcesPath = path.join(extensionPath, "resources");
+    this.templatesPath = path.join(this.resourcesPath, "templates");
+  }
+
+  /**
+   * Gets the content of a resource file
+   * @param {string} resourcePath - Relative path to the resource file from the resources directory
+   * @returns {Promise<string>} The content of the resource file
+   * @throws {Error} If the resource file cannot be read
+   */
+  async getResourceContent(resourcePath) {
+    try {
+      const fullPath = path.join(this.resourcesPath, resourcePath);
+      const content = await fs.readFile(fullPath, "utf8");
+      return content;
+    } catch (error) {
+      throw new Error(
+        `Failed to read resource '${resourcePath}': ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Dumps a resource file to a target directory
+   * @param {string} resourcePath - Relative path to the resource file from the resources directory
+   * @param {string} targetDir - Target directory to dump the resource to
+   * @param {string} [filename] - Optional filename override. If not provided, uses the original filename
+   * @returns {Promise<string>} The full path to the dumped file
+   * @throws {Error} If the resource cannot be dumped
+   */
+  async dumpResource(resourcePath, targetDir, filename = null) {
+    try {
+      // Get the resource content
+      const content = await this.getResourceContent(resourcePath);
+
+      // Determine the target filename
+      const originalFilename = path.basename(resourcePath);
+      const targetFilename = filename || originalFilename;
+      const targetPath = path.join(targetDir, targetFilename);
+
+      // Ensure target directory exists
+      await fs.mkdir(targetDir, { recursive: true });
+
+      // Write the file
+      await fs.writeFile(targetPath, content, "utf8");
+
+      return targetPath;
+    } catch (error) {
+      throw new Error(
+        `Failed to dump resource '${resourcePath}' to '${targetDir}': ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Dumps the Dockerfile template to a target directory
+   * @param {string} targetDir - Target directory to dump the Dockerfile to
+   * @returns {Promise<string>} The full path to the dumped Dockerfile
+   * @throws {Error} If the Dockerfile cannot be dumped
+   */
+  async dumpDockerfile(targetDir) {
+    try {
+      return await this.dumpResource("templates/Dockerfile", targetDir);
+    } catch (error) {
+      throw new Error(`Failed to dump Dockerfile: ${error.message}`);
+    }
+  }
+
+  /**
+   * Dumps the .gitignore template to a target directory
+   * @param {string} targetDir - Target directory to dump the .gitignore to
+   * @returns {Promise<string>} The full path to the dumped .gitignore file
+   * @throws {Error} If the .gitignore cannot be dumped
+   */
+  async dumpGitignore(targetDir) {
+    try {
+      return await this.dumpResource("templates/.gitignore", targetDir);
+    } catch (error) {
+      throw new Error(`Failed to dump .gitignore: ${error.message}`);
+    }
+  }
+
+  /**
+   * Gets the full path to a resource file
+   * @param {string} resourcePath - Relative path to the resource file from the resources directory
+   * @returns {string} The full path to the resource file
+   */
+  getResourcePath(resourcePath) {
+    return path.join(this.resourcesPath, resourcePath);
+  }
+
+  /**
+   * Checks if a resource file exists
+   * @param {string} resourcePath - Relative path to the resource file from the resources directory
+   * @returns {Promise<boolean>} True if the resource exists, false otherwise
+   */
+  async resourceExists(resourcePath) {
+    try {
+      const fullPath = this.getResourcePath(resourcePath);
+      await fs.access(fullPath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+module.exports = { ResourceManager };

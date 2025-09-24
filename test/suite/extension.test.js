@@ -15,6 +15,7 @@ const sinon = require("sinon");
 
 // Import the extension module
 const myExtension = require("../../src/extension");
+const { ResourceManager } = require("../../src/core/resourceManager");
 
 suite("CodeForge Extension Core Test Suite", () => {
   vscode.window.showInformationMessage("Start all tests.");
@@ -33,6 +34,44 @@ suite("CodeForge Extension Core Test Suite", () => {
     test("Extension should be present", () => {
       assert.ok(
         vscode.extensions.getExtension("TulipTreeTechnology.codeforge"),
+      );
+    });
+
+    test("Should initialize ResourceManager during activation", async () => {
+      // This test verifies that ResourceManager initialization is part of the activation process
+      // Since the extension is already loaded in the test environment, we test the behavior indirectly
+
+      // Mock workspace folder to prevent actual initialization
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value(undefined);
+
+      // Test that the activation function includes ResourceManager initialization logic
+      // by checking that the extension exports the necessary functions
+      assert.ok(
+        typeof myExtension.activate === "function",
+        "Extension should export activate function",
+      );
+
+      assert.ok(
+        typeof myExtension.initializeCodeForgeOnActivation === "function",
+        "Extension should export initializeCodeForgeOnActivation function",
+      );
+
+      // Verify that ResourceManager is imported in the extension
+      const extensionSource = require("fs").readFileSync(
+        require("path").join(__dirname, "../../src/extension.js"),
+        "utf8",
+      );
+
+      assert.ok(
+        extensionSource.includes('require("./core/resourceManager")'),
+        "Extension should import ResourceManager",
+      );
+
+      assert.ok(
+        extensionSource.includes("new ResourceManager(context.extensionPath)"),
+        "Extension should initialize ResourceManager with context.extensionPath",
       );
     });
 
@@ -97,7 +136,20 @@ suite("CodeForge Extension Core Test Suite", () => {
       // Mock fs operations
       const fsAccessStub = sandbox.stub(fs, "access");
       const fsMkdirStub = sandbox.stub(fs, "mkdir");
-      const fsWriteFileStub = sandbox.stub(fs, "writeFile");
+
+      // Mock ResourceManager methods
+      const mockResourceManager = {
+        dumpGitignore: sandbox
+          .stub()
+          .resolves(path.join(mockWorkspacePath, ".codeforge", ".gitignore")),
+        dumpDockerfile: sandbox
+          .stub()
+          .resolves(path.join(mockWorkspacePath, ".codeforge", "Dockerfile")),
+      };
+
+      // Replace the global resourceManager with our mock
+      const originalResourceManager = global.resourceManager;
+      global.resourceManager = mockResourceManager;
 
       // Simulate .codeforge directory doesn't exist
       fsAccessStub
@@ -111,19 +163,28 @@ suite("CodeForge Extension Core Test Suite", () => {
         .rejects(new Error("ENOENT"));
 
       fsMkdirStub.resolves();
-      fsWriteFileStub.resolves();
 
-      // Call the initialization function
-      await myExtension.initializeCodeForgeOnActivation();
+      try {
+        // Call the initialization function
+        await myExtension.initializeCodeForgeOnActivation();
 
-      // Verify .gitignore was created with correct content
-      assert.ok(
-        fsWriteFileStub.calledWith(
-          path.join(mockWorkspacePath, ".codeforge", ".gitignore"),
-          "# Ignore fuzzing output directory\n/fuzzing\n",
-        ),
-        ".gitignore should be created with correct content",
-      );
+        // Verify ResourceManager methods were called
+        assert.ok(
+          mockResourceManager.dumpGitignore.calledWith(
+            path.join(mockWorkspacePath, ".codeforge"),
+          ),
+          "ResourceManager.dumpGitignore should be called with correct directory",
+        );
+        assert.ok(
+          mockResourceManager.dumpDockerfile.calledWith(
+            path.join(mockWorkspacePath, ".codeforge"),
+          ),
+          "ResourceManager.dumpDockerfile should be called with correct directory",
+        );
+      } finally {
+        // Restore original resourceManager
+        global.resourceManager = originalResourceManager;
+      }
     });
 
     test("Should not overwrite existing .gitignore", async () => {
@@ -139,7 +200,20 @@ suite("CodeForge Extension Core Test Suite", () => {
 
       // Mock fs operations
       const fsAccessStub = sandbox.stub(fs, "access");
-      const fsWriteFileStub = sandbox.stub(fs, "writeFile");
+
+      // Mock ResourceManager methods
+      const mockResourceManager = {
+        dumpGitignore: sandbox
+          .stub()
+          .resolves(path.join(mockWorkspacePath, ".codeforge", ".gitignore")),
+        dumpDockerfile: sandbox
+          .stub()
+          .resolves(path.join(mockWorkspacePath, ".codeforge", "Dockerfile")),
+      };
+
+      // Replace the global resourceManager with our mock
+      const originalResourceManager = global.resourceManager;
+      global.resourceManager = mockResourceManager;
 
       // Simulate .codeforge directory and .gitignore exist
       fsAccessStub
@@ -152,14 +226,23 @@ suite("CodeForge Extension Core Test Suite", () => {
         .withArgs(path.join(mockWorkspacePath, ".codeforge", "Dockerfile"))
         .resolves();
 
-      // Call the initialization function
-      await myExtension.initializeCodeForgeOnActivation();
+      try {
+        // Call the initialization function
+        await myExtension.initializeCodeForgeOnActivation();
 
-      // Verify .gitignore was NOT written
-      assert.ok(
-        !fsWriteFileStub.called,
-        ".gitignore should not be overwritten if it exists",
-      );
+        // Verify ResourceManager methods were NOT called since files exist
+        assert.ok(
+          !mockResourceManager.dumpGitignore.called,
+          "ResourceManager.dumpGitignore should not be called if .gitignore exists",
+        );
+        assert.ok(
+          !mockResourceManager.dumpDockerfile.called,
+          "ResourceManager.dumpDockerfile should not be called if Dockerfile exists",
+        );
+      } finally {
+        // Restore original resourceManager
+        global.resourceManager = originalResourceManager;
+      }
     });
 
     test("Should create both Dockerfile and .gitignore when neither exists", async () => {
@@ -176,7 +259,20 @@ suite("CodeForge Extension Core Test Suite", () => {
       // Mock fs operations
       const fsAccessStub = sandbox.stub(fs, "access");
       const fsMkdirStub = sandbox.stub(fs, "mkdir");
-      const fsWriteFileStub = sandbox.stub(fs, "writeFile");
+
+      // Mock ResourceManager methods
+      const mockResourceManager = {
+        dumpGitignore: sandbox
+          .stub()
+          .resolves(path.join(mockWorkspacePath, ".codeforge", ".gitignore")),
+        dumpDockerfile: sandbox
+          .stub()
+          .resolves(path.join(mockWorkspacePath, ".codeforge", "Dockerfile")),
+      };
+
+      // Replace the global resourceManager with our mock
+      const originalResourceManager = global.resourceManager;
+      global.resourceManager = mockResourceManager;
 
       // Simulate .codeforge directory doesn't exist
       fsAccessStub
@@ -190,27 +286,28 @@ suite("CodeForge Extension Core Test Suite", () => {
         .rejects(new Error("ENOENT"));
 
       fsMkdirStub.resolves();
-      fsWriteFileStub.resolves();
 
-      // Call the initialization function
-      await myExtension.initializeCodeForgeOnActivation();
+      try {
+        // Call the initialization function
+        await myExtension.initializeCodeForgeOnActivation();
 
-      // Verify both files were created
-      assert.ok(
-        fsWriteFileStub.calledWith(
-          path.join(mockWorkspacePath, ".codeforge", ".gitignore"),
-          "# Ignore fuzzing output directory\n/fuzzing\n",
-        ),
-        ".gitignore should be created",
-      );
-
-      assert.ok(
-        fsWriteFileStub.calledWith(
-          path.join(mockWorkspacePath, ".codeforge", "Dockerfile"),
-          sinon.match.string,
-        ),
-        "Dockerfile should be created",
-      );
+        // Verify both ResourceManager methods were called
+        assert.ok(
+          mockResourceManager.dumpGitignore.calledWith(
+            path.join(mockWorkspacePath, ".codeforge"),
+          ),
+          "ResourceManager.dumpGitignore should be called",
+        );
+        assert.ok(
+          mockResourceManager.dumpDockerfile.calledWith(
+            path.join(mockWorkspacePath, ".codeforge"),
+          ),
+          "ResourceManager.dumpDockerfile should be called",
+        );
+      } finally {
+        // Restore original resourceManager
+        global.resourceManager = originalResourceManager;
+      }
     });
 
     test("Should skip initialization when no workspace is open", async () => {
