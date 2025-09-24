@@ -1,70 +1,12 @@
 const vscode = require("vscode");
 const dockerOperations = require("./core/dockerOperations");
+const { ResourceManager } = require("./core/resourceManager");
 const { CodeForgeTaskProvider } = require("./tasks/taskProvider");
 const { CodeForgeWebviewProvider } = require("./ui/webviewProvider");
 const { CodeForgeCommandHandlers } = require("./ui/commandHandlers");
 const { HexDocumentProvider } = require("./ui/hexDocumentProvider");
 const fs = require("fs").promises;
 const path = require("path");
-
-// Embedded .gitignore content
-const GITIGNORE_CONTENT = `# Ignore fuzzing output directory
-/fuzzing
-`;
-
-// Embedded Dockerfile content
-const DOCKERFILE_CONTENT = `# specify the base image (latest ubuntu lts release as of Oct 2024)
-FROM ubuntu:24.04
-
-# remove pre-installed 'ubuntu' user
-RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
-
-# Installing certain packages requires timezone and insists on requesting user input
-#  These settings ensure that package installation is hands-off
-ARG DEBIAN_FRONTEND=noninteractive
-ENV TZ=Etc/UTC
-
-# Install development packages
-RUN apt-get update
-RUN apt-get install -y --no-install-recommends \\
-    sudo \\
-    build-essential \\
-    gcc-arm-none-eabi \\
-    git \\
-    tzdata \\
-    gcovr \\
-    meld \\
-    cpputest \\
-    pkg-config \\
-    cmake \\
-    sloccount \\
-    cppcheck cppcheck-gui \\
-    clang clang-tidy clang-format libclang-rt-18-dev gdb \\
-    gdbserver \\
-    ninja-build \\
-    just \\
-    python3-pip
-
-
-#################
-# Fix file ownership and permissions issues between WSL and Devcontainer
-#   See this video (minute 13) for more info: https://www.youtube.com/watch?v=F6PiU-SSRWs
-#   That video's exact suggestions didn't work:
-#      RUN groupadd --gid 1000 vscode && \\
-#         useradd --uid 1000 --gid 1000 -G plugdev,dialout --shell /bin/bash -m vscode && \\
-#         echo "vscode ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/vscode
-#   But, creating a user in the container that matches the user in WSL works well.
-# After creating that user, run as that user in the container by default, instead of root
-#################
-ARG USERNAME
-ARG USERID
-RUN groupadd --gid $USERID $USERNAME && \\
-    useradd --gid $USERID -u $USERID -G plugdev,dialout --shell /bin/bash -m $USERNAME && \\
-    mkdir -p /etc/sudoers.d && \\
-    echo "$USERNAME ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
-
-USER $USERNAME
-`;
 
 let outputChannel;
 
@@ -99,6 +41,21 @@ function activate(context) {
   context.subscriptions.push(outputChannel);
 
   safeOutputLog("CodeForge: Extension activation started", false);
+
+  // Initialize ResourceManager
+  try {
+    resourceManager = new ResourceManager(context.extensionPath);
+    safeOutputLog("CodeForge: ✓ ResourceManager initialized successfully");
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `CodeForge: Failed to initialize ResourceManager - ${error.message}`,
+    );
+    safeOutputLog(
+      `CRITICAL: Failed to initialize ResourceManager: ${error.message}`,
+      true,
+    );
+    return; // Cannot continue without ResourceManager
+  }
 
   // Register the task provider
   try {
@@ -171,6 +128,7 @@ function activate(context) {
       outputChannel,
       null,
       webviewProvider,
+      resourceManager,
     );
 
     // Verify provider state before registering commands
@@ -437,14 +395,24 @@ async function initializeCodeForgeOnActivation() {
 
     // Create .gitignore if it doesn't exist
     if (!gitignoreExists) {
-      await fs.writeFile(gitignorePath, GITIGNORE_CONTENT);
-      safeOutputLog(`Auto-created .gitignore: ${gitignorePath}`);
+      try {
+        await resourceManager.dumpGitignore(codeforgeDir);
+        safeOutputLog(`Auto-created .gitignore: ${gitignorePath}`);
+      } catch (error) {
+        safeOutputLog(`Error creating .gitignore: ${error.message}`);
+        throw error;
+      }
     }
 
     // Create Dockerfile if it doesn't exist
     if (!dockerfileExists) {
-      await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
-      safeOutputLog(`Auto-created Dockerfile: ${dockerfilePath}`);
+      try {
+        await resourceManager.dumpDockerfile(codeforgeDir);
+        safeOutputLog(`Auto-created Dockerfile: ${dockerfilePath}`);
+      } catch (error) {
+        safeOutputLog(`Error creating Dockerfile: ${error.message}`);
+        throw error;
+      }
     }
 
     // Show a subtle notification if any files were created
@@ -495,8 +463,23 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
       outputChannel.appendLine(`Created directory: ${codeforgeDir}`);
 
       // Write Dockerfile
-      await fs.writeFile(dockerfilePath, DOCKERFILE_CONTENT);
-      outputChannel.appendLine(`Created Dockerfile: ${dockerfilePath}`);
+      try {
+        await resourceManager.dumpDockerfile(codeforgeDir);
+        outputChannel.appendLine(`Created Dockerfile: ${dockerfilePath}`);
+      } catch (error) {
+        outputChannel.appendLine(`Error creating Dockerfile: ${error.message}`);
+        throw error;
+      }
+
+      // Write .gitignore
+      try {
+        await resourceManager.dumpGitignore(codeforgeDir);
+        const gitignorePath = path.join(codeforgeDir, ".gitignore");
+        outputChannel.appendLine(`Created .gitignore: ${gitignorePath}`);
+      } catch (error) {
+        outputChannel.appendLine(`Error creating .gitignore: ${error.message}`);
+        throw error;
+      }
     }
 
     // Check if Docker image exists
@@ -601,6 +584,7 @@ async function runInitialCrashDiscovery() {
             outputChannel,
             null, // containerTreeProvider not needed
             webviewProvider,
+            resourceManager,
           );
 
           await commandHandlers.handleRefreshCrashes();

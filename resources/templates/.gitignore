@@ -1,0 +1,2 @@
+# Ignore fuzzing output directory
+/fuzzing
