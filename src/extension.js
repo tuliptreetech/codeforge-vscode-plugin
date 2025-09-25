@@ -78,7 +78,7 @@ function activate(context) {
 
   // Register the webview provider
   try {
-    webviewProvider = new CodeForgeWebviewProvider(context);
+    webviewProvider = new CodeForgeWebviewProvider(context, resourceManager);
     const webviewProviderDisposable = vscode.window.registerWebviewViewProvider(
       "codeforge.controlPanel",
       webviewProvider,
@@ -162,8 +162,15 @@ function activate(context) {
     );
   }
 
-  // Automatically initialize .codeforge directory on activation
-  initializeCodeForgeOnActivation();
+  // Note: Automatic initialization removed - users must explicitly initialize
+  // initializeCodeForgeOnActivation(); // Commented out - now user-driven only
+
+  // Trigger initialization status check in webview after providers are ready
+  setTimeout(() => {
+    if (webviewProvider && webviewProvider._checkInitializationStatus) {
+      webviewProvider._checkInitializationStatus();
+    }
+  }, 500);
 
   // Run crash discovery asynchronously after extension activation
   runInitialCrashDiscovery();

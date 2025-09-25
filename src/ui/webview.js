@@ -5,6 +5,14 @@
   // State management
   let currentState = {
     isLoading: false,
+    initialization: {
+      isInitialized: false,
+      isLoading: false,
+      lastChecked: null,
+      error: null,
+      missingComponents: [],
+      details: {},
+    },
     crashes: {
       isLoading: false,
       lastUpdated: null,
@@ -21,6 +29,17 @@
     loadingText: document.getElementById("loading-text"),
     refreshCrashesBtn: document.getElementById("refresh-crashes-btn"),
     crashesContent: document.getElementById("crashes-content"),
+    // Initialization elements
+    initializationSection: document.getElementById("initialization-section"),
+    initializeBtn: document.getElementById("initialize-btn"),
+    initializationProgressSection: document.getElementById(
+      "initialization-progress-section",
+    ),
+    initProgressSteps: document.getElementById("init-progress-steps"),
+    initStatusMessage: document.getElementById("init-status-message"),
+    unknownStateSection: document.getElementById("unknown-state-section"),
+    actionsSection: document.getElementById("actions-section"),
+    crashesSection: document.getElementById("crashes-section"),
   };
 
   // Verify all elements exist
@@ -46,6 +65,11 @@
   if (elements.refreshCrashesBtn) {
     elements.refreshCrashesBtn.addEventListener("click", () =>
       executeCommand("refreshCrashes"),
+    );
+  }
+  if (elements.initializeBtn) {
+    elements.initializeBtn.addEventListener("click", () =>
+      executeInitialization(),
     );
   }
 
@@ -85,6 +109,12 @@
   function updateState(newState) {
     console.log("Updating state:", newState);
     currentState = { ...currentState, ...newState };
+    updateUI();
+  }
+
+  // Main UI update function
+  function updateUI() {
+    updateInitializationUI();
     updateButtonStates();
     updateCrashDisplay();
   }
@@ -133,8 +163,146 @@
       viewCrash: "Opening crash file...",
       analyzeCrash: "Analyzing crash...",
       clearCrashes: "Clearing crashes...",
+      initializeCodeForge: "Initializing CodeForge...",
     };
     return messages[command] || "Processing...";
+  }
+
+  // Initialize CodeForge
+  function executeInitialization() {
+    if (currentState.isLoading || currentState.initialization.isLoading) {
+      console.log("Initialization ignored - already loading");
+      return;
+    }
+
+    console.log("Starting CodeForge initialization");
+
+    vscode.postMessage({
+      type: "initializeCodeForge",
+      params: {},
+    });
+  }
+
+  // Update initialization UI based on state
+  function updateInitializationUI() {
+    const { initialization } = currentState;
+
+    // Hide all sections initially
+    hideAllSections();
+
+    if (initialization.isLoading) {
+      // Show initialization progress
+      showInitializationProgress();
+    } else if (initialization.isInitialized) {
+      // Show main interface (Quick Actions and Crashes)
+      showMainInterface();
+    } else if (initialization.error && initialization.lastChecked) {
+      // Show initialization button with error context
+      showInitializationSection(true);
+    } else if (initialization.lastChecked === null) {
+      // Show unknown state while checking
+      showUnknownState();
+    } else {
+      // Show initialization button
+      showInitializationSection(false);
+    }
+  }
+
+  function hideAllSections() {
+    if (elements.initializationSection)
+      elements.initializationSection.style.display = "none";
+    if (elements.initializationProgressSection)
+      elements.initializationProgressSection.style.display = "none";
+    if (elements.unknownStateSection)
+      elements.unknownStateSection.style.display = "none";
+    if (elements.actionsSection) elements.actionsSection.style.display = "none";
+    if (elements.crashesSection) elements.crashesSection.style.display = "none";
+  }
+
+  function showInitializationSection(hasError) {
+    if (elements.initializationSection) {
+      elements.initializationSection.style.display = "block";
+
+      // Update description based on error state
+      const description =
+        elements.initializationSection.querySelector(".init-description");
+      if (description) {
+        if (hasError) {
+          description.textContent = `Failed to initialize: ${currentState.initialization.error}. Click to retry.`;
+          description.classList.add("error");
+        } else {
+          description.textContent =
+            "Set up CodeForge in your workspace to enable fuzzing capabilities.";
+          description.classList.remove("error");
+        }
+      }
+    }
+  }
+
+  function showInitializationProgress() {
+    if (elements.initializationProgressSection) {
+      elements.initializationProgressSection.style.display = "block";
+      updateInitializationProgress();
+    }
+  }
+
+  function showUnknownState() {
+    if (elements.unknownStateSection) {
+      elements.unknownStateSection.style.display = "block";
+    }
+  }
+
+  function showMainInterface() {
+    if (elements.actionsSection)
+      elements.actionsSection.style.display = "block";
+    if (elements.crashesSection)
+      elements.crashesSection.style.display = "block";
+  }
+
+  function updateInitializationProgress() {
+    const { initialization } = currentState;
+
+    if (!elements.initProgressSteps || !elements.initStatusMessage) return;
+
+    // Update status message
+    if (initialization.details && initialization.details.currentStep) {
+      elements.initStatusMessage.textContent =
+        initialization.details.currentStep;
+    } else {
+      elements.initStatusMessage.textContent = "Setting up your workspace...";
+    }
+
+    // Update progress steps
+    const steps = [
+      "Creating .codeforge directory",
+      "Setting up Docker configuration",
+      "Configuring fuzzing environment",
+      "Finalizing setup",
+    ];
+
+    let html = "";
+    const currentStepIndex = initialization.details?.stepIndex || 0;
+
+    steps.forEach((step, index) => {
+      const isCompleted = index < currentStepIndex;
+      const isCurrent = index === currentStepIndex;
+      const stepClass = isCompleted
+        ? "completed"
+        : isCurrent
+          ? "current"
+          : "pending";
+
+      html += `
+        <div class="progress-step ${stepClass}">
+          <div class="step-indicator">
+            ${isCompleted ? "✓" : isCurrent ? "⏳" : "○"}
+          </div>
+          <div class="step-text">${step}</div>
+        </div>
+      `;
+    });
+
+    elements.initProgressSteps.innerHTML = html;
   }
 
   // Message handling from extension
@@ -379,8 +547,7 @@
   vscode.postMessage({ type: "requestState" });
 
   // Initial UI update
-  updateButtonStates();
-  updateCrashDisplay();
+  updateUI();
 
   // Auto-refresh crashes after fuzzing completes
   let lastFuzzingState = false;
