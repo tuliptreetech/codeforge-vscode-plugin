@@ -3,17 +3,28 @@ const path = require("path");
 const fs = require("fs").promises;
 const dockerOperations = require("../core/dockerOperations");
 const { CrashDiscoveryService } = require("../fuzzing/crashDiscoveryService");
+const {
+  InitializationDetectionService,
+} = require("../core/initializationDetectionService");
 
 /**
  * CodeForge Webview View Provider
  * Manages the webview panel in the activity bar
  */
 class CodeForgeWebviewProvider {
-  constructor(context) {
+  constructor(context, resourceManager = null) {
     this._context = context;
     this._view = undefined;
     this._currentState = {
       isLoading: false,
+      initialization: {
+        isInitialized: false,
+        isLoading: false,
+        lastChecked: null,
+        error: null,
+        missingComponents: [],
+        details: {},
+      },
       crashes: {
         isLoading: false,
         lastUpdated: null,
@@ -22,8 +33,11 @@ class CodeForgeWebviewProvider {
       },
     };
 
-    // Initialize crash discovery service
+    // Initialize services
     this._crashDiscoveryService = new CrashDiscoveryService();
+    this._initializationService = new InitializationDetectionService(
+      resourceManager,
+    );
 
     // Bind methods to preserve 'this' context
     this.resolveWebviewView = this.resolveWebviewView.bind(this);
@@ -31,6 +45,11 @@ class CodeForgeWebviewProvider {
     this._updateState = this._updateState.bind(this);
     this._updateCrashState = this._updateCrashState.bind(this);
     this._setCrashLoading = this._setCrashLoading.bind(this);
+    this._checkInitializationStatus =
+      this._checkInitializationStatus.bind(this);
+    this._updateInitializationState =
+      this._updateInitializationState.bind(this);
+    this._setInitializationLoading = this._setInitializationLoading.bind(this);
   }
 
   /**
@@ -58,8 +77,11 @@ class CodeForgeWebviewProvider {
       this._view = undefined;
     });
 
+    // Check initialization status when webview is first created
+    setTimeout(() => this._checkInitializationStatus(), 0);
+
     // Trigger initial crash discovery when webview is first created (asynchronously)
-    setTimeout(() => this._performInitialCrashDiscovery(), 0);
+    setTimeout(() => this._performInitialCrashDiscovery(), 100);
   }
 
   /**
@@ -79,6 +101,12 @@ class CodeForgeWebviewProvider {
             type: "stateUpdate",
             state: this._currentState,
           });
+          break;
+        case "initializeCodeForge":
+          await this._executeCommand(
+            "initializeCodeForge",
+            message.params || {},
+          );
           break;
         default:
           console.warn(`Unknown message type: ${message.type}`);
@@ -106,6 +134,7 @@ class CodeForgeWebviewProvider {
         viewCrash: "codeforge.viewCrash",
         analyzeCrash: "codeforge.analyzeCrash",
         clearCrashes: "codeforge.clearCrashes",
+        initializeCodeForge: "codeforge.initializeProject",
       };
 
       const vscodeCommand = commandMap[command];
@@ -186,6 +215,75 @@ class CodeForgeWebviewProvider {
   }
 
   /**
+   * Check initialization status and update state
+   */
+  async _checkInitializationStatus() {
+    try {
+      // Check if there's an open workspace
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        this._updateInitializationState({
+          isInitialized: false,
+          error: "No workspace folder open",
+          missingComponents: ["workspace"],
+          details: {},
+          lastChecked: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const workspacePath = workspaceFolder.uri.fsPath;
+
+      // Set loading state
+      this._setInitializationLoading(true);
+
+      // Check initialization status
+      const status =
+        await this._initializationService.isCodeForgeInitialized(workspacePath);
+
+      // Update state with results
+      this._updateInitializationState({
+        isInitialized: status.isInitialized,
+        missingComponents: status.missingComponents,
+        details: status.details,
+        lastChecked: new Date().toISOString(),
+        isLoading: false,
+        error: null,
+      });
+    } catch (error) {
+      // Handle errors gracefully
+      this._setInitializationLoading(false, error.message);
+      console.warn(`Initialization status check failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update initialization state and notify the webview
+   */
+  _updateInitializationState(initializationData) {
+    this._currentState.initialization = {
+      ...this._currentState.initialization,
+      ...initializationData,
+    };
+    this._sendMessage({
+      type: "stateUpdate",
+      state: this._currentState,
+    });
+  }
+
+  /**
+   * Set initialization loading state
+   */
+  _setInitializationLoading(loading, error = null) {
+    this._currentState.initialization.isLoading = loading;
+    this._currentState.initialization.error = error;
+    this._sendMessage({
+      type: "stateUpdate",
+      state: this._currentState,
+    });
+  }
+
+  /**
    * Generate HTML content for the webview
    */
   _getHtmlForWebview(webview) {
@@ -215,8 +313,44 @@ class CodeForgeWebviewProvider {
 </head>
 <body>
     <div class="container">
+        <!-- Initialization Section -->
+        <section class="initialization-section" id="initialization-section" style="display: none;">
+            <div class="init-content">
+                <div class="init-icon">🔧</div>
+                <h2>Initialize CodeForge</h2>
+                <p class="init-description">Set up CodeForge in your workspace to enable fuzzing capabilities.</p>
+                <button class="action-btn primary" id="initialize-btn">
+                    <span class="btn-text">Initialize CodeForge</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Initialization Progress Section -->
+        <section class="initialization-progress-section" id="initialization-progress-section" style="display: none;">
+            <div class="init-progress-content">
+                <div class="init-progress-icon">
+                    <div class="loading-spinner"></div>
+                </div>
+                <h2>Initializing CodeForge</h2>
+                <div class="init-progress-steps" id="init-progress-steps">
+                    <!-- Dynamic progress steps populated by JavaScript -->
+                </div>
+                <div class="init-status-message" id="init-status-message">
+                    Setting up your workspace...
+                </div>
+            </div>
+        </section>
+
+        <!-- Unknown State Section -->
+        <section class="unknown-state-section" id="unknown-state-section" style="display: none;">
+            <div class="unknown-state-content">
+                <div class="loading-spinner"></div>
+                <div class="unknown-state-text">Checking initialization status...</div>
+            </div>
+        </section>
+
         <!-- Quick Actions Section -->
-        <section class="actions-section">
+        <section class="actions-section" id="actions-section">
             <h2>Quick Actions</h2>
             <div class="button-grid">
                 <button class="action-btn outline" id="terminal-btn" disabled>

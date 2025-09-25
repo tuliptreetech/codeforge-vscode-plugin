@@ -8,6 +8,9 @@ const {
 const { CrashDiscoveryService } = require("../fuzzing/crashDiscoveryService");
 const { GdbIntegration } = require("../fuzzing/gdbIntegration");
 const { HexDocumentProvider } = require("./hexDocumentProvider");
+const {
+  InitializationDetectionService,
+} = require("../core/initializationDetectionService");
 const fs = require("fs").promises;
 const path = require("path");
 
@@ -30,6 +33,9 @@ class CodeForgeCommandHandlers {
     this.resourceManager = resourceManager;
     this.crashDiscoveryService = new CrashDiscoveryService();
     this.gdbIntegration = new GdbIntegration(dockerOperations);
+    this.initializationService = new InitializationDetectionService(
+      resourceManager,
+    );
   }
 
   /**
@@ -66,59 +72,58 @@ class CodeForgeCommandHandlers {
 
   /**
    * Ensures that CodeForge is initialized and the Docker image is built
+   * Now requires user permission for initialization
    */
   async ensureInitializedAndBuilt(workspacePath, containerName) {
     try {
-      const dockerfilePath = path.join(
-        workspacePath,
-        ".codeforge",
-        "Dockerfile",
-      );
+      // Check if project is initialized using the initialization service
+      const initializationResult =
+        await this.initializationService.isCodeForgeInitialized(workspacePath);
 
-      // Check if Dockerfile exists
-      let dockerfileExists = false;
-      try {
-        await fs.access(dockerfilePath);
-        dockerfileExists = true;
-      } catch (error) {
-        dockerfileExists = false;
-      }
+      if (!initializationResult.isInitialized) {
+        // Project is not initialized - ask user for permission
+        const action = await vscode.window.showInformationMessage(
+          "CodeForge: This project is not initialized. Would you like to initialize it now?",
+          { modal: true },
+          "Initialize Now",
+          "Cancel",
+        );
 
-      // If Dockerfile doesn't exist, automatically initialize
-      if (!dockerfileExists) {
+        if (action !== "Initialize Now") {
+          this.safeOutputLog(
+            "User cancelled initialization - operation aborted",
+          );
+          return false;
+        }
+
+        // User agreed to initialize - call the initialization handler
         this.safeOutputLog(
-          "CodeForge: Dockerfile not found. Automatically initializing...",
+          "User requested initialization - proceeding...",
           true,
         );
 
-        // Create .codeforge directory
-        const codeforgeDir = path.join(workspacePath, ".codeforge");
-        await fs.mkdir(codeforgeDir, { recursive: true });
-        this.outputChannel.appendLine(`Created directory: ${codeforgeDir}`);
-
-        // Write Dockerfile
         try {
-          await this.resourceManager.dumpDockerfile(codeforgeDir);
-          this.outputChannel.appendLine(
-            `Created Dockerfile: ${dockerfilePath}`,
-          );
-        } catch (error) {
-          this.outputChannel.appendLine(
-            `Error creating Dockerfile: ${error.message}`,
-          );
-          throw error;
-        }
+          // Use the existing initialization handler which provides progress feedback
+          await this.handleInitializeProject();
 
-        // Write .gitignore
-        try {
-          await this.resourceManager.dumpGitignore(codeforgeDir);
-          const gitignorePath = path.join(codeforgeDir, ".gitignore");
-          this.outputChannel.appendLine(`Created .gitignore: ${gitignorePath}`);
+          // Verify initialization was successful
+          const nowInitializedResult =
+            await this.initializationService.isCodeForgeInitialized(
+              workspacePath,
+            );
+          if (!nowInitializedResult.isInitialized) {
+            throw new Error(
+              "Initialization completed but project still appears uninitialized",
+            );
+          }
+
+          this.safeOutputLog("Project initialization completed successfully");
         } catch (error) {
-          this.outputChannel.appendLine(
-            `Error creating .gitignore: ${error.message}`,
+          this.safeOutputLog(`Initialization failed: ${error.message}`, true);
+          vscode.window.showErrorMessage(
+            `CodeForge: Failed to initialize project - ${error.message}`,
           );
-          throw error;
+          return false;
         }
       }
 
@@ -126,10 +131,24 @@ class CodeForgeCommandHandlers {
       const imageExists =
         await dockerOperations.checkImageExists(containerName);
 
-      // If image doesn't exist, automatically build it
+      // If image doesn't exist, ask user permission to build it
       if (!imageExists) {
+        const buildAction = await vscode.window.showInformationMessage(
+          `CodeForge: Docker image '${containerName}' not found. Would you like to build it now?`,
+          { modal: true },
+          "Build Now",
+          "Cancel",
+        );
+
+        if (buildAction !== "Build Now") {
+          this.safeOutputLog(
+            "User cancelled Docker image build - operation aborted",
+          );
+          return false;
+        }
+
         this.safeOutputLog(
-          `CodeForge: Docker image not found. Automatically building ${containerName}...`,
+          `CodeForge: User requested Docker image build for ${containerName}...`,
           true,
         );
 
@@ -137,7 +156,7 @@ class CodeForgeCommandHandlers {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "CodeForge: Automatically building Docker environment...",
+            title: "CodeForge: Building Docker environment...",
             cancellable: false,
           },
           async (progress) => {
@@ -162,7 +181,7 @@ class CodeForgeCommandHandlers {
         if (!imageExistsAfterBuild) {
           this.outputChannel.appendLine("Error: Docker image build failed");
           vscode.window.showErrorMessage(
-            "CodeForge: Failed to build Docker image automatically",
+            "CodeForge: Failed to build Docker image",
           );
           return false;
         }
@@ -173,9 +192,8 @@ class CodeForgeCommandHandlers {
       this.outputChannel.appendLine(
         `Error in ensureInitializedAndBuilt: ${error.message}`,
       );
-      // Don't automatically show output window - users can access it manually
       vscode.window.showErrorMessage(
-        `CodeForge: Failed to initialize/build automatically - ${error.message}`,
+        `CodeForge: Failed to ensure initialization/build - ${error.message}`,
       );
       return false;
     }
@@ -190,12 +208,15 @@ class CodeForgeCommandHandlers {
       const containerName =
         dockerOperations.generateContainerName(workspacePath);
 
-      // Auto-initialize and build if needed
+      // Check initialization and build status
       const initialized = await this.ensureInitializedAndBuilt(
         workspacePath,
         containerName,
       );
       if (!initialized) {
+        vscode.window.showInformationMessage(
+          "CodeForge: Terminal launch cancelled - project initialization required",
+        );
         return;
       }
 
@@ -288,7 +309,7 @@ class CodeForgeCommandHandlers {
     try {
       const { path: workspacePath } = this.getWorkspaceInfo();
 
-      // Auto-initialize and build if needed
+      // Check initialization and build status
       const containerName =
         dockerOperations.generateContainerName(workspacePath);
       const initialized = await this.ensureInitializedAndBuilt(
@@ -296,6 +317,9 @@ class CodeForgeCommandHandlers {
         containerName,
       );
       if (!initialized) {
+        vscode.window.showInformationMessage(
+          "CodeForge: Fuzzing cancelled - project initialization and Docker build required",
+        );
         return;
       }
 
@@ -330,7 +354,7 @@ class CodeForgeCommandHandlers {
     try {
       const { path: workspacePath } = this.getWorkspaceInfo();
 
-      // Auto-initialize and build if needed
+      // Check initialization and build status
       const containerName =
         dockerOperations.generateContainerName(workspacePath);
       const initialized = await this.ensureInitializedAndBuilt(
@@ -338,6 +362,9 @@ class CodeForgeCommandHandlers {
         containerName,
       );
       if (!initialized) {
+        vscode.window.showInformationMessage(
+          "CodeForge: Build cancelled - project initialization and Docker build required",
+        );
         return;
       }
 
@@ -842,7 +869,7 @@ class CodeForgeCommandHandlers {
         );
       }
 
-      // Auto-initialize and build if needed
+      // Check initialization and build status
       const containerName =
         dockerOperations.generateContainerName(workspacePath);
       const initialized = await this.ensureInitializedAndBuilt(
@@ -850,6 +877,9 @@ class CodeForgeCommandHandlers {
         containerName,
       );
       if (!initialized) {
+        vscode.window.showInformationMessage(
+          "CodeForge: Crash analysis cancelled - project initialization and Docker build required",
+        );
         return;
       }
 
@@ -1008,11 +1038,119 @@ class CodeForgeCommandHandlers {
   }
 
   /**
+   * Handle project initialization with progress feedback
+   */
+  async handleInitializeProject() {
+    try {
+      const { path: workspacePath } = this.getWorkspaceInfo();
+
+      // Show progress notification with detailed feedback
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "CodeForge: Initializing project...",
+          cancellable: false,
+        },
+        async (progress, token) => {
+          // Progress callback to update the notification
+          const progressCallback = (message, percentage) => {
+            progress.report({
+              message: message,
+              increment: percentage - (progress._lastPercentage || 0),
+            });
+            progress._lastPercentage = percentage;
+          };
+
+          try {
+            // Initialize the project with progress reporting
+            const result =
+              await this.initializationService.initializeProjectWithProgress(
+                workspacePath,
+                progressCallback,
+              );
+
+            if (result.success) {
+              // Update webview state to reflect initialization
+              if (
+                this.webviewProvider &&
+                this.webviewProvider._checkInitializationStatus
+              ) {
+                setTimeout(
+                  () => this.webviewProvider._checkInitializationStatus(),
+                  100,
+                );
+              }
+
+              // Show success message
+              const createdComponents = result.details?.createdComponents || [];
+              if (createdComponents.length > 0) {
+                vscode.window.showInformationMessage(
+                  `CodeForge: Project initialized successfully! Created: ${createdComponents.join(", ")}`,
+                );
+              } else {
+                vscode.window.showInformationMessage(
+                  "CodeForge: Project was already initialized and is ready to use!",
+                );
+              }
+
+              this.safeOutputLog(
+                "CodeForge: Project initialization completed successfully",
+              );
+            } else {
+              throw new Error(result.error || "Unknown initialization error");
+            }
+          } catch (error) {
+            // Re-throw to be caught by outer try-catch
+            throw error;
+          }
+        },
+      );
+    } catch (error) {
+      this.safeOutputLog(`Initialization failed: ${error.message}`, true);
+
+      // Show detailed error message with helpful actions
+      const actions = ["View Logs", "Retry"];
+
+      // Add specific actions based on error type
+      if (error.message.toLowerCase().includes("permission")) {
+        actions.push("Check Permissions");
+      }
+      if (error.message.toLowerCase().includes("resource")) {
+        actions.push("Check Resources");
+      }
+
+      const selectedAction = await vscode.window.showErrorMessage(
+        `CodeForge: Failed to initialize project - ${error.message}`,
+        ...actions,
+      );
+
+      // Handle user actions
+      if (selectedAction === "View Logs") {
+        this.outputChannel.show();
+      } else if (selectedAction === "Retry") {
+        // Retry initialization
+        setTimeout(() => this.handleInitializeProject(), 1000);
+      } else if (selectedAction === "Check Permissions") {
+        vscode.window.showInformationMessage(
+          "Please ensure you have write permissions to the workspace directory and that no files are locked by other processes.",
+          { modal: true },
+        );
+      } else if (selectedAction === "Check Resources") {
+        vscode.window.showInformationMessage(
+          "Please ensure the CodeForge extension resources are available and not corrupted. Try reloading the window or reinstalling the extension.",
+          { modal: true },
+        );
+      }
+    }
+  }
+
+  /**
    * Update webview state if available
    */
   updateWebviewState() {
-    // Status detection functionality removed
-    // Webview no longer tracks project status
+    if (this.webviewProvider && this.webviewProvider.refresh) {
+      this.webviewProvider.refresh();
+    }
   }
 
   /**
@@ -1028,6 +1166,7 @@ class CodeForgeCommandHandlers {
       "codeforge.viewCrash": this.handleViewCrash.bind(this),
       "codeforge.analyzeCrash": this.handleAnalyzeCrash.bind(this),
       "codeforge.clearCrashes": this.handleClearCrashes.bind(this),
+      "codeforge.initializeProject": this.handleInitializeProject.bind(this),
     };
   }
 }

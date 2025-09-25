@@ -55,7 +55,7 @@ suite("CodeForge Extension Core Test Suite", () => {
 
       assert.ok(
         typeof myExtension.initializeCodeForgeOnActivation === "function",
-        "Extension should export initializeCodeForgeOnActivation function",
+        "Extension should export initializeCodeForgeOnActivation function (available but not called automatically)",
       );
 
       // Verify that ResourceManager is imported in the extension
@@ -121,8 +121,8 @@ suite("CodeForge Extension Core Test Suite", () => {
     });
   });
 
-  suite("Automatic Initialization", () => {
-    test("Should create .gitignore during initialization", async () => {
+  suite("Manual Initialization (Auto-initialization Removed)", () => {
+    test("Should create .gitignore during manual initialization", async () => {
       // Mock workspace folder
       const mockWorkspacePath = "/test/workspace";
       const workspaceFolderStub = sandbox
@@ -145,6 +145,7 @@ suite("CodeForge Extension Core Test Suite", () => {
         dumpDockerfile: sandbox
           .stub()
           .resolves(path.join(mockWorkspacePath, ".codeforge", "Dockerfile")),
+        dumpScripts: sandbox.stub().resolves([]),
       };
 
       // Replace the global resourceManager with our mock
@@ -161,11 +162,14 @@ suite("CodeForge Extension Core Test Suite", () => {
       fsAccessStub
         .withArgs(path.join(mockWorkspacePath, ".codeforge", "Dockerfile"))
         .rejects(new Error("ENOENT"));
+      fsAccessStub
+        .withArgs(path.join(mockWorkspacePath, ".codeforge", "scripts"))
+        .rejects(new Error("ENOENT"));
 
       fsMkdirStub.resolves();
 
       try {
-        // Call the initialization function
+        // Call the initialization function manually (not automatically)
         await myExtension.initializeCodeForgeOnActivation();
 
         // Verify ResourceManager methods were called
@@ -320,12 +324,62 @@ suite("CodeForge Extension Core Test Suite", () => {
       const fsAccessStub = sandbox.stub(fs, "access");
       const fsWriteFileStub = sandbox.stub(fs, "writeFile");
 
-      // Call the initialization function
+      // Call the initialization function manually
       await myExtension.initializeCodeForgeOnActivation();
 
       // Verify no file operations were attempted
       assert.ok(!fsAccessStub.called, "No file access should be attempted");
       assert.ok(!fsWriteFileStub.called, "No files should be written");
+    });
+
+    test("Extension activation should NOT automatically initialize", async () => {
+      // Mock workspace folder
+      const mockWorkspacePath = "/test/workspace";
+      const workspaceFolderStub = sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([
+          {
+            uri: { fsPath: mockWorkspacePath },
+          },
+        ]);
+
+      // Mock fs operations
+      const fsAccessStub = sandbox.stub(fs, "access");
+      const fsMkdirStub = sandbox.stub(fs, "mkdir");
+
+      // Mock ResourceManager methods
+      const mockResourceManager = {
+        dumpGitignore: sandbox.stub(),
+        dumpDockerfile: sandbox.stub(),
+        dumpScripts: sandbox.stub(),
+      };
+
+      // Replace the global resourceManager with our mock
+      const originalResourceManager = global.resourceManager;
+      global.resourceManager = mockResourceManager;
+
+      try {
+        // Verify that extension activation does NOT call initialization
+        // Since we removed the automatic call, these methods should NOT be called
+        // during normal extension activation
+
+        // Verify ResourceManager methods were NOT called automatically
+        assert.ok(
+          !mockResourceManager.dumpGitignore.called,
+          "ResourceManager.dumpGitignore should NOT be called automatically on activation",
+        );
+        assert.ok(
+          !mockResourceManager.dumpDockerfile.called,
+          "ResourceManager.dumpDockerfile should NOT be called automatically on activation",
+        );
+        assert.ok(
+          !mockResourceManager.dumpScripts.called,
+          "ResourceManager.dumpScripts should NOT be called automatically on activation",
+        );
+      } finally {
+        // Restore original resourceManager
+        global.resourceManager = originalResourceManager;
+      }
     });
   });
 

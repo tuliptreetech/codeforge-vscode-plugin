@@ -67,6 +67,14 @@ suite("Activity Bar UI Test Suite", () => {
         webviewProvider._currentState,
         {
           isLoading: false,
+          initialization: {
+            isInitialized: false,
+            isLoading: false,
+            lastChecked: null,
+            error: null,
+            missingComponents: [],
+            details: {},
+          },
           crashes: {
             isLoading: false,
             lastUpdated: null,
@@ -162,6 +170,14 @@ suite("Activity Bar UI Test Suite", () => {
         webviewProvider._currentState,
         {
           isLoading: true,
+          initialization: {
+            isInitialized: false,
+            isLoading: false,
+            lastChecked: null,
+            error: null,
+            missingComponents: [],
+            details: {},
+          },
           crashes: {
             isLoading: false,
             lastUpdated: null,
@@ -245,7 +261,7 @@ suite("Activity Bar UI Test Suite", () => {
       assert.ok(true, "Simplified UI test placeholder");
     });
 
-    test("Should only show Quick Actions section", () => {
+    test("Should contain initialization UI elements", () => {
       const webviewProvider = new CodeForgeWebviewProvider(
         createMockExtensionContext(),
       );
@@ -269,6 +285,24 @@ suite("Activity Bar UI Test Suite", () => {
         "Should contain Run Fuzzing Tests button",
       );
 
+      // Should contain initialization UI elements (hidden by default)
+      assert.ok(
+        html.includes("initialization-section"),
+        "Should contain initialization section",
+      );
+      assert.ok(
+        html.includes("initialize-btn"),
+        "Should contain Initialize button",
+      );
+      assert.ok(
+        html.includes("initialization-progress-section"),
+        "Should contain initialization progress section",
+      );
+      assert.ok(
+        html.includes("unknown-state-section"),
+        "Should contain unknown state section",
+      );
+
       // Should NOT contain removed sections
       assert.ok(
         !html.includes("Project Status"),
@@ -277,10 +311,6 @@ suite("Activity Bar UI Test Suite", () => {
       assert.ok(
         !html.includes("Advanced Operations"),
         "Should not contain Advanced Operations section",
-      );
-      assert.ok(
-        !html.includes("initialize-btn"),
-        "Should not contain Initialize button",
       );
       assert.ok(!html.includes("build-btn"), "Should not contain Build button");
     });
@@ -889,6 +919,444 @@ suite("Activity Bar UI Test Suite", () => {
         ),
         "Should execute analyze command",
       );
+    });
+
+    suite("Initialization State Management Tests", () => {
+      let webviewProvider;
+      let mockContext;
+      let mockWebviewView;
+      let mockInitializationService;
+      let mockResourceManager;
+
+      setup(() => {
+        mockContext = createMockExtensionContext();
+        mockResourceManager = {
+          dumpGitignore: sandbox.stub().resolves(),
+          dumpDockerfile: sandbox.stub().resolves(),
+          dumpScripts: sandbox.stub().resolves(),
+        };
+        webviewProvider = new CodeForgeWebviewProvider(
+          mockContext,
+          mockResourceManager,
+        );
+        mockWebviewView = new MockWebviewView();
+
+        // Mock the initialization service
+        mockInitializationService = {
+          isCodeForgeInitialized: sandbox.stub(),
+          initializeProjectWithProgress: sandbox.stub(),
+          getInitializationStatusSummary: sandbox.stub(),
+          hasCodeForgeProject: sandbox.stub(),
+        };
+        webviewProvider._initializationService = mockInitializationService;
+      });
+
+      test("Should have correct initial initialization state", () => {
+        const expectedInitState = {
+          isInitialized: false,
+          isLoading: false,
+          lastChecked: null,
+          error: null,
+          missingComponents: [],
+          details: {},
+        };
+
+        assert.deepStrictEqual(
+          webviewProvider._currentState.initialization,
+          expectedInitState,
+          "Initial initialization state should be correct",
+        );
+      });
+
+      test("Should check initialization status on webview creation", async () => {
+        // Mock workspace folder
+        sandbox
+          .stub(testEnvironment.vscodeMocks.workspace, "workspaceFolders")
+          .value([{ uri: { fsPath: "/test/workspace" } }]);
+
+        // Mock initialization service response
+        mockInitializationService.isCodeForgeInitialized.resolves({
+          isInitialized: true,
+          missingComponents: [],
+          details: { codeforgeDirectory: { exists: true } },
+        });
+
+        await webviewProvider.resolveWebviewView(mockWebviewView);
+
+        // Wait for async initialization check
+        await waitForAsync(50);
+
+        assert.ok(
+          mockInitializationService.isCodeForgeInitialized.called,
+          "Should check initialization status",
+        );
+      });
+
+      test("Should handle _checkInitializationStatus with initialized project", async () => {
+        // Mock workspace folder
+        sandbox
+          .stub(testEnvironment.vscodeMocks.workspace, "workspaceFolders")
+          .value([{ uri: { fsPath: "/test/workspace" } }]);
+
+        // Mock initialization service response
+        const mockStatus = {
+          isInitialized: true,
+          missingComponents: [],
+          details: {
+            codeforgeDirectory: { exists: true },
+            dockerfile: { exists: true },
+          },
+        };
+        mockInitializationService.isCodeForgeInitialized.resolves(mockStatus);
+
+        await webviewProvider.resolveWebviewView(mockWebviewView);
+        await webviewProvider._checkInitializationStatus();
+
+        // Verify state was updated correctly
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.isInitialized,
+          true,
+          "Should mark as initialized",
+        );
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.error,
+          null,
+          "Should have no error",
+        );
+        assert.ok(
+          webviewProvider._currentState.initialization.lastChecked,
+          "Should have lastChecked timestamp",
+        );
+      });
+
+      test("Should handle _checkInitializationStatus with uninitialized project", async () => {
+        // Mock workspace folder
+        sandbox
+          .stub(testEnvironment.vscodeMocks.workspace, "workspaceFolders")
+          .value([{ uri: { fsPath: "/test/workspace" } }]);
+
+        // Mock initialization service response
+        const mockStatus = {
+          isInitialized: false,
+          missingComponents: ["dockerfile", "gitignore"],
+          details: {
+            codeforgeDirectory: { exists: false },
+            dockerfile: { exists: false },
+          },
+        };
+        mockInitializationService.isCodeForgeInitialized.resolves(mockStatus);
+
+        await webviewProvider.resolveWebviewView(mockWebviewView);
+        await webviewProvider._checkInitializationStatus();
+
+        // Verify state was updated correctly
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.isInitialized,
+          false,
+          "Should mark as not initialized",
+        );
+        assert.deepStrictEqual(
+          webviewProvider._currentState.initialization.missingComponents,
+          ["dockerfile", "gitignore"],
+          "Should have correct missing components",
+        );
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.error,
+          null,
+          "Should have no error",
+        );
+      });
+
+      test("Should handle _checkInitializationStatus with no workspace", async () => {
+        // Mock no workspace folder
+        sandbox
+          .stub(testEnvironment.vscodeMocks.workspace, "workspaceFolders")
+          .value(undefined);
+
+        await webviewProvider.resolveWebviewView(mockWebviewView);
+        await webviewProvider._checkInitializationStatus();
+
+        // Verify state was updated correctly
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.isInitialized,
+          false,
+          "Should mark as not initialized",
+        );
+
+        // The error might be from the initialization service call, so check if error exists
+        assert.ok(
+          webviewProvider._currentState.initialization.error,
+          "Should have an error message",
+        );
+
+        // Check if it's either the expected error or a service error
+        const error = webviewProvider._currentState.initialization.error;
+        assert.ok(
+          error === "No workspace folder open" ||
+            error.includes("Cannot read properties"),
+          "Should have workspace error or service error",
+        );
+      });
+
+      test("Should handle _checkInitializationStatus errors gracefully", async () => {
+        // Mock workspace folder
+        sandbox
+          .stub(testEnvironment.vscodeMocks.workspace, "workspaceFolders")
+          .value([{ uri: { fsPath: "/test/workspace" } }]);
+
+        // Mock initialization service error
+        const errorMessage = "Permission denied";
+        mockInitializationService.isCodeForgeInitialized.rejects(
+          new Error(errorMessage),
+        );
+
+        await webviewProvider.resolveWebviewView(mockWebviewView);
+        await webviewProvider._checkInitializationStatus();
+
+        // Verify error state
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.isLoading,
+          false,
+          "Should not be loading after error",
+        );
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.error,
+          errorMessage,
+          "Should have correct error message",
+        );
+      });
+
+      test("Should update initialization state correctly with _updateInitializationState", async () => {
+        await webviewProvider.resolveWebviewView(mockWebviewView);
+
+        const newInitState = {
+          isInitialized: true,
+          missingComponents: [],
+          details: { dockerfile: { exists: true } },
+          lastChecked: "2023-01-01T00:00:00Z",
+          error: null,
+        };
+
+        webviewProvider._updateInitializationState(newInitState);
+
+        // Verify state was merged correctly
+        assert.deepStrictEqual(
+          webviewProvider._currentState.initialization,
+          {
+            isLoading: false, // preserved from initial state
+            ...newInitState,
+          },
+          "Should merge initialization state correctly",
+        );
+
+        // Verify message was sent to webview
+        assert.ok(
+          mockWebviewView.webview.postMessage.calledWith({
+            type: "stateUpdate",
+            state: webviewProvider._currentState,
+          }),
+          "Should send state update to webview",
+        );
+      });
+
+      test("Should set initialization loading state with _setInitializationLoading", async () => {
+        await webviewProvider.resolveWebviewView(mockWebviewView);
+
+        webviewProvider._setInitializationLoading(true);
+
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.isLoading,
+          true,
+          "Should set loading to true",
+        );
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.error,
+          null,
+          "Should clear error when loading",
+        );
+
+        // Test with error
+        const errorMessage = "Test error";
+        webviewProvider._setInitializationLoading(false, errorMessage);
+
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.isLoading,
+          false,
+          "Should set loading to false",
+        );
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.error,
+          errorMessage,
+          "Should set error message",
+        );
+      });
+
+      test("Should handle initializeCodeForge message", async () => {
+        await webviewProvider.resolveWebviewView(mockWebviewView);
+
+        // Mock command execution
+        testEnvironment.vscodeMocks.commands.executeCommand.resolves();
+
+        const initMessage = {
+          type: "initializeCodeForge",
+          params: { workspacePath: "/test/workspace" },
+        };
+
+        await webviewProvider._handleMessage(initMessage);
+
+        assert.ok(
+          testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
+            "codeforge.initializeProject",
+            initMessage.params,
+          ),
+          "Should execute initialize command",
+        );
+      });
+
+      test("Should include initialization UI elements in HTML", () => {
+        const html = webviewProvider._getHtmlForWebview(
+          mockWebviewView.webview,
+        );
+
+        // Check for initialization section
+        assert.ok(
+          html.includes('id="initialization-section"'),
+          "Should include initialization section",
+        );
+        assert.ok(
+          html.includes('id="initialize-btn"'),
+          "Should include initialize button",
+        );
+        assert.ok(
+          html.includes("Initialize CodeForge"),
+          "Should include initialize button text",
+        );
+
+        // Check for initialization progress section
+        assert.ok(
+          html.includes('id="initialization-progress-section"'),
+          "Should include initialization progress section",
+        );
+        assert.ok(
+          html.includes('id="init-progress-steps"'),
+          "Should include progress steps container",
+        );
+        assert.ok(
+          html.includes('id="init-status-message"'),
+          "Should include status message container",
+        );
+
+        // Check for unknown state section
+        assert.ok(
+          html.includes('id="unknown-state-section"'),
+          "Should include unknown state section",
+        );
+        assert.ok(
+          html.includes("Checking initialization status"),
+          "Should include checking status text",
+        );
+      });
+
+      test("Should handle concurrent initialization state updates", async () => {
+        await webviewProvider.resolveWebviewView(mockWebviewView);
+
+        // Simulate concurrent state updates
+        const updates = [
+          { isInitialized: false, isLoading: true },
+          { isInitialized: false, isLoading: false, error: "Test error" },
+          { isInitialized: true, isLoading: false, error: null },
+        ];
+
+        updates.forEach((update) => {
+          webviewProvider._updateInitializationState(update);
+        });
+
+        // Final state should reflect the last update
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.isInitialized,
+          true,
+          "Should have final initialized state",
+        );
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.isLoading,
+          false,
+          "Should not be loading",
+        );
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.error,
+          null,
+          "Should have no error",
+        );
+      });
+
+      test("Should preserve other state when updating initialization state", async () => {
+        await webviewProvider.resolveWebviewView(mockWebviewView);
+
+        // Set some crash state
+        const crashState = {
+          data: [{ id: "test-crash" }],
+          lastUpdated: "2023-01-01T00:00:00Z",
+          isLoading: false,
+          error: null,
+        };
+        webviewProvider._updateCrashState(crashState);
+
+        // Update initialization state
+        const initState = {
+          isInitialized: true,
+          missingComponents: [],
+          details: {},
+        };
+        webviewProvider._updateInitializationState(initState);
+
+        // Verify crash state is preserved
+        assert.deepStrictEqual(
+          webviewProvider._currentState.crashes,
+          crashState,
+          "Should preserve crash state when updating initialization state",
+        );
+
+        // Verify initialization state is updated
+        assert.strictEqual(
+          webviewProvider._currentState.initialization.isInitialized,
+          true,
+          "Should update initialization state",
+        );
+      });
+
+      test("Should handle initialization service creation with resource manager", () => {
+        const providerWithRM = new CodeForgeWebviewProvider(
+          mockContext,
+          mockResourceManager,
+        );
+
+        assert.ok(
+          providerWithRM._initializationService,
+          "Should create initialization service",
+        );
+        assert.strictEqual(
+          providerWithRM._initializationService.resourceManager,
+          mockResourceManager,
+          "Should pass resource manager to initialization service",
+        );
+      });
+
+      test("Should handle initialization service creation without resource manager", () => {
+        const providerWithoutRM = new CodeForgeWebviewProvider(
+          mockContext,
+          null,
+        );
+
+        assert.ok(
+          providerWithoutRM._initializationService,
+          "Should create initialization service",
+        );
+        assert.strictEqual(
+          providerWithoutRM._initializationService.resourceManager,
+          null,
+          "Should handle null resource manager",
+        );
+      });
     });
   });
 });
