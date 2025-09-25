@@ -1,4 +1,5 @@
 const fs = require("fs").promises;
+const fsSync = require("fs");
 const path = require("path");
 const vscode = require("vscode");
 
@@ -14,6 +15,7 @@ class ResourceManager {
     this.extensionPath = extensionPath;
     this.resourcesPath = path.join(extensionPath, "resources");
     this.templatesPath = path.join(this.resourcesPath, "templates");
+    this.scriptsPath = path.join(this.resourcesPath, "scripts");
   }
 
   /**
@@ -91,6 +93,55 @@ class ResourceManager {
       return await this.dumpResource("templates/.gitignore", targetDir);
     } catch (error) {
       throw new Error(`Failed to dump .gitignore: ${error.message}`);
+    }
+  }
+
+  /**
+   * Dumps a single script file to a target directory with executable permissions
+   * @param {string} scriptName - Name of the script file (e.g., 'build-fuzz-tests.sh')
+   * @param {string} targetDir - Target directory to dump the script to
+   * @returns {Promise<string>} The full path to the dumped script file
+   * @throws {Error} If the script cannot be dumped
+   */
+  async dumpScript(scriptName, targetDir) {
+    try {
+      const scriptPath = `scripts/${scriptName}`;
+      const targetPath = await this.dumpResource(scriptPath, targetDir);
+
+      // Set executable permissions (equivalent to chmod +x)
+      fsSync.chmodSync(targetPath, 0o755);
+
+      return targetPath;
+    } catch (error) {
+      throw new Error(
+        `Failed to dump script '${scriptName}': ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Dumps all script files to a target directory with executable permissions
+   * @param {string} targetDir - Target directory to dump the scripts to
+   * @returns {Promise<string[]>} Array of full paths to the dumped script files
+   * @throws {Error} If any script cannot be dumped
+   */
+  async dumpScripts(targetDir) {
+    try {
+      const scriptFiles = [
+        "build-fuzz-tests.sh",
+        "find-fuzz-tests.sh",
+        "run-fuzz-tests.sh",
+      ];
+      const dumpedPaths = [];
+
+      for (const scriptFile of scriptFiles) {
+        const dumpedPath = await this.dumpScript(scriptFile, targetDir);
+        dumpedPaths.push(dumpedPath);
+      }
+
+      return dumpedPaths;
+    } catch (error) {
+      throw new Error(`Failed to dump scripts: ${error.message}`);
     }
   }
 
