@@ -5,22 +5,29 @@ set -euo pipefail
 # This script builds fuzz tests for the project and copies them to a central location.
 
 scripts_directory="$(dirname "$(realpath "$0")")"
-codeforge_directory="$(realpath "$codeforge_directory/..")"
+codeforge_directory="$(realpath "$scripts_directory/..")"
 root_directory="$(realpath "$codeforge_directory/..")"
 fuzzing_directory="$codeforge_directory/fuzzing"
 
 cd "$root_directory"
 
-set +e
-output=$($scripts_directory/build-fuzz-tests.sh)
-if [ $? -ne 0 ]; then
-    echo "[!] Failed to build fuzz tests"
-    echo "$output"
-    exit 1
+if [ $# -gt 0 ]; then
+    fuzzers="$1"
+else 
+    fuzzers=$($scripts_directory/find-fuzz-tests.sh -q)
 fi
-set -e
 
-fuzzers=$($scripts_directory/find-fuzz-tests.sh -q)
+echo "[+] Building fuzzers"
+for f in $fuzzers; do
+    set +e
+    output=$($scripts_directory/build-fuzz-tests.sh $f)
+    if [ $? -ne 0 ]; then
+        echo "[!] Failed to build fuzz tests"
+        echo "$output"
+        exit 1
+    fi
+    set -e
+done
 
 echo "[+] Running fuzzers"
 for f in $fuzzers; do

@@ -31,16 +31,21 @@ function safeFuzzingLog(terminal, message, show = false) {
 }
 
 /**
- * Discovers CMake presets in the workspace
- * Replicates the functionality of: cmake . --list-presets | tail +2 | awk -F'"' '{print $2}'
+ * Discovers fuzz tests using the find-fuzz-tests.sh script
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {Object} terminal - Terminal instance for logging
- * @returns {Promise<string[]>} Array of preset names
+ * @param {boolean} cleanCache - Whether to clean the cache (-c flag)
+ * @returns {Promise<Array>} Array of objects with {preset, fuzzer} properties
  */
-async function discoverCMakePresets(workspacePath, containerName, terminal) {
+async function discoverFuzzTestsWithScript(
+  workspacePath,
+  containerName,
+  terminal,
+  cleanCache = false,
+) {
   return new Promise((resolve, reject) => {
-    safeFuzzingLog(terminal, "Executing cmake --list-presets in container...");
+    safeFuzzingLog(terminal, "Discovering fuzz tests...");
 
     const options = {
       removeAfterRun: true,
@@ -48,10 +53,17 @@ async function discoverCMakePresets(workspacePath, containerName, terminal) {
       dockerCommand: "docker",
     };
 
+    // Build the script command with appropriate flags
+    const flags = ["-q"]; // Always use quiet mode for cleaner output
+    if (cleanCache) {
+      flags.push("-c");
+    }
+    const scriptCommand = `.codeforge/scripts/find-fuzz-tests.sh ${flags.join(" ")}`;
+
     const dockerProcess = dockerOperations.runDockerCommandWithOutput(
       workspacePath,
       containerName,
-      "cmake . --list-presets",
+      scriptCommand,
       "/bin/bash",
       options,
     );
@@ -69,53 +81,243 @@ async function discoverCMakePresets(workspacePath, containerName, terminal) {
 
     dockerProcess.on("close", (code) => {
       if (code !== 0) {
-        const error = new Error(
-          `CMake preset discovery failed with exit code ${code}: ${stderr}`,
+        // Display formatted error in terminal with full context
+        if (terminal && typeof terminal.writeRaw === "function") {
+          terminal.writeRaw(
+            `\r\n\x1b[31m╭─ SCRIPT DISCOVERY FAILED ─╮\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(`\x1b[31m│ Exit Code: ${code}\x1b[0m\r\n`, null);
+          terminal.writeRaw(
+            `\x1b[31m│ Command: ${scriptCommand}\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[31m╰─────────────────────────────╯\x1b[0m\r\n`,
+            null,
+          );
+
+          // Display script output if available
+          if (stdout.trim()) {
+            terminal.writeRaw(`\r\n\x1b[33m📋 Script Output:\x1b[0m\r\n`, null);
+            terminal.writeRaw(`\x1b[37m${stdout}\x1b[0m\r\n`, null);
+          }
+
+          if (stderr.trim()) {
+            terminal.writeRaw(`\r\n\x1b[33m📋 Error Output:\x1b[0m\r\n`, null);
+            terminal.writeRaw(`\x1b[31m${stderr}\x1b[0m\r\n`, null);
+          }
+
+          // Provide troubleshooting guidance
+          terminal.writeRaw(`\r\n\x1b[93m💡 Troubleshooting:\x1b[0m\r\n`, null);
+          terminal.writeRaw(
+            `\x1b[93m• Check CMake configuration and presets\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[93m• Verify build environment setup\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[93m• Ensure script permissions and availability\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[93m• Review project structure and dependencies\x1b[0m\r\n`,
+            null,
+          );
+        }
+
+        // Also use safeFuzzingLog for compatibility with different terminal types
+        safeFuzzingLog(
+          terminal,
+          `❌ Script execution failed: ${scriptCommand}`,
+          true,
         );
-        // Silently ignore preset discovery errors - log for debugging only
+        safeFuzzingLog(terminal, `Exit code: ${code}`);
+
+        if (stderr.trim()) {
+          safeFuzzingLog(terminal, `Error output: ${stderr.trim()}`);
+        }
+
+        safeFuzzingLog(
+          terminal,
+          "This error occurred during fuzz test discovery. Please check CMake configuration, build environment, and script availability.",
+        );
+
+        const error = new Error(
+          `Fuzz test discovery script failed with exit code ${code}: ${stderr}`,
+        );
+
+        // Log for debugging but don't fail the entire workflow
         console.log(
-          `CodeForge Debug: CMake preset discovery failed: ${error.message}`,
+          `CodeForge Debug: Fuzz test discovery script failed: ${error.message}`,
         );
         resolve([]); // Return empty array instead of rejecting
         return;
       }
 
       try {
-        // Parse the output to extract preset names
-        // Skip the first line (header) and extract quoted preset names
-        const lines = stdout.trim().split("\n");
-        const presets = [];
+        // Parse the script output format: "preset:fuzzer_name" (one per line)
+        const lines = stdout
+          .trim()
+          .split("\n")
+          .filter((line) => line.trim());
+        const fuzzTests = [];
 
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i].trim();
-          // Look for quoted preset names using regex
-          const match = line.match(/"([^"]+)"/);
-          if (match && match[1]) {
-            presets.push(match[1]);
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (trimmedLine && trimmedLine.includes(":")) {
+            const [preset, fuzzer] = trimmedLine.split(":", 2);
+            if (preset && fuzzer) {
+              fuzzTests.push({
+                preset: preset.trim(),
+                fuzzer: fuzzer.trim(),
+              });
+            }
           }
         }
 
+        safeFuzzingLog(terminal, `Discovered ${fuzzTests.length} fuzz test(s)`);
+
+        // Log the discovered tests for debugging
+        if (fuzzTests.length > 0) {
+          const summary = fuzzTests
+            .map((ft) => `${ft.preset}:${ft.fuzzer}`)
+            .join(", ");
+          safeFuzzingLog(terminal, `Found: ${summary}`);
+        }
+
+        resolve(fuzzTests);
+      } catch (parseError) {
+        // Display formatted parse error in terminal
+        if (terminal && typeof terminal.writeRaw === "function") {
+          terminal.writeRaw(
+            `\r\n\x1b[31m╭─ SCRIPT OUTPUT PARSE ERROR ─╮\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[31m│ Failed to parse script output\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[31m│ Command: ${scriptCommand}\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[31m╰─────────────────────────────────╯\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(`\r\n\x1b[31m❌ Parse Error:\x1b[0m\r\n`, null);
+          terminal.writeRaw(`\x1b[31m${parseError.message}\x1b[0m\r\n`, null);
+
+          // Show the raw output that failed to parse
+          if (stdout.trim()) {
+            terminal.writeRaw(
+              `\r\n\x1b[33m📋 Raw Script Output:\x1b[0m\r\n`,
+              null,
+            );
+            terminal.writeRaw(`\x1b[37m${stdout}\x1b[0m\r\n`, null);
+          }
+
+          // Provide troubleshooting guidance for parse errors
+          terminal.writeRaw(`\r\n\x1b[93m💡 Troubleshooting:\x1b[0m\r\n`, null);
+          terminal.writeRaw(
+            `\x1b[93m• Check script output format (expected: preset:fuzzer)\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[93m• Verify script is producing valid output\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[93m• Review script execution and dependencies\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[93m• Check for unexpected characters or formatting\x1b[0m\r\n`,
+            null,
+          );
+        }
+
+        // Also use safeFuzzingLog for compatibility
         safeFuzzingLog(
           terminal,
-          `Discovered ${presets.length} preset(s): ${presets.join(", ")}`,
+          `❌ Failed to parse script output: ${parseError.message}`,
+          true,
         );
-        resolve(presets);
-      } catch (parseError) {
+        safeFuzzingLog(
+          terminal,
+          "This error occurred while parsing script output. Please check script output format and execution.",
+        );
+
         const error = new Error(
-          `Failed to parse CMake preset output: ${parseError.message}`,
+          `Failed to parse script output: ${parseError.message}`,
         );
-        safeFuzzingLog(terminal, `Parse error: ${error.message}`);
         reject(error);
       }
     });
 
     dockerProcess.on("error", (error) => {
-      const wrappedError = new Error(
-        `Failed to execute CMake preset discovery: ${error.message}`,
+      // Display formatted process error in terminal
+      if (terminal && typeof terminal.writeRaw === "function") {
+        terminal.writeRaw(
+          `\r\n\x1b[31m╭─ SCRIPT PROCESS ERROR ─╮\x1b[0m\r\n`,
+          null,
+        );
+        terminal.writeRaw(
+          `\x1b[31m│ Failed to execute discovery script\x1b[0m\r\n`,
+          null,
+        );
+        terminal.writeRaw(
+          `\x1b[31m│ Command: ${scriptCommand}\x1b[0m\r\n`,
+          null,
+        );
+        terminal.writeRaw(
+          `\x1b[31m╰─────────────────────────────╯\x1b[0m\r\n`,
+          null,
+        );
+        terminal.writeRaw(`\r\n\x1b[31m❌ Process Error:\x1b[0m\r\n`, null);
+        terminal.writeRaw(`\x1b[31m${error.message}\x1b[0m\r\n`, null);
+
+        // Provide troubleshooting guidance for process errors
+        terminal.writeRaw(`\r\n\x1b[93m💡 Troubleshooting:\x1b[0m\r\n`, null);
+        terminal.writeRaw(
+          `\x1b[93m• Check Docker daemon is running\x1b[0m\r\n`,
+          null,
+        );
+        terminal.writeRaw(
+          `\x1b[93m• Verify container and image availability\x1b[0m\r\n`,
+          null,
+        );
+        terminal.writeRaw(
+          `\x1b[93m• Ensure script file exists and is executable\x1b[0m\r\n`,
+          null,
+        );
+        terminal.writeRaw(
+          `\x1b[93m• Review Docker permissions and configuration\x1b[0m\r\n`,
+          null,
+        );
+      }
+
+      // Also use safeFuzzingLog for compatibility
+      safeFuzzingLog(
+        terminal,
+        `❌ Failed to execute discovery script: ${error.message}`,
+        true,
       );
-      // Silently ignore preset discovery errors - log for debugging only
+      safeFuzzingLog(
+        terminal,
+        "This error occurred during script execution. Please check Docker daemon, container availability, and script permissions.",
+      );
+
+      const wrappedError = new Error(
+        `Failed to execute fuzz test discovery script: ${error.message}`,
+      );
+
+      // Log for debugging but don't fail the entire workflow
       console.log(
-        `CodeForge Debug: Docker execution error during preset discovery: ${wrappedError.message}`,
+        `CodeForge Debug: Docker execution error during script discovery: ${wrappedError.message}`,
       );
       resolve([]); // Return empty array instead of rejecting
     });
@@ -123,287 +325,37 @@ async function discoverCMakePresets(workspacePath, containerName, terminal) {
 }
 
 /**
- * Detects the CMake generator used in the build directory
+ * Legacy function for backward compatibility
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
- * @param {string} buildDir - Build directory path
  * @param {Object} terminal - Terminal instance for logging
- * @returns {Promise<string>} Generator type ('ninja' or 'make')
+ * @returns {Promise<string[]>} Array of preset names
  */
-async function detectCMakeGenerator(
-  workspacePath,
-  containerName,
-  buildDir,
-  terminal,
-) {
-  return new Promise((resolve, reject) => {
-    safeFuzzingLog(terminal, `Detecting CMake generator in ${buildDir}...`);
+async function discoverCMakePresets(workspacePath, containerName, terminal) {
+  const fuzzTests = await discoverFuzzTestsWithScript(
+    workspacePath,
+    containerName,
+    terminal,
+  );
 
-    const options = {
-      removeAfterRun: true,
-      mountWorkspace: true,
-      dockerCommand: "docker",
-    };
+  // Extract unique presets for backward compatibility
+  const presets = [...new Set(fuzzTests.map((ft) => ft.preset))];
 
-    // Check for Ninja build files first
-    const checkCommand = `if [ -f "${buildDir}/build.ninja" ]; then echo "ninja"; elif [ -f "${buildDir}/Makefile" ]; then echo "make"; else echo "unknown"; fi`;
+  safeFuzzingLog(
+    terminal,
+    `Extracted ${presets.length} unique preset(s): ${presets.join(", ")}`,
+  );
 
-    const checkProcess = dockerOperations.runDockerCommandWithOutput(
-      workspacePath,
-      containerName,
-      checkCommand,
-      "/bin/bash",
-      options,
-    );
-
-    let stdout = "";
-    let stderr = "";
-
-    checkProcess.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    checkProcess.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    checkProcess.on("close", (code) => {
-      if (code !== 0) {
-        const error = new Error(`Generator detection failed: ${stderr}`);
-        // Silently ignore generator detection errors - log for debugging only
-        console.log(
-          `CodeForge Debug: Generator detection failed: ${error.message}`,
-        );
-        resolve("make"); // Default to make generator
-        return;
-      }
-
-      const generator = stdout.trim().toLowerCase();
-      safeFuzzingLog(terminal, `Detected generator: ${generator}`);
-      resolve(generator);
-    });
-
-    checkProcess.on("error", (error) => {
-      const wrappedError = new Error(
-        `Failed to detect generator: ${error.message}`,
-      );
-      // Silently ignore generator detection errors - log for debugging only
-      console.log(
-        `CodeForge Debug: Generator detection error: ${wrappedError.message}`,
-      );
-      resolve("make"); // Default to make generator
-    });
-  });
+  return presets;
 }
 
 /**
- * Discovers fuzz targets using Make generator
- * @param {string} workspacePath - Path to the workspace
- * @param {string} containerName - Docker container name
- * @param {string} buildDir - Build directory path
- * @param {Object} terminal - Terminal instance for logging
- * @returns {Promise<string[]>} Array of fuzz target names
- */
-async function discoverFuzzTargetsMake(
-  workspacePath,
-  containerName,
-  buildDir,
-  terminal,
-) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      removeAfterRun: true,
-      mountWorkspace: true,
-      dockerCommand: "docker",
-    };
-
-    const helpCommand = `cmake --build "${buildDir}" --target help`;
-
-    const helpProcess = dockerOperations.runDockerCommandWithOutput(
-      workspacePath,
-      containerName,
-      helpCommand,
-      "/bin/bash",
-      options,
-    );
-
-    let helpStdout = "";
-    let helpStderr = "";
-
-    helpProcess.stdout.on("data", (data) => {
-      helpStdout += data.toString();
-    });
-
-    helpProcess.stderr.on("data", (data) => {
-      helpStderr += data.toString();
-    });
-
-    helpProcess.on("close", (helpCode) => {
-      if (helpCode !== 0) {
-        const error = new Error(`CMake help failed: ${helpStderr}`);
-        // Silently ignore Make target discovery errors - log for debugging only
-        console.log(
-          `CodeForge Debug: Make help command failed: ${error.message}`,
-        );
-        resolve([]); // Return empty array instead of rejecting
-        return;
-      }
-
-      try {
-        // Parse the help output to find fuzz targets (Make format)
-        const lines = helpStdout.split("\n");
-        const fuzzTargets = [];
-
-        for (const line of lines) {
-          // Look for lines containing ": phony" (indicating a target)
-          if (line.includes(": phony")) {
-            // Extract the target name (everything before the first colon)
-            const targetMatch = line.match(/^([^:]+):/);
-            if (targetMatch && targetMatch[1]) {
-              const targetName = targetMatch[1].trim();
-              // Check if it matches the fuzz target pattern
-              if (/^codeforge-.*-fuzz$/.test(targetName)) {
-                fuzzTargets.push(targetName);
-              }
-            }
-          }
-        }
-
-        safeFuzzingLog(
-          terminal,
-          `Found ${fuzzTargets.length} fuzz target(s) using Make: ${fuzzTargets.join(", ")}`,
-        );
-        resolve(fuzzTargets);
-      } catch (parseError) {
-        const error = new Error(
-          `Failed to parse Make help output: ${parseError.message}`,
-        );
-        safeFuzzingLog(terminal, `Make parse error: ${error.message}`);
-        reject(error);
-      }
-    });
-
-    helpProcess.on("error", (error) => {
-      const wrappedError = new Error(
-        `Failed to execute Make help: ${error.message}`,
-      );
-      // Silently ignore Make target discovery errors - log for debugging only
-      console.log(
-        `CodeForge Debug: Make execution error: ${wrappedError.message}`,
-      );
-      resolve([]); // Return empty array instead of rejecting
-    });
-  });
-}
-
-/**
- * Discovers fuzz targets using Ninja generator
- * @param {string} workspacePath - Path to the workspace
- * @param {string} containerName - Docker container name
- * @param {string} buildDir - Build directory path
- * @param {Object} terminal - Terminal instance for logging
- * @returns {Promise<string[]>} Array of fuzz target names
- */
-async function discoverFuzzTargetsNinja(
-  workspacePath,
-  containerName,
-  buildDir,
-  terminal,
-) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      removeAfterRun: true,
-      mountWorkspace: true,
-      dockerCommand: "docker",
-    };
-
-    const ninjaCommand = `ninja -C "${buildDir}" -t targets all`;
-
-    const ninjaProcess = dockerOperations.runDockerCommandWithOutput(
-      workspacePath,
-      containerName,
-      ninjaCommand,
-      "/bin/bash",
-      options,
-    );
-
-    let ninjaStdout = "";
-    let ninjaStderr = "";
-
-    ninjaProcess.stdout.on("data", (data) => {
-      ninjaStdout += data.toString();
-    });
-
-    ninjaProcess.stderr.on("data", (data) => {
-      ninjaStderr += data.toString();
-    });
-
-    ninjaProcess.on("close", (ninjaCode) => {
-      if (ninjaCode !== 0) {
-        const error = new Error(`Ninja targets failed: ${ninjaStderr}`);
-        // Silently ignore Ninja target discovery errors - log for debugging only
-        console.log(
-          `CodeForge Debug: Ninja targets command failed: ${error.message}`,
-        );
-        resolve([]); // Return empty array instead of rejecting
-        return;
-      }
-
-      try {
-        // Parse the ninja output to find fuzz targets (Ninja format)
-        const lines = ninjaStdout.split("\n");
-        const fuzzTargets = [];
-
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (trimmedLine) {
-            // Ninja output format: "target: rule"
-            // We want just the target name before the colon
-            const targetMatch = trimmedLine.match(/^([^:]+):/);
-            if (targetMatch && targetMatch[1]) {
-              const targetName = targetMatch[1].trim();
-              // Check if it matches the fuzz target pattern
-              if (/^codeforge-.*-fuzz$/.test(targetName)) {
-                fuzzTargets.push(targetName);
-              }
-            }
-          }
-        }
-
-        safeFuzzingLog(
-          terminal,
-          `Found ${fuzzTargets.length} fuzz target(s) using Ninja: ${fuzzTargets.join(", ")}`,
-        );
-        resolve(fuzzTargets);
-      } catch (parseError) {
-        const error = new Error(
-          `Failed to parse Ninja targets output: ${parseError.message}`,
-        );
-        safeFuzzingLog(terminal, `Ninja parse error: ${error.message}`);
-        reject(error);
-      }
-    });
-
-    ninjaProcess.on("error", (error) => {
-      const wrappedError = new Error(
-        `Failed to execute Ninja targets: ${error.message}`,
-      );
-      // Silently ignore Ninja target discovery errors - log for debugging only
-      console.log(
-        `CodeForge Debug: Ninja execution error: ${wrappedError.message}`,
-      );
-      resolve([]); // Return empty array instead of rejecting
-    });
-  });
-}
-
-/**
- * Discovers fuzz targets for a specific preset
- * Supports both Make and Ninja generators
+ * Legacy function for backward compatibility
+ * Returns fuzz targets for a specific preset by filtering results
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string} preset - CMake preset name
- * @param {string} buildDir - Build directory path
+ * @param {string} buildDir - Build directory path (unused)
  * @param {Object} terminal - Terminal instance for logging
  * @returns {Promise<string[]>} Array of fuzz target names
  */
@@ -420,105 +372,26 @@ async function discoverFuzzTargets(
       `Discovering fuzz targets for preset ${preset}...`,
     );
 
-    const options = {
-      removeAfterRun: true,
-      mountWorkspace: true,
-      dockerCommand: "docker",
-    };
-
-    // First configure the preset
-    const configureCommand = `cmake --preset "${preset}" -S . -B "${buildDir}"`;
-
-    await new Promise((resolve, reject) => {
-      const configureProcess = dockerOperations.runDockerCommandWithOutput(
-        workspacePath,
-        containerName,
-        configureCommand,
-        "/bin/bash",
-        options,
-      );
-
-      let configureStderr = "";
-
-      configureProcess.stderr.on("data", (data) => {
-        configureStderr += data.toString();
-      });
-
-      configureProcess.on("close", (configureCode) => {
-        if (configureCode !== 0) {
-          const error = new Error(
-            `CMake configure failed for preset ${preset}: ${configureStderr}`,
-          );
-          // Silently ignore configure errors during target discovery - log for debugging only
-          console.log(
-            `CodeForge Debug: CMake configure failed for preset ${preset}: ${error.message}`,
-          );
-          reject(error); // Still reject here as this will be caught by the outer try-catch
-          return;
-        }
-
-        safeFuzzingLog(terminal, `Successfully configured preset ${preset}`);
-        resolve();
-      });
-
-      configureProcess.on("error", (error) => {
-        const wrappedError = new Error(
-          `Failed to execute CMake configure: ${error.message}`,
-        );
-        // Silently ignore configure errors during target discovery - log for debugging only
-        console.log(
-          `CodeForge Debug: Docker execution error during configure: ${wrappedError.message}`,
-        );
-        reject(wrappedError); // Still reject here as this will be caught by the outer try-catch
-      });
-    });
-
-    // Detect the generator type
-    const generator = await detectCMakeGenerator(
+    // Use discovery script
+    const fuzzTests = await discoverFuzzTestsWithScript(
       workspacePath,
       containerName,
-      buildDir,
       terminal,
     );
 
-    // Use the appropriate discovery method based on generator
-    let fuzzTargets;
-    if (generator === "ninja") {
-      fuzzTargets = await discoverFuzzTargetsNinja(
-        workspacePath,
-        containerName,
-        buildDir,
-        terminal,
-      );
-    } else if (generator === "make") {
-      fuzzTargets = await discoverFuzzTargetsMake(
-        workspacePath,
-        containerName,
-        buildDir,
-        terminal,
-      );
-    } else {
-      // Fallback to Make method for unknown generators
-      safeFuzzingLog(
-        terminal,
-        `Unknown generator '${generator}', falling back to Make method`,
-      );
-      fuzzTargets = await discoverFuzzTargetsMake(
-        workspacePath,
-        containerName,
-        buildDir,
-        terminal,
-      );
-    }
+    // Filter results for the specific preset
+    const targetsForPreset = fuzzTests
+      .filter((ft) => ft.preset === preset)
+      .map((ft) => ft.fuzzer);
 
     safeFuzzingLog(
       terminal,
-      `Total fuzz targets found for preset ${preset}: ${fuzzTargets.length}`,
+      `Found ${targetsForPreset.length} fuzz target(s) for preset ${preset}: ${targetsForPreset.join(", ")}`,
     );
-    return fuzzTargets;
+
+    return targetsForPreset;
   } catch (error) {
-    // Silently ignore target discovery errors - these are part of normal discovery process
-    // Log for debugging but don't report to user or throw
+    // Log for debugging but don't fail the entire workflow
     console.log(
       `CodeForge Debug: Target discovery failed for preset ${preset}: ${error.message}`,
     );
@@ -527,7 +400,7 @@ async function discoverFuzzTargets(
 }
 
 /**
- * Validates that a preset configuration is valid
+ * Legacy function for backward compatibility - simplified validation
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string} preset - CMake preset name
@@ -540,48 +413,35 @@ async function validatePresetConfiguration(
   preset,
   terminal,
 ) {
-  return new Promise((resolve) => {
-    safeFuzzingLog(terminal, `Validating preset configuration: ${preset}`);
+  safeFuzzingLog(terminal, `Validating preset configuration: ${preset}`);
 
-    const options = {
-      removeAfterRun: true,
-      mountWorkspace: true,
-      dockerCommand: "docker",
-    };
-
-    // Create a temporary directory for validation
-    const tempBuildDir = `/tmp/validate-${preset}-${Date.now()}`;
-    const validateCommand = `mkdir -p "${tempBuildDir}" && cmake --preset "${preset}" -S . -B "${tempBuildDir}"`;
-
-    const validateProcess = dockerOperations.runDockerCommandWithOutput(
+  // If the preset appears in discovery output, it's considered valid
+  try {
+    const fuzzTests = await discoverFuzzTestsWithScript(
       workspacePath,
       containerName,
-      validateCommand,
-      "/bin/bash",
-      options,
+      terminal,
+    );
+    const isValid = fuzzTests.some((ft) => ft.preset === preset);
+
+    safeFuzzingLog(
+      terminal,
+      `Preset ${preset} validation: ${isValid ? "PASSED" : "FAILED"}`,
     );
 
-    validateProcess.on("close", (code) => {
-      const isValid = code === 0;
-      safeFuzzingLog(
-        terminal,
-        `Preset ${preset} validation: ${isValid ? "PASSED" : "FAILED"}`,
-      );
-      resolve(isValid);
-    });
-
-    validateProcess.on("error", (error) => {
-      safeFuzzingLog(
-        terminal,
-        `Preset ${preset} validation error: ${error.message}`,
-      );
-      resolve(false);
-    });
-  });
+    return isValid;
+  } catch (error) {
+    safeFuzzingLog(
+      terminal,
+      `Preset ${preset} validation error: ${error.message}`,
+    );
+    return false;
+  }
 }
 
 module.exports = {
   discoverCMakePresets,
   discoverFuzzTargets,
+  discoverFuzzTestsWithScript,
   validatePresetConfiguration,
 };
