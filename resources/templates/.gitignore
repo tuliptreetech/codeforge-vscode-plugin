@@ -1,2 +1,4 @@
 # Ignore fuzzing output directory
 /fuzzing
+# ignore the scripts we install
+/scripts

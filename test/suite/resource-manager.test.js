@@ -36,6 +36,9 @@ suite("ResourceManager Test Suite", () => {
     await fs.mkdir(path.join(mockExtensionPath, "resources", "templates"), {
       recursive: true,
     });
+    await fs.mkdir(path.join(mockExtensionPath, "resources", "scripts"), {
+      recursive: true,
+    });
 
     // Create mock resource files
     await fs.writeFile(
@@ -49,6 +52,30 @@ suite("ResourceManager Test Suite", () => {
     await fs.writeFile(
       path.join(mockExtensionPath, "resources", "test-resource.txt"),
       "Test resource content\n",
+    );
+
+    // Create mock script files
+    await fs.writeFile(
+      path.join(
+        mockExtensionPath,
+        "resources",
+        "scripts",
+        "build-fuzz-tests.sh",
+      ),
+      "#!/usr/bin/env bash\necho 'Building fuzz tests'\n",
+    );
+    await fs.writeFile(
+      path.join(
+        mockExtensionPath,
+        "resources",
+        "scripts",
+        "find-fuzz-tests.sh",
+      ),
+      "#!/usr/bin/env bash\necho 'Finding fuzz tests'\n",
+    );
+    await fs.writeFile(
+      path.join(mockExtensionPath, "resources", "scripts", "run-fuzz-tests.sh"),
+      "#!/usr/bin/env bash\necho 'Running fuzz tests'\n",
     );
 
     // Initialize ResourceManager with mock extension path
@@ -82,6 +109,10 @@ suite("ResourceManager Test Suite", () => {
         rm.templatesPath,
         path.join("/test/extension/path", "resources", "templates"),
       );
+      assert.strictEqual(
+        rm.scriptsPath,
+        path.join("/test/extension/path", "resources", "scripts"),
+      );
     });
 
     test("Should handle Windows paths correctly", () => {
@@ -93,6 +124,10 @@ suite("ResourceManager Test Suite", () => {
       assert.strictEqual(
         rm.templatesPath,
         path.join(windowsPath, "resources", "templates"),
+      );
+      assert.strictEqual(
+        rm.scriptsPath,
+        path.join(windowsPath, "resources", "scripts"),
       );
     });
 
@@ -108,6 +143,10 @@ suite("ResourceManager Test Suite", () => {
       assert.strictEqual(
         rm.templatesPath,
         path.join(relativePath, "resources", "templates"),
+      );
+      assert.strictEqual(
+        rm.scriptsPath,
+        path.join(relativePath, "resources", "scripts"),
       );
     });
   });
@@ -571,6 +610,404 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
       const stats = await fs.stat(dumpedPath);
       assert.ok(stats.isFile());
       assert.ok(stats.size > 0);
+    });
+
+    suite("dumpScript() Method", () => {
+      let targetDir;
+
+      setup(async () => {
+        targetDir = path.join(tempDir, "script-target");
+        await fs.mkdir(targetDir, { recursive: true });
+      });
+
+      test("Should dump script file with executable permissions", async () => {
+        const dumpedPath = await resourceManager.dumpScript(
+          "build-fuzz-tests.sh",
+          targetDir,
+        );
+
+        assert.strictEqual(
+          dumpedPath,
+          path.join(targetDir, "build-fuzz-tests.sh"),
+        );
+
+        // Verify file content
+        const content = await fs.readFile(dumpedPath, "utf8");
+        assert.strictEqual(
+          content,
+          "#!/usr/bin/env bash\necho 'Building fuzz tests'\n",
+        );
+
+        // Verify executable permissions using fs.statSync().mode
+        const stats = require("fs").statSync(dumpedPath);
+        const hasExecutePermission = (stats.mode & parseInt("755", 8)) !== 0;
+        assert.strictEqual(
+          hasExecutePermission,
+          true,
+          "Script should have executable permissions",
+        );
+      });
+
+      test("Should dump find-fuzz-tests.sh script", async () => {
+        const dumpedPath = await resourceManager.dumpScript(
+          "find-fuzz-tests.sh",
+          targetDir,
+        );
+
+        assert.strictEqual(
+          dumpedPath,
+          path.join(targetDir, "find-fuzz-tests.sh"),
+        );
+
+        const content = await fs.readFile(dumpedPath, "utf8");
+        assert.strictEqual(
+          content,
+          "#!/usr/bin/env bash\necho 'Finding fuzz tests'\n",
+        );
+
+        // Verify executable permissions
+        const stats = require("fs").statSync(dumpedPath);
+        const hasExecutePermission = (stats.mode & parseInt("755", 8)) !== 0;
+        assert.strictEqual(hasExecutePermission, true);
+      });
+
+      test("Should dump run-fuzz-tests.sh script", async () => {
+        const dumpedPath = await resourceManager.dumpScript(
+          "run-fuzz-tests.sh",
+          targetDir,
+        );
+
+        assert.strictEqual(
+          dumpedPath,
+          path.join(targetDir, "run-fuzz-tests.sh"),
+        );
+
+        const content = await fs.readFile(dumpedPath, "utf8");
+        assert.strictEqual(
+          content,
+          "#!/usr/bin/env bash\necho 'Running fuzz tests'\n",
+        );
+
+        // Verify executable permissions
+        const stats = require("fs").statSync(dumpedPath);
+        const hasExecutePermission = (stats.mode & parseInt("755", 8)) !== 0;
+        assert.strictEqual(hasExecutePermission, true);
+      });
+
+      test("Should create target directory if it doesn't exist", async () => {
+        const newTargetDir = path.join(tempDir, "new-script-target", "nested");
+
+        const dumpedPath = await resourceManager.dumpScript(
+          "build-fuzz-tests.sh",
+          newTargetDir,
+        );
+
+        assert.strictEqual(
+          dumpedPath,
+          path.join(newTargetDir, "build-fuzz-tests.sh"),
+        );
+
+        const content = await fs.readFile(dumpedPath, "utf8");
+        assert.strictEqual(
+          content,
+          "#!/usr/bin/env bash\necho 'Building fuzz tests'\n",
+        );
+
+        // Verify executable permissions
+        const stats = require("fs").statSync(dumpedPath);
+        const hasExecutePermission = (stats.mode & parseInt("755", 8)) !== 0;
+        assert.strictEqual(hasExecutePermission, true);
+      });
+
+      test("Should overwrite existing script file", async () => {
+        const targetFile = path.join(targetDir, "build-fuzz-tests.sh");
+        await fs.writeFile(targetFile, "Old script content");
+
+        const dumpedPath = await resourceManager.dumpScript(
+          "build-fuzz-tests.sh",
+          targetDir,
+        );
+
+        const content = await fs.readFile(dumpedPath, "utf8");
+        assert.strictEqual(
+          content,
+          "#!/usr/bin/env bash\necho 'Building fuzz tests'\n",
+        );
+
+        // Verify executable permissions are set correctly
+        const stats = require("fs").statSync(dumpedPath);
+        const hasExecutePermission = (stats.mode & parseInt("755", 8)) !== 0;
+        assert.strictEqual(hasExecutePermission, true);
+      });
+
+      test("Should throw error for non-existent script", async () => {
+        await assert.rejects(
+          async () => {
+            await resourceManager.dumpScript(
+              "non-existent-script.sh",
+              targetDir,
+            );
+          },
+          {
+            name: "Error",
+            message: /Failed to dump script 'non-existent-script\.sh'/,
+          },
+        );
+      });
+
+      test("Should throw error for invalid target directory", async () => {
+        // Create a file where we expect a directory (this will cause mkdir to fail)
+        const invalidTarget = path.join(tempDir, "invalid-target");
+        await fs.writeFile(invalidTarget, "This is a file, not a directory");
+
+        await assert.rejects(
+          async () => {
+            await resourceManager.dumpScript(
+              "build-fuzz-tests.sh",
+              invalidTarget,
+            );
+          },
+          {
+            name: "Error",
+            message: /Failed to dump script/,
+          },
+        );
+      });
+
+      test("Should handle permission errors gracefully", async () => {
+        // Skip on Windows as permission handling is different
+        if (process.platform !== "win32") {
+          const readOnlyDir = path.join(tempDir, "readonly-script");
+          await fs.mkdir(readOnlyDir);
+          await fs.chmod(readOnlyDir, 0o444);
+
+          await assert.rejects(
+            async () => {
+              await resourceManager.dumpScript(
+                "build-fuzz-tests.sh",
+                readOnlyDir,
+              );
+            },
+            {
+              name: "Error",
+              message: /Failed to dump script/,
+            },
+          );
+
+          // Restore permissions for cleanup
+          await fs.chmod(readOnlyDir, 0o755);
+        }
+      });
+    });
+
+    suite("dumpScripts() Method", () => {
+      let targetDir;
+
+      setup(async () => {
+        targetDir = path.join(tempDir, "scripts-target");
+        await fs.mkdir(targetDir, { recursive: true });
+      });
+
+      test("Should dump all three script files with executable permissions", async () => {
+        const dumpedPaths = await resourceManager.dumpScripts(targetDir);
+
+        // Verify return value is an array with correct length
+        assert.strictEqual(Array.isArray(dumpedPaths), true);
+        assert.strictEqual(dumpedPaths.length, 3);
+
+        // Expected script files
+        const expectedScripts = [
+          "build-fuzz-tests.sh",
+          "find-fuzz-tests.sh",
+          "run-fuzz-tests.sh",
+        ];
+
+        // Verify all scripts were dumped
+        for (let i = 0; i < expectedScripts.length; i++) {
+          const expectedPath = path.join(targetDir, expectedScripts[i]);
+          assert.strictEqual(dumpedPaths[i], expectedPath);
+
+          // Verify file exists and has correct content
+          const content = await fs.readFile(expectedPath, "utf8");
+          assert.ok(content.includes("#!/usr/bin/env bash"));
+
+          // Verify executable permissions
+          const stats = require("fs").statSync(expectedPath);
+          const hasExecutePermission = (stats.mode & parseInt("755", 8)) !== 0;
+          assert.strictEqual(
+            hasExecutePermission,
+            true,
+            `${expectedScripts[i]} should have executable permissions`,
+          );
+        }
+      });
+
+      test("Should verify specific content of each dumped script", async () => {
+        const dumpedPaths = await resourceManager.dumpScripts(targetDir);
+
+        // Verify build-fuzz-tests.sh content
+        const buildContent = await fs.readFile(dumpedPaths[0], "utf8");
+        assert.strictEqual(
+          buildContent,
+          "#!/usr/bin/env bash\necho 'Building fuzz tests'\n",
+        );
+
+        // Verify find-fuzz-tests.sh content
+        const findContent = await fs.readFile(dumpedPaths[1], "utf8");
+        assert.strictEqual(
+          findContent,
+          "#!/usr/bin/env bash\necho 'Finding fuzz tests'\n",
+        );
+
+        // Verify run-fuzz-tests.sh content
+        const runContent = await fs.readFile(dumpedPaths[2], "utf8");
+        assert.strictEqual(
+          runContent,
+          "#!/usr/bin/env bash\necho 'Running fuzz tests'\n",
+        );
+      });
+
+      test("Should create target directory if it doesn't exist", async () => {
+        const newTargetDir = path.join(tempDir, "new-scripts-target", "nested");
+
+        const dumpedPaths = await resourceManager.dumpScripts(newTargetDir);
+
+        assert.strictEqual(dumpedPaths.length, 3);
+
+        // Verify all files were created in the new directory
+        for (const dumpedPath of dumpedPaths) {
+          assert.ok(dumpedPath.startsWith(newTargetDir));
+
+          const content = await fs.readFile(dumpedPath, "utf8");
+          assert.ok(content.includes("#!/usr/bin/env bash"));
+
+          // Verify executable permissions
+          const stats = require("fs").statSync(dumpedPath);
+          const hasExecutePermission = (stats.mode & parseInt("755", 8)) !== 0;
+          assert.strictEqual(hasExecutePermission, true);
+        }
+      });
+
+      test("Should overwrite existing script files", async () => {
+        // Create existing files with old content
+        await fs.writeFile(
+          path.join(targetDir, "build-fuzz-tests.sh"),
+          "Old build script",
+        );
+        await fs.writeFile(
+          path.join(targetDir, "find-fuzz-tests.sh"),
+          "Old find script",
+        );
+        await fs.writeFile(
+          path.join(targetDir, "run-fuzz-tests.sh"),
+          "Old run script",
+        );
+
+        const dumpedPaths = await resourceManager.dumpScripts(targetDir);
+
+        // Verify all files were overwritten with correct content
+        const buildContent = await fs.readFile(dumpedPaths[0], "utf8");
+        assert.strictEqual(
+          buildContent,
+          "#!/usr/bin/env bash\necho 'Building fuzz tests'\n",
+        );
+
+        const findContent = await fs.readFile(dumpedPaths[1], "utf8");
+        assert.strictEqual(
+          findContent,
+          "#!/usr/bin/env bash\necho 'Finding fuzz tests'\n",
+        );
+
+        const runContent = await fs.readFile(dumpedPaths[2], "utf8");
+        assert.strictEqual(
+          runContent,
+          "#!/usr/bin/env bash\necho 'Running fuzz tests'\n",
+        );
+
+        // Verify executable permissions are set
+        for (const dumpedPath of dumpedPaths) {
+          const stats = require("fs").statSync(dumpedPath);
+          const hasExecutePermission = (stats.mode & parseInt("755", 8)) !== 0;
+          assert.strictEqual(hasExecutePermission, true);
+        }
+      });
+
+      test("Should throw error if any script is missing", async () => {
+        // Remove one of the script files
+        await fs.unlink(
+          path.join(
+            mockExtensionPath,
+            "resources",
+            "scripts",
+            "find-fuzz-tests.sh",
+          ),
+        );
+
+        await assert.rejects(
+          async () => {
+            await resourceManager.dumpScripts(targetDir);
+          },
+          {
+            name: "Error",
+            message: /Failed to dump scripts/,
+          },
+        );
+      });
+
+      test("Should throw error for invalid target directory", async () => {
+        // Create a file where we expect a directory
+        const invalidTarget = path.join(tempDir, "invalid-scripts-target");
+        await fs.writeFile(invalidTarget, "This is a file, not a directory");
+
+        await assert.rejects(
+          async () => {
+            await resourceManager.dumpScripts(invalidTarget);
+          },
+          {
+            name: "Error",
+            message: /Failed to dump scripts/,
+          },
+        );
+      });
+
+      test("Should handle permission errors gracefully", async () => {
+        // Skip on Windows as permission handling is different
+        if (process.platform !== "win32") {
+          const readOnlyDir = path.join(tempDir, "readonly-scripts");
+          await fs.mkdir(readOnlyDir);
+          await fs.chmod(readOnlyDir, 0o444);
+
+          await assert.rejects(
+            async () => {
+              await resourceManager.dumpScripts(readOnlyDir);
+            },
+            {
+              name: "Error",
+              message: /Failed to dump scripts/,
+            },
+          );
+
+          // Restore permissions for cleanup
+          await fs.chmod(readOnlyDir, 0o755);
+        }
+      });
+
+      test("Should maintain cross-platform path compatibility", async () => {
+        const dumpedPaths = await resourceManager.dumpScripts(targetDir);
+
+        // Verify paths use correct separators for the current platform
+        for (const dumpedPath of dumpedPaths) {
+          assert.strictEqual(
+            dumpedPath,
+            path.normalize(dumpedPath),
+            "Path should be normalized for current platform",
+          );
+          assert.ok(
+            dumpedPath.startsWith(targetDir),
+            "Path should be within target directory",
+          );
+        }
+      });
     });
   });
 });

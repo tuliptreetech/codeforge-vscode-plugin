@@ -342,6 +342,7 @@ async function initializeCodeForgeOnActivation() {
 
     const workspacePath = workspaceFolder.uri.fsPath;
     const codeforgeDir = path.join(workspacePath, ".codeforge");
+    const scriptsDir = path.join(codeforgeDir, "scripts");
     const gitignorePath = path.join(codeforgeDir, ".gitignore");
     const dockerfilePath = path.join(codeforgeDir, "Dockerfile");
 
@@ -379,8 +380,20 @@ async function initializeCodeForgeOnActivation() {
       }
     }
 
-    // If directory, .gitignore, and Dockerfile all exist, nothing to do
-    if (dirExists && gitignoreExists && dockerfileExists) {
+    // Check if scripts directory exists
+    let scriptsExist = false;
+    if (dirExists) {
+      try {
+        await fs.access(scriptsDir);
+        scriptsExist = true;
+      } catch (error) {
+        // Scripts directory doesn't exist
+        scriptsExist = false;
+      }
+    }
+
+    // If directory, .gitignore, Dockerfile, and scripts all exist, nothing to do
+    if (dirExists && gitignoreExists && dockerfileExists && scriptsExist) {
       safeOutputLog(
         "CodeForge already initialized, skipping automatic initialization",
       );
@@ -415,10 +428,24 @@ async function initializeCodeForgeOnActivation() {
       }
     }
 
+    // Create scripts directory and copy scripts if they don't exist
+    if (!scriptsExist) {
+      try {
+        await fs.mkdir(scriptsDir, { recursive: true });
+        safeOutputLog(`Auto-created scripts directory: ${scriptsDir}`);
+
+        const scriptPaths = await resourceManager.dumpScripts(scriptsDir);
+        safeOutputLog(`Auto-created scripts: ${scriptPaths.join(", ")}`);
+      } catch (error) {
+        safeOutputLog(`Error creating scripts: ${error.message}`);
+        throw error;
+      }
+    }
+
     // Show a subtle notification if any files were created
-    if (!dirExists || !gitignoreExists || !dockerfileExists) {
+    if (!dirExists || !gitignoreExists || !dockerfileExists || !scriptsExist) {
       vscode.window.showInformationMessage(
-        "CodeForge: Initialized .codeforge directory with configuration files",
+        "CodeForge: Initialized .codeforge directory with configuration files and scripts",
       );
     }
   } catch (error) {
