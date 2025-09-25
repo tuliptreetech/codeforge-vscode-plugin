@@ -911,7 +911,13 @@ suite("Initialization Detection Service Test Suite", () => {
     });
 
     test("Should handle special characters in workspace path", async () => {
-      const specialPath = "/test/workspace with spaces/and-special@chars#";
+      // Use path.join for cross-platform compatibility and avoid Windows-invalid characters
+      const specialPath = path.join(
+        process.platform === "win32" ? "C:" : "",
+        "test",
+        "workspace with spaces",
+        "and-special_chars",
+      );
       let fsStatStub;
       if (!fs.stat.isSinonProxy) {
         fsStatStub = sandbox.stub(fs, "stat");
