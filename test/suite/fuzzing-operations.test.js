@@ -4,6 +4,7 @@ const sinon = require("sinon");
 const path = require("path");
 const fuzzingOperations = require("../../src/fuzzing/fuzzingOperations");
 const dockerOperations = require("../../src/core/dockerOperations");
+const cmakePresetDiscovery = require("../../src/fuzzing/cmakePresetDiscovery");
 
 suite("Fuzzing Operations Test Suite", () => {
   let sandbox;
@@ -133,6 +134,533 @@ suite("Fuzzing Operations Test Suite", () => {
         typeof fuzzingOperations.buildFuzzingTargetsOnly,
         "function",
       );
+    });
+  });
+
+  suite("Script-Based Discovery", () => {
+    test("discoverFuzzTestsWithScript should parse script output correctly", async () => {
+      const mockScriptOutput =
+        "debug:codeforge-example-fuzz\nrelease:codeforge-another-fuzz\ndebug:codeforge-test-fuzz\n";
+
+      // Mock the Docker process
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      const runDockerCommandStub = sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      // Set up the process event handlers
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0); // Success exit code
+
+      const result = await cmakePresetDiscovery.discoverFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        mockOutputChannel,
+      );
+
+      // Verify the parsed results
+      assert.strictEqual(result.length, 3, "Should parse 3 fuzz tests");
+
+      assert.deepStrictEqual(result[0], {
+        preset: "debug",
+        fuzzer: "codeforge-example-fuzz",
+      });
+
+      assert.deepStrictEqual(result[1], {
+        preset: "release",
+        fuzzer: "codeforge-another-fuzz",
+      });
+
+      assert.deepStrictEqual(result[2], {
+        preset: "debug",
+        fuzzer: "codeforge-test-fuzz",
+      });
+
+      // Verify the script was called with correct parameters
+      assert(runDockerCommandStub.calledOnce);
+      const [workspacePath, containerName, command] =
+        runDockerCommandStub.firstCall.args;
+      assert.strictEqual(workspacePath, "/test/workspace");
+      assert.strictEqual(containerName, "test-container");
+      assert(command.includes(".codeforge/scripts/find-fuzz-tests.sh"));
+      assert(command.includes("-q")); // Should include quiet flag
+    });
+
+    test("discoverFuzzTestsWithScript should handle empty output", async () => {
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      // Set up empty output
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0);
+
+      const result = await cmakePresetDiscovery.discoverFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        mockOutputChannel,
+      );
+
+      assert.strictEqual(
+        result.length,
+        0,
+        "Should return empty array for no output",
+      );
+    });
+
+    test("discoverFuzzTestsWithScript should handle script failure gracefully", async () => {
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      // Set up failure scenario
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.stderr.on
+        .withArgs("data")
+        .callsArgWith(1, "Script failed: No CMake presets found");
+      mockProcess.on.withArgs("close").callsArgWith(1, 1); // Failure exit code
+
+      const result = await cmakePresetDiscovery.discoverFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        mockOutputChannel,
+      );
+
+      assert.strictEqual(
+        result.length,
+        0,
+        "Should return empty array on script failure",
+      );
+    });
+
+    test("discoverFuzzTestsWithScript should handle malformed output", async () => {
+      const mockScriptOutput =
+        "debug:codeforge-example-fuzz\ninvalid-line-without-colon\nrelease:codeforge-another-fuzz\n:missing-preset\npreset-missing-fuzzer:\n";
+
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0);
+
+      const result = await cmakePresetDiscovery.discoverFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        mockOutputChannel,
+      );
+
+      // Should only parse valid lines
+      assert.strictEqual(result.length, 2, "Should parse only valid lines");
+      assert.deepStrictEqual(result[0], {
+        preset: "debug",
+        fuzzer: "codeforge-example-fuzz",
+      });
+      assert.deepStrictEqual(result[1], {
+        preset: "release",
+        fuzzer: "codeforge-another-fuzz",
+      });
+    });
+
+    test("discoverCMakePresets should extract unique presets from script results", async () => {
+      const mockScriptOutput =
+        "debug:codeforge-example-fuzz\nrelease:codeforge-another-fuzz\ndebug:codeforge-test-fuzz\nrelease:codeforge-final-fuzz\n";
+
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0);
+
+      const result = await cmakePresetDiscovery.discoverCMakePresets(
+        "/test/workspace",
+        "test-container",
+        mockOutputChannel,
+      );
+
+      // Should return unique presets
+      assert.strictEqual(result.length, 2, "Should return 2 unique presets");
+      assert(result.includes("debug"), "Should include debug preset");
+      assert(result.includes("release"), "Should include release preset");
+    });
+
+    test("discoverFuzzTargets should filter targets by preset", async () => {
+      const mockScriptOutput =
+        "debug:codeforge-example-fuzz\nrelease:codeforge-another-fuzz\ndebug:codeforge-test-fuzz\n";
+
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0);
+
+      const result = await cmakePresetDiscovery.discoverFuzzTargets(
+        "/test/workspace",
+        "test-container",
+        "debug", // Filter for debug preset
+        "/unused/build/dir",
+        mockOutputChannel,
+      );
+
+      // Should return only debug preset targets
+      assert.strictEqual(
+        result.length,
+        2,
+        "Should return 2 targets for debug preset",
+      );
+      assert(
+        result.includes("codeforge-example-fuzz"),
+        "Should include example fuzz target",
+      );
+      assert(
+        result.includes("codeforge-test-fuzz"),
+        "Should include test fuzz target",
+      );
+      assert(
+        !result.includes("codeforge-another-fuzz"),
+        "Should not include release preset target",
+      );
+    });
+  });
+
+  suite("Build and Execution", () => {
+    test("buildFuzzTestsWithScript should build fuzz tests", async () => {
+      const mockScriptOutput =
+        "[+] built fuzzer: test-fuzzer\n[+] built fuzzer: another-fuzzer\n";
+      const fuzzTests = [
+        { preset: "debug", fuzzer: "test-fuzzer" },
+        { preset: "release", fuzzer: "another-fuzzer" },
+      ];
+
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      const runDockerCommandStub = sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      // Set up successful build process
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0); // Success exit code
+
+      const result = await fuzzingOperations.buildFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        fuzzTests,
+        mockOutputChannel,
+      );
+
+      // Verify the build results
+      assert.strictEqual(
+        result.builtTargets,
+        2,
+        "Should report 2 built targets",
+      );
+      assert.strictEqual(result.errors.length, 0, "Should have no errors");
+      assert.strictEqual(
+        result.builtFuzzers.length,
+        2,
+        "Should have 2 built fuzzers",
+      );
+
+      // Verify the script was called with correct parameters
+      assert(runDockerCommandStub.calledOnce);
+      const [workspacePath, containerName, command] =
+        runDockerCommandStub.firstCall.args;
+      assert.strictEqual(workspacePath, "/test/workspace");
+      assert.strictEqual(containerName, "test-container");
+      assert(command.includes(".codeforge/scripts/build-fuzz-tests.sh"));
+      assert(command.includes("debug:test-fuzzer release:another-fuzzer"));
+    });
+
+    test("buildFuzzTestsWithScript should handle build failures", async () => {
+      const mockScriptOutput =
+        "[!] Failed to build target test-fuzzer\nCompilation error: missing header\n[+] built fuzzer: another-fuzzer\n";
+      const fuzzTests = [
+        { preset: "debug", fuzzer: "test-fuzzer" },
+        { preset: "release", fuzzer: "another-fuzzer" },
+      ];
+
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      // Set up failed build process
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 1); // Failure exit code
+
+      const result = await fuzzingOperations.buildFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        fuzzTests,
+        mockOutputChannel,
+      );
+
+      // Verify the build results include errors
+      assert.strictEqual(
+        result.builtTargets,
+        1,
+        "Should report 1 built target",
+      );
+      assert.strictEqual(result.errors.length, 1, "Should have 1 error");
+      assert.strictEqual(
+        result.builtFuzzers.length,
+        1,
+        "Should have 1 built fuzzer",
+      );
+
+      // Verify error details
+      const error = result.errors[0];
+      assert.strictEqual(error.type, "build_error");
+      assert(error.error.includes("test-fuzzer"));
+      assert.strictEqual(error.failedTargets.length, 1);
+      assert.strictEqual(error.failedTargets[0], "test-fuzzer");
+    });
+
+    test("runFuzzTestsWithScript should execute fuzz tests", async () => {
+      const mockScriptOutput =
+        "[+] running fuzzer: /workspace/.codeforge/fuzzing/test-fuzzer\n[+] running fuzzer: /workspace/.codeforge/fuzzing/another-fuzzer\n";
+      const fuzzTests = [
+        { preset: "debug", fuzzer: "test-fuzzer" },
+        { preset: "release", fuzzer: "another-fuzzer" },
+      ];
+
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      const runDockerCommandStub = sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      // Set up successful execution process
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0); // Success exit code
+
+      const result = await fuzzingOperations.runFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        fuzzTests,
+        mockOutputChannel,
+      );
+
+      // Verify the execution results
+      assert.strictEqual(
+        result.executed,
+        2,
+        "Should report 2 executed fuzzers",
+      );
+      assert.strictEqual(result.crashes.length, 0, "Should have no crashes");
+      assert.strictEqual(result.errors.length, 0, "Should have no errors");
+
+      // Verify the script was called with correct parameters
+      assert(runDockerCommandStub.calledOnce);
+      const [workspacePath, containerName, command] =
+        runDockerCommandStub.firstCall.args;
+      assert.strictEqual(workspacePath, "/test/workspace");
+      assert.strictEqual(containerName, "test-container");
+      assert(command.includes(".codeforge/scripts/run-fuzz-tests.sh"));
+      assert(command.includes("debug:test-fuzzer release:another-fuzzer"));
+    });
+
+    test("runFuzzTestsWithScript should detect crashes", async () => {
+      const mockScriptOutput =
+        "[+] running fuzzer: /workspace/.codeforge/fuzzing/test-fuzzer\n[+] Found crash file: /workspace/.codeforge/fuzzing/test-fuzzer-output/crash-abc123\n";
+      const fuzzTests = [{ preset: "debug", fuzzer: "test-fuzzer" }];
+
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      // Set up execution with crash
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0); // Success exit code
+
+      const result = await fuzzingOperations.runFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        fuzzTests,
+        mockOutputChannel,
+      );
+
+      // Verify the execution results include crashes
+      assert.strictEqual(result.executed, 1, "Should report 1 executed fuzzer");
+      assert.strictEqual(result.crashes.length, 1, "Should have 1 crash");
+      assert.strictEqual(result.errors.length, 0, "Should have no errors");
+
+      // Verify crash details
+      const crash = result.crashes[0];
+      assert.strictEqual(crash.fuzzer, "test-fuzzer");
+      assert(crash.file.includes("crash-abc123"));
+    });
+
+    test("parseSuccessfulBuilds should parse build output correctly", () => {
+      const stdout =
+        "[+] built fuzzer: test-fuzzer\n[+] built fuzzer: another-fuzzer\nSome other output\n[+] built fuzzer: third-fuzzer\n";
+      const fuzzTests = [
+        { preset: "debug", fuzzer: "test-fuzzer" },
+        { preset: "release", fuzzer: "another-fuzzer" },
+        { preset: "debug", fuzzer: "third-fuzzer" },
+      ];
+
+      const result = fuzzingOperations.parseSuccessfulBuilds(stdout, fuzzTests);
+
+      assert.strictEqual(result.length, 3, "Should parse 3 successful builds");
+      assert.strictEqual(result[0].name, "test-fuzzer");
+      assert.strictEqual(result[0].preset, "debug");
+      assert.strictEqual(result[1].name, "another-fuzzer");
+      assert.strictEqual(result[1].preset, "release");
+      assert.strictEqual(result[2].name, "third-fuzzer");
+      assert.strictEqual(result[2].preset, "debug");
+    });
+
+    test("parseScriptBuildErrors should parse build errors correctly", () => {
+      const stdout =
+        "[!] Failed to build target test-fuzzer\nCompilation error: missing header\n[+] built fuzzer: another-fuzzer\n[!] Failed to build target third-fuzzer\nLinker error: undefined reference\n";
+      const stderr = "";
+      const fuzzTests = [
+        { preset: "debug", fuzzer: "test-fuzzer" },
+        { preset: "release", fuzzer: "another-fuzzer" },
+        { preset: "debug", fuzzer: "third-fuzzer" },
+      ];
+
+      const result = fuzzingOperations.parseScriptBuildErrors(
+        stdout,
+        stderr,
+        fuzzTests,
+      );
+
+      assert.strictEqual(result.length, 2, "Should parse 2 build errors");
+
+      // First error
+      assert.strictEqual(result[0].type, "build_error");
+      assert(result[0].error.includes("test-fuzzer"));
+      assert.strictEqual(result[0].preset, "debug");
+      assert.strictEqual(result[0].failedTargets[0], "test-fuzzer");
+
+      // Second error
+      assert.strictEqual(result[1].type, "build_error");
+      assert(result[1].error.includes("third-fuzzer"));
+      assert.strictEqual(result[1].preset, "debug");
+      assert.strictEqual(result[1].failedTargets[0], "third-fuzzer");
+    });
+
+    test("parseScriptExecutionResults should parse execution output correctly", () => {
+      const stdout =
+        "[+] running fuzzer: /workspace/.codeforge/fuzzing/test-fuzzer\n[+] Found crash file: /workspace/.codeforge/fuzzing/test-fuzzer-output/crash-abc123\n[+] running fuzzer: /workspace/.codeforge/fuzzing/another-fuzzer\n";
+      const stderr = "";
+      const fuzzTests = [
+        { preset: "debug", fuzzer: "test-fuzzer" },
+        { preset: "release", fuzzer: "another-fuzzer" },
+      ];
+
+      const result = fuzzingOperations.parseScriptExecutionResults(
+        stdout,
+        stderr,
+        fuzzTests,
+      );
+
+      assert.strictEqual(
+        result.executed,
+        2,
+        "Should report 2 executed fuzzers",
+      );
+      assert.strictEqual(result.crashes.length, 1, "Should detect 1 crash");
+      assert.strictEqual(result.errors.length, 0, "Should have no errors");
+
+      // Verify crash details
+      const crash = result.crashes[0];
+      assert.strictEqual(crash.fuzzer, "test-fuzzer");
+      assert(crash.file.includes("crash-abc123"));
+    });
+
+    test("buildFuzzTestsWithScript should handle empty fuzz tests", async () => {
+      const result = await fuzzingOperations.buildFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        [],
+        mockOutputChannel,
+      );
+
+      assert.strictEqual(result.builtTargets, 0);
+      assert.strictEqual(result.errors.length, 0);
+      assert.strictEqual(result.builtFuzzers.length, 0);
+    });
+
+    test("runFuzzTestsWithScript should handle empty fuzz tests", async () => {
+      const result = await fuzzingOperations.runFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        [],
+        mockOutputChannel,
+      );
+
+      assert.strictEqual(result.executed, 0);
+      assert.strictEqual(result.crashes.length, 0);
+      assert.strictEqual(result.errors.length, 0);
     });
   });
 

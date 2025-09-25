@@ -5,7 +5,7 @@ set -euo pipefail
 # This script builds fuzz tests for the project and copies them to a central location.
 
 scripts_directory="$(dirname "$(realpath "$0")")"
-codeforge_directory="$(realpath "$codeforge_directory/..")"
+codeforge_directory="$(realpath "$scripts_directory/..")"
 root_directory="$(realpath "$codeforge_directory/..")"
 fuzzing_directory="$codeforge_directory/fuzzing"
 
@@ -13,11 +13,11 @@ fuzzers_list="$fuzzing_directory/.fuzzers_list"
 
 quiet=false
 clean=false
-while getopts "qc" opt; do
-    case $opt in
-        q) quiet=true ;;
-        c) clean=true ;;
-        \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+while [ $# -gt 0 ]; do
+    case $1 in
+        -q) quiet=true; shift ;;
+        -c) clean=true; shift ;;
+        *) shift ;;
     esac
 done
 

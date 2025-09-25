@@ -50,6 +50,7 @@ const DEFAULT_LIBFUZZER_OPTIONS = {
 
 /**
  * Runs all fuzzers in the collection
+ * @deprecated Use runFuzzTestsWithScript from fuzzingOperations instead
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {Map<string, string>} fuzzers - Map of fuzzer names to paths
@@ -59,6 +60,57 @@ const DEFAULT_LIBFUZZER_OPTIONS = {
  * @returns {Promise<Object>} Execution results
  */
 async function runAllFuzzers(
+  workspacePath,
+  containerName,
+  fuzzers,
+  fuzzingDir,
+  terminal,
+  options = {},
+) {
+  // Log deprecation warning
+  safeFuzzingLog(
+    terminal,
+    "⚠️  WARNING: runAllFuzzers is deprecated. Use runFuzzTestsWithScript from fuzzingOperations instead.",
+  );
+
+  // Convert fuzzer map to fuzzTests array format for script compatibility
+  const fuzzTests = Array.from(fuzzers.entries()).map(([name, path]) => ({
+    fuzzer: name,
+    preset: "legacy", // Default preset for backward compatibility
+  }));
+
+  // Use the new execution method
+  try {
+    const fuzzingOperations = require("./fuzzingOperations");
+    return await fuzzingOperations.runFuzzTestsWithScript(
+      workspacePath,
+      containerName,
+      fuzzTests,
+      terminal,
+    );
+  } catch (error) {
+    safeFuzzingLog(
+      terminal,
+      `Execution failed, falling back to legacy implementation: ${error.message}`,
+    );
+
+    // Fall back to original implementation if script fails
+    return await runAllFuzzersLegacy(
+      workspacePath,
+      containerName,
+      fuzzers,
+      fuzzingDir,
+      terminal,
+      options,
+    );
+  }
+}
+
+/**
+ * Legacy implementation of runAllFuzzers (kept for fallback)
+ * @deprecated This is the original implementation kept for emergency fallback only
+ */
+async function runAllFuzzersLegacy(
   workspacePath,
   containerName,
   fuzzers,
@@ -506,6 +558,7 @@ async function generateCoverageReport(
 
 module.exports = {
   runAllFuzzers,
+  runAllFuzzersLegacy,
   runSingleFuzzer,
   executeFuzzer,
   detectCrashes,

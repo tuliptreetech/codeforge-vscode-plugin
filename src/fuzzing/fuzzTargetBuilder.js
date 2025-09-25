@@ -32,24 +32,29 @@ function safeFuzzingLog(terminal, message, show = false) {
 
 /**
  * Creates a temporary build directory for a preset
+ * @deprecated This function is deprecated. Build functionality has been moved to buildFuzzTestsWithScript.
  * @param {string} fuzzingDir - Base fuzzing directory
  * @param {string} preset - CMake preset name
  * @returns {Promise<string>} Path to the build directory
  */
 async function createTemporaryBuildDirectory(fuzzingDir, preset) {
+  console.warn(
+    "createTemporaryBuildDirectory is deprecated. Use buildFuzzTestsWithScript instead.",
+  );
   const buildDir = path.join(fuzzingDir, `build-${preset}`);
   return buildDir;
 }
 
 /**
  * Builds fuzz targets for a specific preset
+ * @deprecated This function is deprecated. Use buildFuzzTestsWithScript from fuzzingOperations.js instead.
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string} preset - CMake preset name
  * @param {string[]} targets - Array of target names to build
  * @param {string} buildDir - Build directory path
  * @param {Object} terminal - Terminal instance for logging
- * @returns {Promise<string[]>} Array of successfully built target names
+ * @returns {Promise<Object>} Build results object
  */
 async function buildFuzzTargets(
   workspacePath,
@@ -59,132 +64,30 @@ async function buildFuzzTargets(
   buildDir,
   terminal,
 ) {
-  const builtTargets = [];
-  const buildErrors = [];
-
-  safeFuzzingLog(
-    terminal,
-    `Building ${targets.length} fuzz target(s) for preset ${preset}...`,
+  console.warn(
+    "buildFuzzTargets is deprecated. Use buildFuzzTestsWithScript from fuzzingOperations.js instead.",
   );
 
-  // Display build header in terminal
-  if (terminal && typeof terminal.writeRaw === "function") {
-    terminal.writeRaw(
-      `\r\n\x1b[36m╭─ BUILDING PRESET: ${preset} ─╮\x1b[0m\r\n`,
-      null,
-    );
-    terminal.writeRaw(
-      `\x1b[36m│ Targets: ${targets.join(", ")}\x1b[0m\r\n`,
-      null,
-    );
-    terminal.writeRaw(`\x1b[36m│ Build Dir: ${buildDir}\x1b[0m\r\n`, null);
-    terminal.writeRaw(
-      `\x1b[36m╰─────────────────────────────╯\x1b[0m\r\n\r\n`,
-      null,
-    );
-  }
-
-  for (const target of targets) {
-    try {
-      await buildSingleTarget(
-        workspacePath,
-        containerName,
-        target,
-        buildDir,
-        terminal,
-      );
-      builtTargets.push(target);
-      safeFuzzingLog(terminal, `Successfully built target: ${target}`);
-    } catch (error) {
-      const errorMsg = `Failed to build target ${target}: ${error.message}`;
-      safeFuzzingLog(terminal, errorMsg);
-
-      // Enhanced error tracking with build context and binary information
-      const expectedBinaryPath = `${buildDir}/${target}`;
-      const errorInfo = {
-        target: target,
-        preset: preset,
-        error: error.message,
-        buildContext: error.buildContext || null,
-        timestamp: new Date().toISOString(),
-        expectedBinaryPath: expectedBinaryPath,
-        binaryName: target,
-        buildDirectory: buildDir,
-      };
-
-      buildErrors.push(errorInfo);
-
-      // Display error summary in terminal
-      if (terminal && typeof terminal.writeRaw === "function") {
-        terminal.writeRaw(
-          `\r\n\x1b[31m❌ Target ${target} failed to build\x1b[0m\r\n`,
-          null,
-        );
-
-        // Add troubleshooting hints based on common error patterns
-        const troubleshootingHint = generateTroubleshootingHint(
-          error.message,
-          error.buildContext,
-        );
-        if (troubleshootingHint) {
-          terminal.writeRaw(
-            `\x1b[33m💡 Hint: ${troubleshootingHint}\x1b[0m\r\n`,
-            null,
-          );
-        }
-      }
-
-      // Continue with other targets even if one fails
-    }
-  }
-
-  // Display build summary
-  if (terminal && typeof terminal.writeRaw === "function") {
-    terminal.writeRaw(
-      `\r\n\x1b[36m╭─ BUILD SUMMARY: ${preset} ─╮\x1b[0m\r\n`,
-      null,
-    );
-    terminal.writeRaw(
-      `\x1b[36m│ Success: ${builtTargets.length}/${targets.length} targets\x1b[0m\r\n`,
-      null,
-    );
-    terminal.writeRaw(
-      `\x1b[36m│ Errors: ${buildErrors.length}\x1b[0m\r\n`,
-      null,
-    );
-    terminal.writeRaw(
-      `\x1b[36m╰─────────────────────────────╯\x1b[0m\r\n`,
-      null,
-    );
-  }
-
-  if (buildErrors.length > 0) {
-    safeFuzzingLog(
-      terminal,
-      `Build completed with ${buildErrors.length} error(s) out of ${targets.length} target(s)`,
-    );
-  }
-
-  if (builtTargets.length === 0) {
-    // Create enhanced error with detailed failure information
-    const error = new Error(
-      `No targets were successfully built for preset ${preset}`,
-    );
-    error.buildErrors = buildErrors;
-    error.preset = preset;
-    error.totalTargets = targets.length;
-    throw error;
-  }
-
-  // Return both successful targets and build errors for proper error propagation
+  // Return empty results to maintain compatibility
   return {
-    builtTargets: builtTargets,
-    buildErrors: buildErrors,
+    builtTargets: [],
+    buildErrors: [
+      {
+        target: "deprecated",
+        error:
+          "This function is deprecated. Use buildFuzzTestsWithScript instead.",
+        buildContext: {
+          deprecated: true,
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ],
   };
 }
 
 /**
  * Builds a single fuzz target
+ * @deprecated This function is deprecated. Use buildFuzzTestsWithScript instead.
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string} target - Target name to build
@@ -199,137 +102,17 @@ async function buildSingleTarget(
   buildDir,
   terminal,
 ) {
-  return new Promise((resolve, reject) => {
-    safeFuzzingLog(terminal, `Building target: ${target}`);
-
-    const options = {
-      removeAfterRun: true,
-      mountWorkspace: true,
-      dockerCommand: "docker",
-    };
-
-    const buildCommand = `cmake --build "${buildDir}" --target "${target}"`;
-
-    const buildProcess = dockerOperations.runDockerCommandWithOutput(
-      workspacePath,
-      containerName,
-      buildCommand,
-      "/bin/bash",
-      options,
-    );
-
-    let stdout = "";
-    let stderr = "";
-
-    buildProcess.stdout.on("data", (data) => {
-      const chunk = data.toString();
-      stdout += chunk;
-      // Stream build output to terminal in real-time for better user feedback
-      if (terminal && typeof terminal.writeRaw === "function") {
-        terminal.writeRaw(chunk, "\x1b[37m"); // Light gray for build output
-      }
-    });
-
-    buildProcess.stderr.on("data", (data) => {
-      const chunk = data.toString();
-      stderr += chunk;
-      // Stream error output to terminal in real-time with error formatting
-      if (terminal && typeof terminal.writeRaw === "function") {
-        terminal.writeRaw(chunk, "\x1b[31m"); // Red for error output
-      }
-    });
-
-    buildProcess.on("close", (code) => {
-      if (code !== 0) {
-        // Create enhanced error with complete build context
-        const error = new Error(
-          `Build failed with exit code ${code}: ${stderr}`,
-        );
-
-        // Add detailed error context for better debugging
-        error.buildContext = {
-          target: target,
-          buildDir: buildDir,
-          exitCode: code,
-          stdout: stdout,
-          stderr: stderr,
-          buildCommand: buildCommand,
-          timestamp: new Date().toISOString(),
-        };
-
-        // Display formatted error in terminal
-        if (terminal && typeof terminal.writeRaw === "function") {
-          terminal.writeRaw(
-            `\r\n\x1b[31m╭─ BUILD FAILED: ${target} ─╮\x1b[0m\r\n`,
-            null,
-          );
-          terminal.writeRaw(`\x1b[31m│ Exit Code: ${code}\x1b[0m\r\n`, null);
-          terminal.writeRaw(
-            `\x1b[31m│ Command: ${buildCommand}\x1b[0m\r\n`,
-            null,
-          );
-          terminal.writeRaw(
-            `\x1b[31m╰─────────────────────────────╯\x1b[0m\r\n`,
-            null,
-          );
-
-          if (stderr.trim()) {
-            terminal.writeRaw(`\r\n\x1b[33m📋 Error Output:\x1b[0m\r\n`, null);
-            terminal.writeRaw(`\x1b[31m${stderr}\x1b[0m\r\n`, null);
-          }
-
-          if (stdout.trim()) {
-            terminal.writeRaw(`\r\n\x1b[33m📋 Build Output:\x1b[0m\r\n`, null);
-            terminal.writeRaw(`\x1b[37m${stdout}\x1b[0m\r\n`, null);
-          }
-        }
-
-        reject(error);
-        return;
-      }
-
-      // Success case - show completion with summary
-      if (terminal && typeof terminal.writeRaw === "function") {
-        terminal.writeRaw(
-          `\r\n\x1b[32m✅ Successfully built: ${target}\x1b[0m\r\n`,
-          null,
-        );
-      }
-
-      safeFuzzingLog(terminal, `Build completed successfully for ${target}`);
-      resolve();
-    });
-
-    buildProcess.on("error", (error) => {
-      const wrappedError = new Error(
-        `Failed to execute build command: ${error.message}`,
-      );
-
-      // Add context for process execution errors
-      wrappedError.buildContext = {
-        target: target,
-        buildDir: buildDir,
-        buildCommand: buildCommand,
-        processError: error.message,
-        timestamp: new Date().toISOString(),
-      };
-
-      // Display formatted process error in terminal
-      if (terminal && typeof terminal.writeRaw === "function") {
-        terminal.writeRaw(
-          `\r\n\x1b[31m❌ PROCESS ERROR: ${target}\x1b[0m\r\n`,
-          null,
-        );
-        terminal.writeRaw(`\x1b[31m${error.message}\x1b[0m\r\n`, null);
-      }
-
-      reject(wrappedError);
-    });
-  });
+  console.warn(
+    "buildSingleTarget is deprecated. Use buildFuzzTestsWithScript instead.",
+  );
+  throw new Error(
+    "This function is deprecated. Use buildFuzzTestsWithScript instead.",
+  );
 }
 
 /**
  * Copies built fuzz executables to the central fuzzing directory
+ * @deprecated This function is deprecated. buildFuzzTestsWithScript handles copying automatically.
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string} buildDir - Build directory path
@@ -346,42 +129,15 @@ async function copyFuzzExecutables(
   fuzzingDir,
   terminal,
 ) {
-  const copiedFuzzers = [];
-
-  safeFuzzingLog(
-    terminal,
-    `Copying ${targets.length} executable(s) to central location...`,
+  console.warn(
+    "copyFuzzExecutables is deprecated. buildFuzzTestsWithScript handles copying automatically.",
   );
-
-  for (const target of targets) {
-    try {
-      const fuzzerInfo = await copyExecutable(
-        workspacePath,
-        containerName,
-        buildDir,
-        target,
-        fuzzingDir,
-        terminal,
-      );
-      copiedFuzzers.push(fuzzerInfo);
-      safeFuzzingLog(
-        terminal,
-        `Copied executable: ${target} -> ${fuzzerInfo.path}`,
-      );
-    } catch (error) {
-      safeFuzzingLog(
-        terminal,
-        `Failed to copy executable for ${target}: ${error.message}`,
-      );
-      // Continue with other executables
-    }
-  }
-
-  return copiedFuzzers;
+  return [];
 }
 
 /**
  * Copies a single executable to the fuzzing directory
+ * @deprecated This function is deprecated. buildFuzzTestsWithScript handles copying automatically.
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string} buildDir - Build directory path
@@ -398,85 +154,19 @@ async function copyExecutable(
   fuzzingDir,
   terminal,
 ) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      removeAfterRun: true,
-      mountWorkspace: true,
-      dockerCommand: "docker",
-    };
-
-    // Find the executable in the build directory
-    const findCommand = `find "${buildDir}" -name "${target}" -type f -executable 2>/dev/null | head -1`;
-
-    const findProcess = dockerOperations.runDockerCommandWithOutput(
-      workspacePath,
-      containerName,
-      findCommand,
-      "/bin/bash",
-      options,
-    );
-
-    let stdout = "";
-    let stderr = "";
-
-    findProcess.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    findProcess.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    findProcess.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(`Failed to find executable for ${target}: ${stderr}`));
-        return;
-      }
-
-      const executablePath = stdout.trim();
-      if (!executablePath) {
-        reject(new Error(`No executable found for target ${target}`));
-        return;
-      }
-
-      // Copy the executable to the fuzzing directory
-      const destinationPath = path.join(fuzzingDir, target);
-      const copyCommand = `cp -p "${executablePath}" "${destinationPath}" && chmod +x "${destinationPath}"`;
-
-      const copyProcess = dockerOperations.runDockerCommandWithOutput(
-        workspacePath,
-        containerName,
-        copyCommand,
-        "/bin/bash",
-        options,
-      );
-
-      copyProcess.on("close", (copyCode) => {
-        if (copyCode !== 0) {
-          reject(new Error(`Failed to copy executable for ${target}`));
-          return;
-        }
-
-        resolve({
-          name: target,
-          path: destinationPath,
-          originalPath: executablePath,
-        });
-      });
-
-      copyProcess.on("error", (error) => {
-        reject(new Error(`Failed to execute copy command: ${error.message}`));
-      });
-    });
-
-    findProcess.on("error", (error) => {
-      reject(new Error(`Failed to execute find command: ${error.message}`));
-    });
-  });
+  console.warn(
+    "copyExecutable is deprecated. buildFuzzTestsWithScript handles copying automatically.",
+  );
+  return {
+    name: target,
+    path: path.join(fuzzingDir, target),
+    originalPath: path.join(buildDir, target),
+  };
 }
 
 /**
  * Cleans up temporary build directories
+ * @deprecated This function is deprecated. Build directories are managed automatically.
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
  * @param {string[]} buildDirs - Array of build directory paths to clean
@@ -489,47 +179,10 @@ async function cleanupBuildDirectories(
   buildDirs,
   terminal,
 ) {
-  if (buildDirs.length === 0) return;
-
-  safeFuzzingLog(
-    terminal,
-    `Cleaning up ${buildDirs.length} build director(ies)...`,
+  console.warn(
+    "cleanupBuildDirectories is deprecated. Build directories are managed automatically.",
   );
-
-  const options = {
-    removeAfterRun: true,
-    mountWorkspace: true,
-    dockerCommand: "docker",
-  };
-
-  const cleanupCommand = `rm -rf ${buildDirs.map((dir) => `"${dir}"`).join(" ")}`;
-
-  return new Promise((resolve) => {
-    const cleanupProcess = dockerOperations.runDockerCommandWithOutput(
-      workspacePath,
-      containerName,
-      cleanupCommand,
-      "/bin/bash",
-      options,
-    );
-
-    cleanupProcess.on("close", (code) => {
-      if (code === 0) {
-        safeFuzzingLog(terminal, "Build directories cleaned up successfully");
-      } else {
-        safeFuzzingLog(
-          terminal,
-          "Warning: Some build directories may not have been cleaned up properly",
-        );
-      }
-      resolve();
-    });
-
-    cleanupProcess.on("error", (error) => {
-      safeFuzzingLog(terminal, `Warning: Cleanup error: ${error.message}`);
-      resolve(); // Don't fail the entire process for cleanup errors
-    });
-  });
+  return Promise.resolve();
 }
 
 /**

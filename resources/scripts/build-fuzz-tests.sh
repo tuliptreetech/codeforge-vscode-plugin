@@ -5,18 +5,35 @@ set -euo pipefail
 # This script builds fuzz tests for the project and copies them to a central location.
 
 scripts_directory="$(dirname "$(realpath "$0")")"
-codeforge_directory="$(realpath "$codeforge_directory/..")"
+codeforge_directory="$(realpath "$scripts_directory/..")"
 root_directory="$(realpath "$codeforge_directory/..")"
 fuzzing_directory="$codeforge_directory/fuzzing"
 
 cd "$root_directory"
 
-fuzzers=$($scripts_directory/find-fuzz-tests.sh -q)
+if [ $# -gt 0 ]; then
+    fuzzers="$1"
+else 
+    fuzzers=$($scripts_directory/find-fuzz-tests.sh -q)
+fi
 
 for f in $fuzzers; do
     IFS=":" read -r preset fuzzer_name <<< "$f"
 
     build_dir="$fuzzing_directory/build-$preset"
+
+    if [[ ! -d "$build_dir" ]]; then
+        # Configure with the preset
+        set +e 
+        cmake --preset "$preset" -S . -B "$build_dir" 1>/dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            [ $quiet == false ] && echo "[+] Failed to configure preset $p - skipping"
+            rm -rf "$build_dir"
+            continue
+        fi
+        set -e
+    fi
+
     echo "[+] building target: $fuzzer_name in preset: $build_dir"
     set +e
     cmake_command="cmake --build $build_dir --target $fuzzer_name"

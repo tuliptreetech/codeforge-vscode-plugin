@@ -5,6 +5,561 @@ const fs = require("fs").promises;
 const { getOutputDirectory } = require("./fuzzingConfig");
 
 /**
+ * Builds fuzz tests using the build-fuzz-tests.sh script
+ * @param {string} workspacePath - Path to the workspace
+ * @param {string} containerName - Docker container name
+ * @param {Array} fuzzTests - Array of fuzz test objects with preset and fuzzer properties
+ * @param {Object} terminal - Terminal instance for logging
+ * @returns {Promise<Object>} Build results with builtTargets, errors, and builtFuzzers
+ */
+async function buildFuzzTestsWithScript(
+  workspacePath,
+  containerName,
+  fuzzTests,
+  terminal,
+) {
+  const results = {
+    builtTargets: 0,
+    errors: [],
+    builtFuzzers: [],
+  };
+
+  if (fuzzTests.length === 0) {
+    safeFuzzingLog(terminal, "No fuzz tests to build");
+    return results;
+  }
+
+  // Convert fuzz tests to script format: "preset:fuzzer_name preset:fuzzer_name ..."
+  const fuzzerList = fuzzTests
+    .map((ft) => `${ft.preset}:${ft.fuzzer}`)
+    .join(" ");
+
+  safeFuzzingLog(terminal, `Building ${fuzzTests.length} fuzz test(s)...`);
+
+  // Display build header in terminal
+  if (terminal && typeof terminal.writeRaw === "function") {
+    terminal.writeRaw(`\r\n\x1b[36m╭─ BUILDING FUZZ TESTS ─╮\x1b[0m\r\n`, null);
+    terminal.writeRaw(
+      `\x1b[36m│ Targets: ${fuzzTests.map((ft) => ft.fuzzer).join(", ")}\x1b[0m\r\n`,
+      null,
+    );
+    terminal.writeRaw(`\x1b[36m│ Script: build-fuzz-tests.sh\x1b[0m\r\n`, null);
+    terminal.writeRaw(
+      `\x1b[36m╰─────────────────────────────╯\x1b[0m\r\n\r\n`,
+      null,
+    );
+  }
+
+  return new Promise((resolve, reject) => {
+    const options = {
+      removeAfterRun: true,
+      mountWorkspace: true,
+      dockerCommand: "docker",
+    };
+
+    // Execute the build script with the fuzzer list
+    const buildCommand = `.codeforge/scripts/build-fuzz-tests.sh "${fuzzerList}"`;
+
+    const buildProcess = dockerOperations.runDockerCommandWithOutput(
+      workspacePath,
+      containerName,
+      buildCommand,
+      "/bin/bash",
+      options,
+    );
+
+    let stdout = "";
+    let stderr = "";
+
+    buildProcess.stdout.on("data", (data) => {
+      const chunk = data.toString();
+      stdout += chunk;
+      // Stream build output to terminal in real-time
+      if (terminal && typeof terminal.writeRaw === "function") {
+        terminal.writeRaw(chunk, "\x1b[37m"); // Light gray for build output
+      }
+    });
+
+    buildProcess.stderr.on("data", (data) => {
+      const chunk = data.toString();
+      stderr += chunk;
+      // Stream error output to terminal in real-time with error formatting
+      if (terminal && typeof terminal.writeRaw === "function") {
+        terminal.writeRaw(chunk, "\x1b[31m"); // Red for error output
+      }
+    });
+
+    buildProcess.on("close", (code) => {
+      if (code !== 0) {
+        // Parse script output for specific build failures
+        const buildErrors = parseScriptBuildErrors(stdout, stderr, fuzzTests);
+        results.errors = buildErrors;
+
+        // Display formatted error in terminal
+        if (terminal && typeof terminal.writeRaw === "function") {
+          terminal.writeRaw(`\r\n\x1b[31m╭─ BUILD FAILED ─╮\x1b[0m\r\n`, null);
+          terminal.writeRaw(`\x1b[31m│ Exit Code: ${code}\x1b[0m\r\n`, null);
+          terminal.writeRaw(
+            `\x1b[31m│ Command: ${buildCommand}\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[31m╰─────────────────────────────╯\x1b[0m\r\n`,
+            null,
+          );
+
+          if (stderr.trim()) {
+            terminal.writeRaw(`\r\n\x1b[33m📋 Error Output:\x1b[0m\r\n`, null);
+            terminal.writeRaw(`\x1b[31m${stderr}\x1b[0m\r\n`, null);
+          }
+        }
+
+        // If we have specific build errors, resolve with partial results
+        if (buildErrors.length > 0) {
+          // Count successful builds by checking which fuzzers were built
+          const successfulBuilds = parseSuccessfulBuilds(stdout, fuzzTests);
+          results.builtTargets = successfulBuilds.length;
+          results.builtFuzzers = successfulBuilds;
+
+          safeFuzzingLog(
+            terminal,
+            `Script build completed with ${buildErrors.length} error(s), ${successfulBuilds.length} successful build(s)`,
+          );
+          resolve(results);
+        } else {
+          // Complete failure
+          const error = new Error(
+            `Build script failed with exit code ${code}: ${stderr}`,
+          );
+          error.buildContext = {
+            exitCode: code,
+            stdout: stdout,
+            stderr: stderr,
+            buildCommand: buildCommand,
+            timestamp: new Date().toISOString(),
+          };
+          reject(error);
+        }
+        return;
+      }
+
+      // Success case - parse successful builds
+      const successfulBuilds = parseSuccessfulBuilds(stdout, fuzzTests);
+      results.builtTargets = successfulBuilds.length;
+      results.builtFuzzers = successfulBuilds;
+
+      // Display success summary
+      if (terminal && typeof terminal.writeRaw === "function") {
+        terminal.writeRaw(
+          `\r\n\x1b[32m╭─ BUILD SUCCESSFUL ─╮\x1b[0m\r\n`,
+          null,
+        );
+        terminal.writeRaw(
+          `\x1b[32m│ Built: ${successfulBuilds.length}/${fuzzTests.length} targets\x1b[0m\r\n`,
+          null,
+        );
+        terminal.writeRaw(
+          `\x1b[32m╰─────────────────────────────╯\x1b[0m\r\n`,
+          null,
+        );
+      }
+
+      safeFuzzingLog(
+        terminal,
+        `Build completed successfully: ${successfulBuilds.length} target(s) built`,
+      );
+      resolve(results);
+    });
+
+    buildProcess.on("error", (error) => {
+      const wrappedError = new Error(
+        `Failed to execute build script: ${error.message}`,
+      );
+
+      wrappedError.buildContext = {
+        buildCommand: buildCommand,
+        processError: error.message,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Display formatted process error in terminal
+      if (terminal && typeof terminal.writeRaw === "function") {
+        terminal.writeRaw(`\r\n\x1b[31m❌ PROCESS ERROR\x1b[0m\r\n`, null);
+        terminal.writeRaw(`\x1b[31m${error.message}\x1b[0m\r\n`, null);
+      }
+
+      reject(wrappedError);
+    });
+  });
+}
+
+/**
+ * Parses script output to identify successful builds
+ * @param {string} stdout - Script stdout
+ * @param {Array} fuzzTests - Original fuzz tests array
+ * @returns {Array} Array of successfully built fuzzer objects
+ */
+function parseSuccessfulBuilds(stdout, fuzzTests) {
+  const successfulBuilds = [];
+  const lines = stdout.split("\n");
+
+  // Look for "[+] built fuzzer: <name>" lines
+  lines.forEach((line) => {
+    const match = line.match(/\[\+\] built fuzzer: (.+)/);
+    if (match) {
+      const fuzzerName = match[1].trim();
+      const fuzzTest = fuzzTests.find((ft) => ft.fuzzer === fuzzerName);
+      if (fuzzTest) {
+        successfulBuilds.push({
+          name: fuzzerName,
+          path: `.codeforge/fuzzing/${fuzzerName}`,
+          preset: fuzzTest.preset,
+        });
+      }
+    }
+  });
+
+  return successfulBuilds;
+}
+
+/**
+ * Parses script output to identify build errors
+ * @param {string} stdout - Script stdout
+ * @param {string} stderr - Script stderr
+ * @param {Array} fuzzTests - Original fuzz tests array
+ * @returns {Array} Array of build error objects
+ */
+function parseScriptBuildErrors(stdout, stderr, fuzzTests) {
+  const buildErrors = [];
+  const lines = stdout.split("\n");
+
+  // Look for "[!] Failed to build target <name>" lines
+  lines.forEach((line, index) => {
+    const match = line.match(/\[\!\] Failed to build target (.+)/);
+    if (match) {
+      const fuzzerName = match[1].trim();
+      const fuzzTest = fuzzTests.find((ft) => ft.fuzzer === fuzzerName);
+
+      // Try to get the error details from subsequent lines
+      let errorDetails = "Build failed";
+      if (index + 1 < lines.length) {
+        errorDetails = lines[index + 1].trim() || errorDetails;
+      }
+
+      buildErrors.push({
+        preset: fuzzTest ? fuzzTest.preset : "unknown",
+        error: `Failed to build target ${fuzzerName}`,
+        type: "build_error",
+        timestamp: new Date().toISOString(),
+        buildErrors: [
+          {
+            target: fuzzerName,
+            error: errorDetails,
+            buildContext: {
+              buildCommand: `cmake --build ... --target ${fuzzerName}`,
+              stderr: errorDetails,
+              timestamp: new Date().toISOString(),
+            },
+          },
+        ],
+        failedTargets: [fuzzerName],
+        totalTargets: 1,
+      });
+    }
+  });
+
+  // If no specific errors found but we have stderr, create a general error
+  if (buildErrors.length === 0 && stderr.trim()) {
+    buildErrors.push({
+      preset: "unknown",
+      error: "Script execution failed",
+      type: "script_error",
+      timestamp: new Date().toISOString(),
+      buildErrors: [
+        {
+          target: "script",
+          error: stderr.trim(),
+          buildContext: {
+            stderr: stderr.trim(),
+            timestamp: new Date().toISOString(),
+          },
+        },
+      ],
+      failedTargets: fuzzTests.map((ft) => ft.fuzzer),
+      totalTargets: fuzzTests.length,
+    });
+  }
+
+  return buildErrors;
+}
+
+/**
+ * Runs fuzz tests using the run-fuzz-tests.sh script
+ * @param {string} workspacePath - Path to the workspace
+ * @param {string} containerName - Docker container name
+ * @param {Array} fuzzTests - Array of fuzz test objects with preset and fuzzer properties
+ * @param {Object} terminal - Terminal instance for logging
+ * @returns {Promise<Object>} Execution results with executed count, crashes, and errors
+ */
+async function runFuzzTestsWithScript(
+  workspacePath,
+  containerName,
+  fuzzTests,
+  terminal,
+) {
+  const results = {
+    executed: 0,
+    crashes: [],
+    errors: [],
+  };
+
+  if (fuzzTests.length === 0) {
+    safeFuzzingLog(terminal, "No fuzz tests to run");
+    return results;
+  }
+
+  // Convert fuzz tests to script format: "preset:fuzzer_name preset:fuzzer_name ..."
+  const fuzzerList = fuzzTests
+    .map((ft) => `${ft.preset}:${ft.fuzzer}`)
+    .join(" ");
+
+  safeFuzzingLog(terminal, `Running ${fuzzTests.length} fuzz test(s)...`);
+
+  // Display execution header in terminal
+  if (terminal && typeof terminal.writeRaw === "function") {
+    terminal.writeRaw(`\r\n\x1b[35m╭─ RUNNING FUZZ TESTS ─╮\x1b[0m\r\n`, null);
+    terminal.writeRaw(
+      `\x1b[35m│ Targets: ${fuzzTests.map((ft) => ft.fuzzer).join(", ")}\x1b[0m\r\n`,
+      null,
+    );
+    terminal.writeRaw(`\x1b[35m│ Script: run-fuzz-tests.sh\x1b[0m\r\n`, null);
+    terminal.writeRaw(
+      `\x1b[35m╰─────────────────────────────╯\x1b[0m\r\n\r\n`,
+      null,
+    );
+  }
+
+  return new Promise((resolve, reject) => {
+    const options = {
+      removeAfterRun: true,
+      mountWorkspace: true,
+      dockerCommand: "docker",
+    };
+
+    // Execute the run script with the fuzzer list
+    const runCommand = `.codeforge/scripts/run-fuzz-tests.sh "${fuzzerList}"`;
+
+    const runProcess = dockerOperations.runDockerCommandWithOutput(
+      workspacePath,
+      containerName,
+      runCommand,
+      "/bin/bash",
+      options,
+    );
+
+    let stdout = "";
+    let stderr = "";
+
+    runProcess.stdout.on("data", (data) => {
+      const chunk = data.toString();
+      stdout += chunk;
+      // Stream execution output to terminal in real-time
+      if (terminal && typeof terminal.writeRaw === "function") {
+        terminal.writeRaw(chunk, "\x1b[37m"); // Light gray for execution output
+      }
+    });
+
+    runProcess.stderr.on("data", (data) => {
+      const chunk = data.toString();
+      stderr += chunk;
+      // Stream error output to terminal in real-time with error formatting
+      if (terminal && typeof terminal.writeRaw === "function") {
+        terminal.writeRaw(chunk, "\x1b[31m"); // Red for error output
+      }
+    });
+
+    runProcess.on("close", (code) => {
+      // Parse script output for execution results
+      const executionResults = parseScriptExecutionResults(
+        stdout,
+        stderr,
+        fuzzTests,
+      );
+      results.executed = executionResults.executed;
+      results.crashes = executionResults.crashes;
+      results.errors = executionResults.errors;
+
+      // Display execution summary
+      if (terminal && typeof terminal.writeRaw === "function") {
+        if (code === 0 || results.executed > 0) {
+          terminal.writeRaw(
+            `\r\n\x1b[32m╭─ EXECUTION COMPLETED ─╮\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[32m│ Executed: ${results.executed}/${fuzzTests.length} fuzzers\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[32m│ Crashes: ${results.crashes.length}\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[32m╰─────────────────────────────────╯\x1b[0m\r\n`,
+            null,
+          );
+        } else {
+          terminal.writeRaw(
+            `\r\n\x1b[31m╭─ EXECUTION FAILED ─╮\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(`\x1b[31m│ Exit Code: ${code}\x1b[0m\r\n`, null);
+          terminal.writeRaw(
+            `\x1b[31m│ Command: ${runCommand}\x1b[0m\r\n`,
+            null,
+          );
+          terminal.writeRaw(
+            `\x1b[31m╰─────────────────────────────╯\x1b[0m\r\n`,
+            null,
+          );
+
+          if (stderr.trim()) {
+            terminal.writeRaw(`\r\n\x1b[33m📋 Error Output:\x1b[0m\r\n`, null);
+            terminal.writeRaw(`\x1b[31m${stderr}\x1b[0m\r\n`, null);
+          }
+        }
+      }
+
+      if (code !== 0 && results.executed === 0) {
+        // Complete failure
+        const error = new Error(
+          `Run script failed with exit code ${code}: ${stderr}`,
+        );
+        error.executionContext = {
+          exitCode: code,
+          stdout: stdout,
+          stderr: stderr,
+          runCommand: runCommand,
+          timestamp: new Date().toISOString(),
+        };
+        reject(error);
+        return;
+      }
+
+      safeFuzzingLog(
+        terminal,
+        `Execution completed: ${results.executed} fuzzer(s) executed, ${results.crashes.length} crash(es) found`,
+      );
+      resolve(results);
+    });
+
+    runProcess.on("error", (error) => {
+      const wrappedError = new Error(
+        `Failed to execute run script: ${error.message}`,
+      );
+
+      wrappedError.executionContext = {
+        runCommand: runCommand,
+        processError: error.message,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Display formatted process error in terminal
+      if (terminal && typeof terminal.writeRaw === "function") {
+        terminal.writeRaw(`\r\n\x1b[31m❌ PROCESS ERROR\x1b[0m\r\n`, null);
+        terminal.writeRaw(`\x1b[31m${error.message}\x1b[0m\r\n`, null);
+      }
+
+      reject(wrappedError);
+    });
+  });
+}
+
+/**
+ * Parses script output to identify execution results, crashes, and errors
+ * @param {string} stdout - Script stdout
+ * @param {string} stderr - Script stderr
+ * @param {Array} fuzzTests - Original fuzz tests array
+ * @returns {Object} Object with executed count, crashes array, and errors array
+ */
+function parseScriptExecutionResults(stdout, stderr, fuzzTests) {
+  const results = {
+    executed: 0,
+    crashes: [],
+    errors: [],
+  };
+
+  const lines = stdout.split("\n");
+
+  // Track which fuzzers were executed
+  const executedFuzzers = new Set();
+
+  // Look for "[+] running fuzzer: <path>" lines to count executed fuzzers
+  lines.forEach((line) => {
+    const runMatch = line.match(/\[\+\] running fuzzer: (.+)/);
+    if (runMatch) {
+      const fuzzerPath = runMatch[1].trim();
+      // Extract fuzzer name from path (last part after /)
+      const fuzzerName = fuzzerPath.split("/").pop();
+      executedFuzzers.add(fuzzerName);
+    }
+  });
+
+  results.executed = executedFuzzers.size;
+
+  // Look for crash detection: "[+] Found crash file: <path>"
+  lines.forEach((line) => {
+    const crashMatch = line.match(/\[\+\] Found crash file: (.+)/);
+    if (crashMatch) {
+      const crashFile = crashMatch[1].trim();
+      // Extract fuzzer name from crash file path
+      const pathParts = crashFile.split("/");
+      let fuzzerName = "unknown";
+
+      // Look for fuzzer name in path (typically in format: .../fuzzer_name-output/corpus/crash-*)
+      for (let i = 0; i < pathParts.length; i++) {
+        if (pathParts[i].endsWith("-output")) {
+          fuzzerName = pathParts[i].replace("-output", "");
+          break;
+        }
+      }
+
+      results.crashes.push({
+        fuzzer: fuzzerName,
+        file: crashFile,
+        relativePath: crashFile.split("/").slice(-2).join("/"), // Get last two parts of path
+      });
+    }
+  });
+
+  // Look for fuzzer errors: "[+] fuzzer <path> encountered errors!"
+  lines.forEach((line) => {
+    const errorMatch = line.match(/\[\+\] fuzzer (.+) encountered errors!/);
+    if (errorMatch) {
+      const fuzzerPath = errorMatch[1].trim();
+      const fuzzerName = fuzzerPath.split("/").pop();
+
+      results.errors.push({
+        fuzzer: fuzzerName,
+        error: "Fuzzer encountered errors during execution",
+        type: "execution",
+      });
+    }
+  });
+
+  // If we have stderr but no specific errors, create a general error
+  if (results.errors.length === 0 && stderr.trim()) {
+    results.errors.push({
+      fuzzer: "script",
+      error: stderr.trim(),
+      type: "script_error",
+    });
+  }
+
+  return results;
+}
+
+/**
  * Safe wrapper for fuzzing terminal operations
  * Works with both output channels and terminal instances
  */
@@ -141,8 +696,6 @@ async function orchestrateFuzzingWorkflow(
 ) {
   // Lazy load modules to avoid circular dependencies
   const cmakePresetDiscovery = require("./cmakePresetDiscovery");
-  const fuzzTargetBuilder = require("./fuzzTargetBuilder");
-  const fuzzRunner = require("./fuzzRunner");
   const results = {
     totalPresets: 0,
     processedPresets: 0,
@@ -159,143 +712,89 @@ async function orchestrateFuzzingWorkflow(
     const fuzzingDir = await createFuzzingDirectory(workspacePath);
     progressCallback("Creating fuzzing directory", 5);
 
-    // Discover CMake presets
-    safeFuzzingLog(terminal, "Discovering CMake presets...");
-    progressCallback("Discovering CMake presets", 10);
+    // Discover fuzz tests
+    safeFuzzingLog(terminal, "Discovering fuzz tests...");
+    progressCallback("Discovering fuzz tests", 10);
 
-    const presets = await cmakePresetDiscovery.discoverCMakePresets(
+    const fuzzTests = await cmakePresetDiscovery.discoverFuzzTestsWithScript(
       workspacePath,
       containerName,
       terminal,
     );
 
-    results.totalPresets = presets.length;
-    safeFuzzingLog(
-      terminal,
-      `Found ${presets.length} CMake preset(s): ${presets.join(", ")}`,
-    );
-
-    if (presets.length === 0) {
+    if (fuzzTests.length === 0) {
       throw new Error(
-        "No CMake presets found. Ensure your project has CMakePresets.json or CMakeUserPresets.json",
+        "No fuzz tests found. Ensure your project has fuzz targets and CMakePresets.json",
       );
     }
 
-    const allFuzzers = new Map(); // Map to store fuzzer paths
-
-    // Process each preset
-    for (let i = 0; i < presets.length; i++) {
-      const preset = presets[i];
-      const presetProgress = 20 + (i / presets.length) * 60; // 20-80% for preset processing
-
-      try {
-        safeFuzzingLog(terminal, `Processing preset: ${preset}`);
-        progressCallback(`Processing preset: ${preset}`, presetProgress);
-
-        // Create temporary build directory
-        const buildDir = await fuzzTargetBuilder.createTemporaryBuildDirectory(
-          fuzzingDir,
-          preset,
-        );
-
-        // Discover fuzz targets for this preset
-        const targets = await cmakePresetDiscovery.discoverFuzzTargets(
-          workspacePath,
-          containerName,
-          preset,
-          buildDir,
-          terminal,
-        );
-
-        if (targets.length === 0) {
-          safeFuzzingLog(
-            terminal,
-            `No fuzz targets found for preset ${preset} - skipping`,
-          );
-          continue;
-        }
-
-        results.totalTargets += targets.length;
-        safeFuzzingLog(
-          terminal,
-          `Found ${targets.length} fuzz target(s) for preset ${preset}: ${targets.join(", ")}`,
-        );
-
-        // Build fuzz targets
-        const buildResult = await fuzzTargetBuilder.buildFuzzTargets(
-          workspacePath,
-          containerName,
-          preset,
-          targets,
-          buildDir,
-          terminal,
-        );
-
-        results.builtTargets += buildResult.builtTargets.length;
-
-        // Collect build errors for proper error tracking in orchestration workflow
-        if (buildResult.buildErrors && buildResult.buildErrors.length > 0) {
-          // Create error entry for this preset with detailed build error information
-          const errorInfo = {
-            preset: preset,
-            error: `${buildResult.buildErrors.length} target(s) failed to build`,
-            type: "build_error",
-            timestamp: new Date().toISOString(),
-            buildErrors: buildResult.buildErrors,
-            failedTargets: buildResult.buildErrors.map((e) => e.target),
-            totalTargets: targets.length,
-          };
-
-          results.errors.push(errorInfo);
-        }
-
-        // Copy executables to central location
-        const copiedFuzzers = await fuzzTargetBuilder.copyFuzzExecutables(
-          workspacePath,
-          containerName,
-          buildDir,
-          buildResult.builtTargets,
-          fuzzingDir,
-          terminal,
-        );
-
-        // Add to fuzzer collection
-        copiedFuzzers.forEach((fuzzer) => {
-          allFuzzers.set(fuzzer.name, fuzzer.path);
-        });
-
-        results.processedPresets++;
-      } catch (error) {
-        safeFuzzingLog(
-          terminal,
-          `Error processing preset ${preset}: ${error.message}`,
-        );
-        results.errors.push({
-          preset: preset,
-          error: error.message,
-          type: "preset_processing",
-        });
-        // Continue with next preset
+    // Group fuzz tests by preset
+    const presetGroups = new Map();
+    fuzzTests.forEach((ft) => {
+      if (!presetGroups.has(ft.preset)) {
+        presetGroups.set(ft.preset, []);
       }
+      presetGroups.get(ft.preset).push(ft.fuzzer);
+    });
+
+    const presets = Array.from(presetGroups.keys());
+    results.totalPresets = presets.length;
+    results.totalTargets = fuzzTests.length;
+
+    safeFuzzingLog(
+      terminal,
+      `Found ${fuzzTests.length} fuzz test(s) across ${presets.length} preset(s): ${presets.join(", ")}`,
+    );
+
+    // Build all fuzz tests
+    safeFuzzingLog(terminal, "Building fuzz tests...");
+    progressCallback("Building fuzz tests", 30);
+
+    try {
+      const buildResult = await buildFuzzTestsWithScript(
+        workspacePath,
+        containerName,
+        fuzzTests,
+        terminal,
+      );
+
+      results.builtTargets = buildResult.builtTargets;
+      results.errors = buildResult.errors;
+      results.processedPresets = presets.length; // All presets were processed by the script
+
+      progressCallback("Build complete", 70);
+    } catch (error) {
+      safeFuzzingLog(terminal, `Error building fuzz tests: ${error.message}`);
+      results.errors.push({
+        error: error.message,
+        type: "build_script_error",
+        timestamp: new Date().toISOString(),
+      });
     }
 
     // Execute fuzzers
-    if (allFuzzers.size > 0) {
-      safeFuzzingLog(terminal, `Running ${allFuzzers.size} fuzzer(s)...`);
+    if (fuzzTests.length > 0) {
       progressCallback("Running fuzzers", 85);
 
-      const fuzzingResults = await fuzzRunner.runAllFuzzers(
-        workspacePath,
-        containerName,
-        allFuzzers,
-        fuzzingDir,
-        terminal,
-        options.fuzzingOptions || {},
-      );
+      try {
+        const fuzzingResults = await runFuzzTestsWithScript(
+          workspacePath,
+          containerName,
+          fuzzTests,
+          terminal,
+        );
 
-      results.executedFuzzers = fuzzingResults.executed;
-      results.crashes = fuzzingResults.crashes;
-      results.errors.push(...fuzzingResults.errors);
+        results.executedFuzzers = fuzzingResults.executed;
+        results.crashes = fuzzingResults.crashes;
+        results.errors.push(...fuzzingResults.errors);
+      } catch (error) {
+        safeFuzzingLog(terminal, `Error running fuzz tests: ${error.message}`);
+        results.errors.push({
+          error: error.message,
+          type: "execution_script_error",
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
 
     progressCallback("Generating reports", 95);
@@ -440,26 +939,24 @@ async function buildFuzzingTargetsOnly(
     const fuzzingDir = await createFuzzingDirectory(workspacePath);
     progressCallback("Creating fuzzing directory", 5);
 
-    // Discover CMake presets
-    safeFuzzingLog(terminal, "Discovering CMake presets...");
-    progressCallback("Discovering CMake presets", 10);
+    // Discover fuzz tests
+    safeFuzzingLog(terminal, "Discovering fuzz tests...");
+    progressCallback("Discovering fuzz tests", 10);
 
-    const presets = await cmakePresetDiscovery.discoverCMakePresets(
+    const fuzzTests = await cmakePresetDiscovery.discoverFuzzTestsWithScript(
       workspacePath,
       containerName,
       terminal,
     );
 
-    results.totalPresets = presets.length;
-
-    if (presets.length === 0) {
+    if (fuzzTests.length === 0) {
       safeFuzzingLog(
         terminal,
-        "No CMake presets found. This may be normal if the project doesn't have CMakePresets.json or if discovery failed.",
+        "No fuzz tests found. This may be normal if the project doesn't have fuzz targets or if discovery failed.",
       );
 
       // Return early with empty results instead of throwing error
-      const message = "Build completed but no CMake presets were found.";
+      const message = "Build completed but no fuzz tests were found.";
       vscode.window.showInformationMessage(`CodeForge: ${message}`, {
         modal: false,
       });
@@ -467,169 +964,49 @@ async function buildFuzzingTargetsOnly(
       return results;
     }
 
+    // Group fuzz tests by preset
+    const presetGroups = new Map();
+    fuzzTests.forEach((ft) => {
+      if (!presetGroups.has(ft.preset)) {
+        presetGroups.set(ft.preset, []);
+      }
+      presetGroups.get(ft.preset).push(ft.fuzzer);
+    });
+
+    const presets = Array.from(presetGroups.keys());
+    results.totalPresets = presets.length;
+    results.totalTargets = fuzzTests.length;
+
     safeFuzzingLog(
       terminal,
-      `Found ${presets.length} CMake preset(s): ${presets.join(", ")}`,
+      `Found ${fuzzTests.length} fuzz test(s) across ${presets.length} preset(s): ${presets.join(", ")}`,
     );
 
-    const allFuzzers = new Map(); // Map to store fuzzer paths
+    // Build all fuzz tests
+    safeFuzzingLog(terminal, "Building fuzz tests...");
+    progressCallback("Building fuzz tests", 30);
 
-    // Process each preset
-    for (let i = 0; i < presets.length; i++) {
-      const preset = presets[i];
-      const presetProgress = 20 + (i / presets.length) * 70; // 20-90% for preset processing
+    try {
+      const buildResult = await buildFuzzTestsWithScript(
+        workspacePath,
+        containerName,
+        fuzzTests,
+        terminal,
+      );
 
-      try {
-        safeFuzzingLog(terminal, `Processing preset: ${preset}`);
-        progressCallback(`Processing preset: ${preset}`, presetProgress);
+      results.builtTargets = buildResult.builtTargets;
+      results.errors = buildResult.errors;
+      results.processedPresets = presets.length; // All presets were processed by the script
+      results.builtFuzzers = buildResult.builtFuzzers;
 
-        // Create temporary build directory
-        const buildDir = await fuzzTargetBuilder.createTemporaryBuildDirectory(
-          fuzzingDir,
-          preset,
-        );
-
-        // Discover fuzz targets for this preset
-        const targets = await cmakePresetDiscovery.discoverFuzzTargets(
-          workspacePath,
-          containerName,
-          preset,
-          buildDir,
-          terminal,
-        );
-
-        if (targets.length === 0) {
-          safeFuzzingLog(
-            terminal,
-            `No fuzz targets found for preset ${preset} - skipping`,
-          );
-          continue;
-        }
-
-        results.totalTargets += targets.length;
-        safeFuzzingLog(
-          terminal,
-          `Found ${targets.length} fuzz target(s) for preset ${preset}: ${targets.join(", ")}`,
-        );
-
-        // Build fuzz targets
-        const buildResult = await fuzzTargetBuilder.buildFuzzTargets(
-          workspacePath,
-          containerName,
-          preset,
-          targets,
-          buildDir,
-          terminal,
-        );
-
-        // Update results with successful targets
-        results.builtTargets += buildResult.builtTargets.length;
-
-        // Collect build errors for proper error tracking
-        if (buildResult.buildErrors && buildResult.buildErrors.length > 0) {
-          // Create error entry for this preset with detailed build error information
-          const errorInfo = {
-            preset: preset,
-            error: `${buildResult.buildErrors.length} target(s) failed to build`,
-            type: "build_error",
-            timestamp: new Date().toISOString(),
-            buildErrors: buildResult.buildErrors,
-            failedTargets: buildResult.buildErrors.map((e) => e.target),
-            totalTargets: targets.length,
-          };
-
-          results.errors.push(errorInfo);
-
-          // Display enhanced error information in terminal
-          if (terminal && typeof terminal.writeRaw === "function") {
-            terminal.writeRaw(
-              `\r\n\x1b[31m❌ PARTIAL BUILD FAILURE: ${preset}\x1b[0m\r\n`,
-              null,
-            );
-            terminal.writeRaw(
-              `\x1b[31m${buildResult.buildErrors.length} out of ${targets.length} targets failed to build\x1b[0m\r\n`,
-              null,
-            );
-
-            terminal.writeRaw(`\x1b[33m📋 Failed Targets:\x1b[0m\r\n`, null);
-            buildResult.buildErrors.forEach((buildError) => {
-              terminal.writeRaw(
-                `\x1b[31m  • ${buildError.target}: ${buildError.error}\x1b[0m\r\n`,
-                null,
-              );
-            });
-          }
-        }
-
-        // Copy executables to central location
-        const copiedFuzzers = await fuzzTargetBuilder.copyFuzzExecutables(
-          workspacePath,
-          containerName,
-          buildDir,
-          buildResult.builtTargets,
-          fuzzingDir,
-          terminal,
-        );
-
-        // Add to fuzzer collection and results
-        copiedFuzzers.forEach((fuzzer) => {
-          allFuzzers.set(fuzzer.name, fuzzer.path);
-          results.builtFuzzers.push({
-            name: fuzzer.name,
-            path: fuzzer.path,
-            preset: preset,
-          });
-        });
-
-        results.processedPresets++;
-      } catch (error) {
-        // Only report actual build errors, not discovery errors
-        // Discovery errors are now handled silently in cmakePresetDiscovery.js
-        if (error.buildErrors && Array.isArray(error.buildErrors)) {
-          // This is a build error - report it to the user
-          safeFuzzingLog(
-            terminal,
-            `Build error processing preset ${preset}: ${error.message}`,
-          );
-
-          // Enhanced error tracking with build context
-          const errorInfo = {
-            preset: preset,
-            error: error.message,
-            type: "build_error",
-            timestamp: new Date().toISOString(),
-            buildErrors: error.buildErrors,
-            failedTargets: error.buildErrors.map((e) => e.target),
-            totalTargets: error.totalTargets || 0,
-          };
-
-          results.errors.push(errorInfo);
-
-          // Display enhanced error information in terminal
-          if (terminal && typeof terminal.writeRaw === "function") {
-            terminal.writeRaw(
-              `\r\n\x1b[31m❌ BUILD FAILED: ${preset}\x1b[0m\r\n`,
-              null,
-            );
-            terminal.writeRaw(`\x1b[31m${error.message}\x1b[0m\r\n`, null);
-
-            terminal.writeRaw(`\x1b[33m📋 Failed Targets:\x1b[0m\r\n`, null);
-            error.buildErrors.forEach((buildError) => {
-              terminal.writeRaw(
-                `\x1b[31m  • ${buildError.target}: ${buildError.error}\x1b[0m\r\n`,
-                null,
-              );
-            });
-          }
-        } else {
-          // This is likely a discovery error that wasn't caught - log for debugging only
-          console.log(
-            `CodeForge Debug: Unexpected error processing preset ${preset}: ${error.message}`,
-          );
-        }
-
-        // Continue with next preset
-      }
+      progressCallback("Build complete", 80);
+    } catch (error) {
+      safeFuzzingLog(terminal, `Error building fuzz tests: ${error.message}`);
+      results.errors.push({
+        error: error.message,
+        type: "build_script_error",
+        timestamp: new Date().toISOString(),
+      });
     }
 
     progressCallback("Generating build report", 95);
@@ -1045,4 +1422,9 @@ module.exports = {
   handleFuzzingError,
   generateFuzzingSummary,
   generateBuildSummary,
+  buildFuzzTestsWithScript,
+  runFuzzTestsWithScript,
+  parseScriptExecutionResults,
+  parseSuccessfulBuilds,
+  parseScriptBuildErrors,
 };
