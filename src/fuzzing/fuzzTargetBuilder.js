@@ -30,7 +30,6 @@ function safeFuzzingLog(terminal, message, show = false) {
   }
 }
 
-
 /**
  * Builds fuzz targets for a specific preset
  * @deprecated This function is deprecated. Use buildFuzzTestsWithScript from fuzzingOperations.js instead.
@@ -95,9 +94,6 @@ async function buildSingleTarget(
     "This function is deprecated. Use buildFuzzTestsWithScript instead.",
   );
 }
-
-
-
 
 /**
  * Generates troubleshooting hints based on error patterns

@@ -81,7 +81,7 @@ if (
 
 // 2. Check extension.js
 console.log("\n2. Checking extension.js...");
-const extensionPath = path.join(__dirname, "..", "..", "extension.js");
+const extensionPath = path.join(__dirname, "..", "..", "src", "extension.js");
 const extensionContent = fs.readFileSync(extensionPath, "utf8");
 
 // Check for task provider import
@@ -144,7 +144,14 @@ if (
 
 // 3. Check taskProvider.js
 console.log("\n3. Checking taskProvider.js...");
-const taskProviderPath = path.join(__dirname, "..", "..", "taskProvider.js");
+const taskProviderPath = path.join(
+  __dirname,
+  "..",
+  "..",
+  "src",
+  "tasks",
+  "taskProvider.js",
+);
 const taskProviderContent = fs.readFileSync(taskProviderPath, "utf8");
 
 // Check for required methods
