@@ -30,20 +30,6 @@ function safeFuzzingLog(terminal, message, show = false) {
   }
 }
 
-/**
- * Creates a temporary build directory for a preset
- * @deprecated This function is deprecated. Build functionality has been moved to buildFuzzTestsWithScript.
- * @param {string} fuzzingDir - Base fuzzing directory
- * @param {string} preset - CMake preset name
- * @returns {Promise<string>} Path to the build directory
- */
-async function createTemporaryBuildDirectory(fuzzingDir, preset) {
-  console.warn(
-    "createTemporaryBuildDirectory is deprecated. Use buildFuzzTestsWithScript instead.",
-  );
-  const buildDir = path.join(fuzzingDir, `build-${preset}`);
-  return buildDir;
-}
 
 /**
  * Builds fuzz targets for a specific preset
@@ -110,80 +96,8 @@ async function buildSingleTarget(
   );
 }
 
-/**
- * Copies built fuzz executables to the central fuzzing directory
- * @deprecated This function is deprecated. buildFuzzTestsWithScript handles copying automatically.
- * @param {string} workspacePath - Path to the workspace
- * @param {string} containerName - Docker container name
- * @param {string} buildDir - Build directory path
- * @param {string[]} targets - Array of built target names
- * @param {string} fuzzingDir - Central fuzzing directory
- * @param {Object} terminal - Terminal instance for logging
- * @returns {Promise<Object[]>} Array of copied fuzzer info objects
- */
-async function copyFuzzExecutables(
-  workspacePath,
-  containerName,
-  buildDir,
-  targets,
-  fuzzingDir,
-  terminal,
-) {
-  console.warn(
-    "copyFuzzExecutables is deprecated. buildFuzzTestsWithScript handles copying automatically.",
-  );
-  return [];
-}
 
-/**
- * Copies a single executable to the fuzzing directory
- * @deprecated This function is deprecated. buildFuzzTestsWithScript handles copying automatically.
- * @param {string} workspacePath - Path to the workspace
- * @param {string} containerName - Docker container name
- * @param {string} buildDir - Build directory path
- * @param {string} target - Target name
- * @param {string} fuzzingDir - Central fuzzing directory
- * @param {Object} terminal - Terminal instance for logging
- * @returns {Promise<Object>} Fuzzer info object
- */
-async function copyExecutable(
-  workspacePath,
-  containerName,
-  buildDir,
-  target,
-  fuzzingDir,
-  terminal,
-) {
-  console.warn(
-    "copyExecutable is deprecated. buildFuzzTestsWithScript handles copying automatically.",
-  );
-  return {
-    name: target,
-    path: path.join(fuzzingDir, target),
-    originalPath: path.join(buildDir, target),
-  };
-}
 
-/**
- * Cleans up temporary build directories
- * @deprecated This function is deprecated. Build directories are managed automatically.
- * @param {string} workspacePath - Path to the workspace
- * @param {string} containerName - Docker container name
- * @param {string[]} buildDirs - Array of build directory paths to clean
- * @param {Object} terminal - Terminal instance for logging
- * @returns {Promise<void>}
- */
-async function cleanupBuildDirectories(
-  workspacePath,
-  containerName,
-  buildDirs,
-  terminal,
-) {
-  console.warn(
-    "cleanupBuildDirectories is deprecated. Build directories are managed automatically.",
-  );
-  return Promise.resolve();
-}
 
 /**
  * Generates troubleshooting hints based on error patterns
@@ -298,11 +212,7 @@ function generateTroubleshootingHint(errorMessage, buildContext) {
 }
 
 module.exports = {
-  createTemporaryBuildDirectory,
   buildFuzzTargets,
   buildSingleTarget,
-  copyFuzzExecutables,
-  copyExecutable,
-  cleanupBuildDirectories,
   generateTroubleshootingHint,
 };
