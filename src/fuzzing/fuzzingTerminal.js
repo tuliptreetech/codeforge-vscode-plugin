@@ -468,15 +468,9 @@ class CodeForgeBuildTerminal {
           );
 
           // Show troubleshooting hint
-          const fuzzTargetBuilder = require("./fuzzTargetBuilder");
           const commonErrors = error.buildErrors
             .map((be) => be.error)
             .join(" ");
-          const hint =
-            fuzzTargetBuilder.generateTroubleshootingHint(commonErrors);
-          if (hint) {
-            this.writeEmitter.fire(`\x1b[93m   💡 Hint: ${hint}\x1b[0m\r\n`);
-          }
         }
       });
     }

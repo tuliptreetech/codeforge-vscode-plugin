@@ -468,8 +468,8 @@ body {
   background: var(--vscode-scrollbarSlider-hoverBackground);
 }
 
-/* Crashes Section */
-.crashes-section {
+/* Fuzzers Section */
+.fuzzers-section {
   margin-bottom: 24px;
 }
 
@@ -508,10 +508,10 @@ body {
   outline-offset: 2px;
 }
 
-/* Crash States */
-.no-crashes-state,
-.crashes-loading,
-.crashes-error {
+/* Fuzzer States */
+.no-fuzzers-state,
+.fuzzers-loading,
+.fuzzers-error {
   text-align: center;
   padding: 24px 16px;
   color: var(--vscode-descriptionForeground);
@@ -556,8 +556,8 @@ body {
   outline-offset: 2px;
 }
 
-/* Fuzzer Groups */
-.fuzzer-group {
+/* Fuzzer Items */
+.fuzzer-item {
   margin-bottom: 16px;
   border: 1px solid var(--vscode-input-border);
   border-radius: var(--border-radius);
@@ -568,24 +568,69 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 12px 16px;
   background-color: var(--vscode-list-hoverBackground);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
+}
+
+.fuzzer-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
 }
 
 .fuzzer-name {
   color: var(--vscode-foreground);
+  font-weight: 600;
 }
 
-.crash-count {
+.fuzzer-preset {
   color: var(--vscode-descriptionForeground);
   font-size: 12px;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family);
 }
 
-.fuzzer-actions {
+/* Fuzzer Crashes Section */
+.fuzzer-crashes {
+  border-top: 1px solid var(--vscode-input-border);
+}
+
+.fuzzer-crashes.has-crashes .crashes-header {
+  padding: 8px 16px;
+  background-color: var(--vscode-editor-background);
+  cursor: pointer;
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  transition: background-color 0.2s ease;
+}
+
+.fuzzer-crashes.has-crashes .crashes-header:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.crashes-toggle {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.crashes-label {
+  font-weight: 500;
+}
+
+.no-crashes-text {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
 }
 
 .clear-all-btn {
@@ -614,15 +659,22 @@ body {
 .crash-list {
   max-height: 200px;
   overflow-y: auto;
+  transition: max-height 0.3s ease;
+}
+
+.crash-list.collapsed {
+  max-height: 0;
+  overflow: hidden;
 }
 
 .crash-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--vscode-input-border);
   transition: background-color 0.2s ease;
+  background-color: var(--vscode-editor-background);
 }
 
 .crash-item:last-child {
@@ -692,20 +744,43 @@ body {
   color: var(--vscode-terminal-ansiYellow);
 }
 
-/* Loading state for crashes section */
-.crashes-loading .loading-spinner {
+.crash-actions-footer {
+  padding: 8px 16px;
+  background-color: var(--vscode-list-hoverBackground);
+  border-top: 1px solid var(--vscode-input-border);
+}
+
+/* Loading state for fuzzers section */
+.fuzzers-loading .loading-spinner {
   width: 24px;
   height: 24px;
   border-width: 2px;
 }
 
-.crashes-loading .loading-text {
+.fuzzers-loading .loading-text {
   font-size: 13px;
   margin-top: 12px;
 }
 
-/* Responsive adjustments for crash display */
-@media (max-width: 400px) {
+/* Responsive adjustments for fuzzer display */
+@media (max-width: 500px) {
+  .fuzzer-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .fuzzer-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .fuzzer-actions {
+    align-self: flex-end;
+    flex-wrap: wrap;
+  }
+
   .crash-item {
     flex-direction: column;
     align-items: flex-start;
@@ -715,21 +790,11 @@ body {
   .crash-actions {
     align-self: flex-end;
   }
-
-  .fuzzer-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .fuzzer-actions {
-    align-self: flex-end;
-  }
 }
 
 /* High contrast mode adjustments */
 @media (prefers-contrast: high) {
-  .fuzzer-group {
+  .fuzzer-item {
     border-width: 2px;
   }
 
@@ -749,6 +814,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .crash-item,
   .crash-action-btn,
+  .crashes-header,
+  .crash-list,
+  .crashes-toggle,
   .refresh-btn,
   .clear-all-btn,
   .retry-btn {

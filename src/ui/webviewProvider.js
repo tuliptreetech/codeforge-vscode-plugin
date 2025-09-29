@@ -2,7 +2,7 @@ const vscode = require("vscode");
 const path = require("path");
 const fs = require("fs").promises;
 const dockerOperations = require("../core/dockerOperations");
-const { CrashDiscoveryService } = require("../fuzzing/crashDiscoveryService");
+const { FuzzerDiscoveryService } = require("../fuzzing/fuzzerDiscoveryService");
 const {
   InitializationDetectionService,
 } = require("../core/initializationDetectionService");
@@ -25,7 +25,7 @@ class CodeForgeWebviewProvider {
         missingComponents: [],
         details: {},
       },
-      crashes: {
+      fuzzers: {
         isLoading: false,
         lastUpdated: null,
         data: [],
@@ -33,8 +33,18 @@ class CodeForgeWebviewProvider {
       },
     };
 
+    // Add backward compatibility getter for crashes
+    Object.defineProperty(this._currentState, "crashes", {
+      get: function () {
+        return this.fuzzers;
+      },
+      set: function (value) {
+        this.fuzzers = value;
+      },
+    });
+
     // Initialize services
-    this._crashDiscoveryService = new CrashDiscoveryService();
+    this._fuzzerDiscoveryService = new FuzzerDiscoveryService();
     this._initializationService = new InitializationDetectionService(
       resourceManager,
     );
@@ -43,13 +53,17 @@ class CodeForgeWebviewProvider {
     this.resolveWebviewView = this.resolveWebviewView.bind(this);
     this._handleMessage = this._handleMessage.bind(this);
     this._updateState = this._updateState.bind(this);
-    this._updateCrashState = this._updateCrashState.bind(this);
-    this._setCrashLoading = this._setCrashLoading.bind(this);
+    this._updateFuzzerState = this._updateFuzzerState.bind(this);
+    this._setFuzzerLoading = this._setFuzzerLoading.bind(this);
     this._checkInitializationStatus =
       this._checkInitializationStatus.bind(this);
     this._updateInitializationState =
       this._updateInitializationState.bind(this);
     this._setInitializationLoading = this._setInitializationLoading.bind(this);
+
+    // Backward compatibility methods for tests
+    this._updateCrashState = this._updateFuzzerState.bind(this);
+    this._setCrashLoading = this._setFuzzerLoading.bind(this);
   }
 
   /**
@@ -80,8 +94,8 @@ class CodeForgeWebviewProvider {
     // Check initialization status when webview is first created
     setTimeout(() => this._checkInitializationStatus(), 0);
 
-    // Trigger initial crash discovery when webview is first created (asynchronously)
-    setTimeout(() => this._performInitialCrashDiscovery(), 100);
+    // Trigger initial fuzzer discovery when webview is first created (asynchronously)
+    setTimeout(() => this._performInitialFuzzerDiscovery(), 100);
   }
 
   /**
@@ -130,7 +144,8 @@ class CodeForgeWebviewProvider {
         launchTerminal: "codeforge.launchTerminal",
         runFuzzingTests: "codeforge.runFuzzingTests",
         refreshContainers: "codeforge.refreshContainers",
-        refreshCrashes: "codeforge.refreshCrashes",
+        refreshFuzzers: "codeforge.refreshFuzzers",
+        refreshCrashes: "codeforge.refreshFuzzers", // Backward compatibility
         viewCrash: "codeforge.viewCrash",
         analyzeCrash: "codeforge.analyzeCrash",
         clearCrashes: "codeforge.clearCrashes",
@@ -189,12 +204,12 @@ class CodeForgeWebviewProvider {
   }
 
   /**
-   * Update crash state and notify the webview
+   * Update fuzzer state and notify the webview
    */
-  _updateCrashState(crashData) {
-    this._currentState.crashes = {
-      ...this._currentState.crashes,
-      ...crashData,
+  _updateFuzzerState(fuzzerData) {
+    this._currentState.fuzzers = {
+      ...this._currentState.fuzzers,
+      ...fuzzerData,
     };
     this._sendMessage({
       type: "stateUpdate",
@@ -203,11 +218,11 @@ class CodeForgeWebviewProvider {
   }
 
   /**
-   * Set crash loading state
+   * Set fuzzer loading state
    */
-  _setCrashLoading(loading, error = null) {
-    this._currentState.crashes.isLoading = loading;
-    this._currentState.crashes.error = error;
+  _setFuzzerLoading(loading, error = null) {
+    this._currentState.fuzzers.isLoading = loading;
+    this._currentState.fuzzers.error = error;
     this._sendMessage({
       type: "stateUpdate",
       state: this._currentState,
@@ -362,16 +377,16 @@ class CodeForgeWebviewProvider {
             </div>
         </section>
 
-        <!-- Fuzzing Crashes Section -->
-        <section class="crashes-section" id="crashes-section">
+        <!-- Fuzzers Section -->
+        <section class="fuzzers-section" id="fuzzers-section">
             <div class="section-header">
-                <h2>Fuzzing Crashes</h2>
-                <button class="refresh-btn" id="refresh-crashes-btn" title="Refresh crash data">
+                <h2>Fuzzers</h2>
+                <button class="refresh-btn" id="refresh-fuzzers-btn" title="Refresh fuzzer data">
                     <span class="btn-icon">🔄</span>
                 </button>
             </div>
             
-            <div class="crashes-content" id="crashes-content">
+            <div class="fuzzers-content" id="fuzzers-content">
                 <!-- Dynamic content populated by JavaScript -->
             </div>
         </section>
@@ -413,10 +428,10 @@ class CodeForgeWebviewProvider {
   }
 
   /**
-   * Perform initial crash discovery when webview is first created
-   * This ensures crash data is available immediately when the user opens the panel
+   * Perform initial fuzzer discovery when webview is first created
+   * This ensures fuzzer data is available immediately when the user opens the panel
    */
-  async _performInitialCrashDiscovery() {
+  async _performInitialFuzzerDiscovery() {
     try {
       // Check if there's an open workspace
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -431,28 +446,31 @@ class CodeForgeWebviewProvider {
       try {
         await fs.access(codeforgeDir);
       } catch (error) {
-        // .codeforge directory doesn't exist yet, skip crash discovery
+        // .codeforge directory doesn't exist yet, skip fuzzer discovery
         return;
       }
 
       // Set loading state
-      this._setCrashLoading(true);
+      this._setFuzzerLoading(true);
 
-      // Discover crashes
-      const crashData =
-        await this._crashDiscoveryService.discoverCrashes(workspacePath);
+      // Discover fuzzers - use a default container name for discovery
+      const containerName = "codeforge-fuzzer-discovery";
+      const fuzzerData = await this._fuzzerDiscoveryService.discoverFuzzers(
+        workspacePath,
+        containerName,
+      );
 
-      // Update state with discovered crashes
-      this._updateCrashState({
-        data: crashData,
+      // Update state with discovered fuzzers
+      this._updateFuzzerState({
+        data: fuzzerData,
         lastUpdated: new Date().toISOString(),
         isLoading: false,
         error: null,
       });
     } catch (error) {
       // Handle errors gracefully - don't show error messages for initial discovery
-      this._setCrashLoading(false, error.message);
-      console.warn(`Initial crash discovery failed: ${error.message}`);
+      this._setFuzzerLoading(false, error.message);
+      console.warn(`Initial fuzzer discovery failed: ${error.message}`);
     }
   }
 

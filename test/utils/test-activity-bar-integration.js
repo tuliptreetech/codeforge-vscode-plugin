@@ -142,8 +142,8 @@ suite("Activity Bar Integration Test Suite", () => {
 
       await webviewProvider.resolveWebviewView(mockWebviewView);
 
-      // Simulate build button click
-      const buildMessage = {
+      // Simulate run button click (build button removed)
+      const runMessage = {
         type: "command",
         command: "buildEnvironment",
       };

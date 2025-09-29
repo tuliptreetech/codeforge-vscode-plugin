@@ -240,24 +240,61 @@ function parseScriptBuildErrors(stdout, stderr, fuzzTests) {
       const fuzzerName = match[1].trim();
       const fuzzTest = fuzzTests.find((ft) => ft.fuzzer === fuzzerName);
 
-      // Try to get the error details from subsequent lines
+      // Extract detailed error information from subsequent lines
       let errorDetails = "Build failed";
-      if (index + 1 < lines.length) {
-        errorDetails = lines[index + 1].trim() || errorDetails;
+      let buildCommand = "";
+      let buildOutput = "";
+
+      // Look for the cmake command and output in the next few lines
+      for (let i = index + 1; i < Math.min(index + 20, lines.length); i++) {
+        const nextLine = lines[i].trim();
+
+        // Capture the cmake command
+        if (nextLine.startsWith("cmake --build")) {
+          buildCommand = nextLine;
+        }
+
+        // Capture build output until we hit another section or empty lines
+        if (
+          nextLine &&
+          !nextLine.startsWith("[") &&
+          !nextLine.startsWith("cmake --build")
+        ) {
+          if (buildOutput) {
+            buildOutput += "\n" + nextLine;
+          } else {
+            buildOutput = nextLine;
+            errorDetails = nextLine; // Use first line as primary error
+          }
+        }
+
+        // Stop if we hit another build target or section
+        if (nextLine.startsWith("[+]") || nextLine.startsWith("[!]")) {
+          break;
+        }
       }
+
+      // Analyze error type based on content
+      const errorType = categorizeError(buildOutput || errorDetails);
 
       buildErrors.push({
         preset: fuzzTest ? fuzzTest.preset : "unknown",
         error: `Failed to build target ${fuzzerName}`,
-        type: "build_error",
+        type: errorType,
         timestamp: new Date().toISOString(),
         buildErrors: [
           {
             target: fuzzerName,
             error: errorDetails,
+            buildOutput: buildOutput || errorDetails,
+            buildCommand:
+              buildCommand || `cmake --build ... --target ${fuzzerName}`,
+            errorCategory: errorType,
             buildContext: {
-              buildCommand: `cmake --build ... --target ${fuzzerName}`,
-              stderr: errorDetails,
+              buildCommand:
+                buildCommand || `cmake --build ... --target ${fuzzerName}`,
+              stderr: buildOutput || errorDetails,
+              stdout: buildOutput || errorDetails,
               timestamp: new Date().toISOString(),
             },
           },
@@ -268,17 +305,50 @@ function parseScriptBuildErrors(stdout, stderr, fuzzTests) {
     }
   });
 
+  // Look for CMake configuration errors
+  const configErrorMatch = stdout.match(
+    /\[\+\] Failed to configure preset (.+) - skipping/,
+  );
+  if (configErrorMatch) {
+    const preset = configErrorMatch[1];
+    buildErrors.push({
+      preset: preset,
+      error: `Failed to configure CMake preset '${preset}'`,
+      type: "cmake_config_error",
+      timestamp: new Date().toISOString(),
+      buildErrors: [
+        {
+          target: "cmake_configuration",
+          error: `CMake preset '${preset}' configuration failed`,
+          errorCategory: "cmake_config_error",
+          buildContext: {
+            buildCommand: `cmake --preset ${preset}`,
+            stderr: `Failed to configure preset ${preset}`,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      ],
+      failedTargets: fuzzTests
+        .filter((ft) => ft.preset === preset)
+        .map((ft) => ft.fuzzer),
+      totalTargets: fuzzTests.filter((ft) => ft.preset === preset).length,
+    });
+  }
+
   // If no specific errors found but we have stderr, create a general error
   if (buildErrors.length === 0 && stderr.trim()) {
+    const errorType = categorizeError(stderr);
+
     buildErrors.push({
       preset: "unknown",
       error: "Script execution failed",
-      type: "script_error",
+      type: errorType,
       timestamp: new Date().toISOString(),
       buildErrors: [
         {
           target: "script",
           error: stderr.trim(),
+          errorCategory: errorType,
           buildContext: {
             stderr: stderr.trim(),
             timestamp: new Date().toISOString(),
@@ -291,6 +361,53 @@ function parseScriptBuildErrors(stdout, stderr, fuzzTests) {
   }
 
   return buildErrors;
+}
+
+/**
+ * Categorizes error based on error message content
+ * @param {string} errorText - Error message text
+ * @returns {string} Error category
+ */
+function categorizeError(errorText) {
+  const text = errorText.toLowerCase();
+
+  if (text.includes("cmake") && text.includes("preset")) {
+    return "cmake_preset_error";
+  }
+  if (text.includes("cmake") && text.includes("target")) {
+    return "cmake_target_error";
+  }
+  if (text.includes("cmake")) {
+    return "cmake_error";
+  }
+  if (text.includes("error:") || text.includes("compilation")) {
+    return "compilation_error";
+  }
+  if (
+    text.includes("undefined reference") ||
+    text.includes("ld:") ||
+    text.includes("linker")
+  ) {
+    return "linker_error";
+  }
+  if (text.includes("permission denied") || text.includes("access denied")) {
+    return "permission_error";
+  }
+  if (text.includes("docker") || text.includes("container")) {
+    return "docker_error";
+  }
+  if (
+    text.includes("network") ||
+    text.includes("download") ||
+    text.includes("fetch")
+  ) {
+    return "network_error";
+  }
+  if (text.includes("not found") || text.includes("no such file")) {
+    return "file_not_found_error";
+  }
+
+  return "build_error";
 }
 
 /**
@@ -918,8 +1035,6 @@ async function buildFuzzingTargetsOnly(
 ) {
   // Lazy load modules to avoid circular dependencies
   const cmakePresetDiscovery = require("./cmakePresetDiscovery");
-  const fuzzTargetBuilder = require("./fuzzTargetBuilder");
-  const { generateTroubleshootingHint } = fuzzTargetBuilder;
 
   const results = {
     totalPresets: 0,
@@ -1066,9 +1181,6 @@ async function buildFuzzingTargetsOnly(
  * @returns {string} Formatted summary
  */
 function generateBuildSummary(results) {
-  // Import troubleshooting function
-  const { generateTroubleshootingHint } = require("./fuzzTargetBuilder");
-
   const lines = [
     "",
     "╔══════════════════════════════════════════════════════════════╗",
@@ -1189,15 +1301,6 @@ function generateBuildSummary(results) {
         }
       }
 
-      // Generate binary-specific troubleshooting hints
-      const hint = generateTroubleshootingHint(
-        binary.error,
-        binary.buildContext,
-      );
-      if (hint) {
-        lines.push(`      💡 BINARY-SPECIFIC TROUBLESHOOTING: ${hint}`);
-      }
-
       if (binary.timestamp) {
         lines.push(
           `      🕐 Build Failed At: ${new Date(binary.timestamp).toLocaleString()}`,
@@ -1220,6 +1323,54 @@ function generateBuildSummary(results) {
       lines.push(
         `         4. Review compiler error output above for specific issues`,
       );
+
+      // Add binary-specific troubleshooting hints
+      lines.push("", "      🔧 BINARY-SPECIFIC TROUBLESHOOTING:");
+
+      // Analyze error content for specific hints
+      const errorText = (binary.error || "").toLowerCase();
+      const buildOutput = binary.buildContext?.stderr?.toLowerCase() || "";
+      const combinedError = `${errorText} ${buildOutput}`;
+
+      if (combinedError.includes("llvmfuzzertestoneinput")) {
+        lines.push(
+          "         • Missing LLVMFuzzerTestOneInput function - add fuzzer entry point",
+        );
+        lines.push(
+          "         • Ensure your fuzzer implements the required LibFuzzer interface",
+        );
+      }
+
+      if (
+        combinedError.includes("undefined reference") ||
+        combinedError.includes("unresolved external")
+      ) {
+        lines.push(
+          "         • Linking error detected - check library dependencies",
+        );
+        lines.push(
+          "         • Verify all required libraries are linked in CMakeLists.txt",
+        );
+      }
+
+      if (combinedError.includes("cmake") && combinedError.includes("target")) {
+        lines.push(
+          "         • CMake target issue - verify target name in CMakeLists.txt",
+        );
+        lines.push(
+          "         • Check that target is properly defined and configured",
+        );
+      }
+
+      if (
+        combinedError.includes("compiler") ||
+        combinedError.includes("compilation")
+      ) {
+        lines.push("         • Compilation error - review source code syntax");
+        lines.push(
+          "         • Check for missing headers or incorrect includes",
+        );
+      }
 
       lines.push("      " + "═".repeat(58));
     });
@@ -1252,6 +1403,9 @@ function generateBuildSummary(results) {
     const errorPatterns = {};
     failedFuzzBinaries.forEach((binary) => {
       const error = binary.error.toLowerCase();
+      const stderr = binary.buildContext?.stderr?.toLowerCase() || "";
+      const combinedError = `${error} ${stderr}`;
+
       let pattern = "other";
       if (
         error.includes("undefined reference") ||
@@ -1271,7 +1425,11 @@ function generateBuildSummary(results) {
         pattern = "compiler_errors";
       } else if (error.includes("cmake")) {
         pattern = "cmake_errors";
-      } else if (error.includes("fuzzer") || error.includes("sanitizer")) {
+      } else if (
+        combinedError.includes("libfuzzer") ||
+        combinedError.includes("sanitizer") ||
+        combinedError.includes("fuzzer")
+      ) {
         pattern = "fuzzing_specific";
       }
 
@@ -1289,6 +1447,30 @@ function generateBuildSummary(results) {
       lines.push(
         `        - ${patternName}: ${binaries.join(", ")} (${binaries.length} binary/binaries)`,
       );
+
+      // Add specific hints for fuzzing-specific errors
+      if (pattern === "fuzzing_specific") {
+        const fuzzingBinaries = binaries.map((name) =>
+          failedFuzzBinaries.find((b) => (b.binaryName || b.name) === name),
+        );
+
+        fuzzingBinaries.forEach((binary) => {
+          const error = binary.error.toLowerCase();
+          const stderr = binary.buildContext?.stderr?.toLowerCase() || "";
+          const combinedError = `${error} ${stderr}`;
+
+          if (combinedError.includes("libfuzzer not")) {
+            lines.push(
+              "          • LibFuzzer not available - check fuzzing flags and compiler setup",
+            );
+          }
+          if (combinedError.includes("sanitizer")) {
+            lines.push(
+              "          • Sanitizer build issue - verify sanitizer configuration",
+            );
+          }
+        });
+      }
     });
   }
 
@@ -1314,12 +1496,6 @@ function generateBuildSummary(results) {
       // Show error type and message
       lines.push(`   ⚠️  Error Type: ${error.type || "build_error"}`);
       lines.push(`   💥 Error Message: ${error.error}`);
-
-      // Generate hint from main error message
-      const hint = generateTroubleshootingHint(error.error);
-      if (hint) {
-        lines.push(`   💡 Troubleshooting Hint: ${hint}`);
-      }
 
       lines.push("   " + "─".repeat(60));
     });
@@ -1412,6 +1588,348 @@ function generateBuildSummary(results) {
   return lines.join("\n");
 }
 
+/**
+ * Build a specific fuzzer target
+ * @param {string} workspacePath - Path to the workspace
+ * @param {string} fuzzerName - Name of the fuzzer to build
+ * @param {string} preset - Optional preset name (will use 'Debug' as default)
+ * @returns {Promise<Object>} Build results with success status and details
+ */
+async function buildFuzzTarget(workspacePath, fuzzerName, preset = "Debug") {
+  const containerName = dockerOperations.generateContainerName(workspacePath);
+
+  // Create a simple terminal-like object for logging
+  const terminal = {
+    writeRaw: (message, color) => {
+      console.log(
+        `[BuildFuzzTarget] ${message.replace(/\x1b\[[0-9;]*m/g, "")}`,
+      );
+    },
+  };
+
+  try {
+    // Use the provided preset or default to 'Debug'
+    const targetPreset = preset || "Debug";
+
+    // Validate inputs before attempting build
+    if (!fuzzerName || typeof fuzzerName !== "string") {
+      throw new Error(
+        `Invalid fuzzer name: ${fuzzerName}. Fuzzer name must be a non-empty string.`,
+      );
+    }
+
+    if (!workspacePath) {
+      throw new Error(
+        "Workspace path is required for building fuzzer targets.",
+      );
+    }
+
+    // Check if Docker container exists
+    const imageExists = await dockerOperations.checkImageExists(containerName);
+    if (!imageExists) {
+      throw new Error(
+        `Docker image '${containerName}' not found. Please build the Docker environment first.`,
+      );
+    }
+
+    // Build the specific fuzzer using the existing script-based approach
+    const fuzzTest = { preset: targetPreset, fuzzer: fuzzerName };
+    const results = await buildFuzzTestsWithScript(
+      workspacePath,
+      containerName,
+      [fuzzTest],
+      terminal,
+    );
+
+    if (results.errors.length > 0) {
+      const buildError = results.errors[0];
+
+      // Create detailed error with context
+      const detailedError = new Error(
+        createDetailedBuildErrorMessage(fuzzerName, targetPreset, buildError),
+      );
+      detailedError.fuzzerName = fuzzerName;
+      detailedError.preset = targetPreset;
+      detailedError.buildContext = buildError.buildContext || {};
+      detailedError.buildErrors = buildError.buildErrors || [];
+      detailedError.errorType = buildError.type || "build_error";
+      detailedError.suggestions = generateBuildErrorSuggestions(buildError);
+
+      throw detailedError;
+    }
+
+    if (results.builtTargets === 0) {
+      const noTargetsError = new Error(
+        `No targets were built for fuzzer '${fuzzerName}' with preset '${targetPreset}'. This could indicate:\n• Fuzzer not found in CMake configuration\n• CMake preset '${targetPreset}' is invalid\n• Build dependencies are missing\n• Docker container lacks required tools`,
+      );
+      noTargetsError.fuzzerName = fuzzerName;
+      noTargetsError.preset = targetPreset;
+      noTargetsError.errorType = "no_targets_built";
+      noTargetsError.suggestions = [
+        "Verify the fuzzer name exists in your CMakePresets.json",
+        `Check that preset '${targetPreset}' is properly configured`,
+        "Ensure all build dependencies are installed in the Docker container",
+        "Try building with a different preset (e.g., Debug, Release)",
+      ];
+
+      throw noTargetsError;
+    }
+
+    return {
+      success: true,
+      fuzzerName,
+      preset: targetPreset,
+      builtTargets: results.builtTargets,
+      builtFuzzers: results.builtFuzzers,
+    };
+  } catch (error) {
+    // Enhance error with additional context if not already enhanced
+    if (!error.fuzzerName) {
+      error.fuzzerName = fuzzerName;
+      error.preset = preset || "Debug";
+      error.workspacePath = workspacePath;
+      error.containerName = containerName;
+      error.timestamp = new Date().toISOString();
+    }
+
+    console.error(`Error building fuzzer ${fuzzerName}:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Run a specific fuzzer target
+ * @param {string} workspacePath - Path to the workspace
+ * @param {string} fuzzerName - Name of the fuzzer to run
+ * @param {string} preset - Optional preset name (will use 'Debug' as default)
+ * @returns {Promise<Object>} Run results with execution details
+ */
+async function runFuzzTarget(workspacePath, fuzzerName, preset = "Debug") {
+  const containerName = dockerOperations.generateContainerName(workspacePath);
+
+  // Create a simple terminal-like object for logging
+  const terminal = {
+    writeRaw: (message, color) => {
+      console.log(`[RunFuzzTarget] ${message.replace(/\x1b\[[0-9;]*m/g, "")}`);
+    },
+  };
+
+  try {
+    // Use the provided preset or default to 'Debug'
+    const targetPreset = preset || "Debug";
+
+    // Run the specific fuzzer using the existing script-based approach
+    const fuzzTest = { preset: targetPreset, fuzzer: fuzzerName };
+    const results = await runFuzzTestsWithScript(
+      workspacePath,
+      containerName,
+      [fuzzTest],
+      terminal,
+    );
+
+    return {
+      success: true,
+      fuzzerName,
+      preset: targetPreset,
+      executed: results.executed,
+      crashes: results.crashes,
+      errors: results.errors,
+    };
+  } catch (error) {
+    console.error(`Error running fuzzer ${fuzzerName}:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Stop a specific fuzzer target
+ * @param {string} workspacePath - Path to the workspace
+ * @param {string} fuzzerName - Name of the fuzzer to stop
+ * @returns {Promise<Object>} Stop results with success status
+ */
+async function stopFuzzTarget(workspacePath, fuzzerName) {
+  const containerName = dockerOperations.generateContainerName(workspacePath);
+
+  try {
+    // Stop the container associated with this workspace
+    await dockerOperations.stopContainer(containerName);
+
+    return {
+      success: true,
+      fuzzerName,
+      message: `Stopped container ${containerName} for fuzzer ${fuzzerName}`,
+    };
+  } catch (error) {
+    // Container might not be running, which is fine for stop operations
+    console.log(
+      `No running container found for fuzzer ${fuzzerName}: ${error.message}`,
+    );
+    return {
+      success: true,
+      fuzzerName,
+      message: `No running container found for fuzzer ${fuzzerName} (already stopped)`,
+    };
+  }
+}
+
+/**
+ * Creates a detailed error message for build failures
+ * @param {string} fuzzerName - Name of the fuzzer that failed to build
+ * @param {string} preset - CMake preset used
+ * @param {Object} buildError - Build error object from parseScriptBuildErrors
+ * @returns {string} Detailed error message
+ */
+function createDetailedBuildErrorMessage(fuzzerName, preset, buildError) {
+  let message = `Failed to build fuzzer '${fuzzerName}' with preset '${preset}'`;
+
+  if (buildError.buildErrors && buildError.buildErrors.length > 0) {
+    const firstError = buildError.buildErrors[0];
+    if (firstError.error && firstError.error !== "Build failed") {
+      message += `:\n\n${firstError.error}`;
+    }
+
+    if (firstError.buildContext && firstError.buildContext.stderr) {
+      message += `\n\nBuild output:\n${firstError.buildContext.stderr}`;
+    }
+  }
+
+  return message;
+}
+
+/**
+ * Generates actionable suggestions based on build error type and content
+ * @param {Object} buildError - Build error object from parseScriptBuildErrors
+ * @returns {Array<string>} Array of suggestion strings
+ */
+function generateBuildErrorSuggestions(buildError) {
+  const suggestions = [];
+
+  if (!buildError.buildErrors || buildError.buildErrors.length === 0) {
+    return [
+      "Check that the fuzzer name exists in your CMakePresets.json",
+      "Verify Docker container has required build tools",
+      "Try cleaning build directories and rebuilding",
+    ];
+  }
+
+  const errorText = buildError.buildErrors[0].error?.toLowerCase() || "";
+  const stderrText =
+    buildError.buildErrors[0].buildContext?.stderr?.toLowerCase() || "";
+  const combinedError = `${errorText} ${stderrText}`;
+
+  // CMake-specific errors
+  if (combinedError.includes("cmake")) {
+    if (combinedError.includes("preset")) {
+      suggestions.push(
+        "Check that the CMake preset is properly configured in CMakePresets.json",
+      );
+      suggestions.push(
+        "Verify the preset name matches exactly (case-sensitive)",
+      );
+    }
+    if (
+      combinedError.includes("target") &&
+      combinedError.includes("does not exist")
+    ) {
+      suggestions.push(
+        "Verify the fuzzer target is defined in your CMakeLists.txt",
+      );
+      suggestions.push(
+        "Check that the target name matches the fuzzer name exactly",
+      );
+    }
+    if (combinedError.includes("configuration")) {
+      suggestions.push("Run CMake configuration manually to check for issues");
+      suggestions.push("Ensure all required dependencies are available");
+    }
+  }
+
+  // Compiler errors
+  if (
+    combinedError.includes("error:") ||
+    combinedError.includes("undefined reference")
+  ) {
+    suggestions.push("Check for compilation errors in your source code");
+    suggestions.push("Verify all required libraries are linked");
+    suggestions.push("Ensure header files are properly included");
+  }
+
+  // Linker errors
+  if (combinedError.includes("ld:") || combinedError.includes("linker")) {
+    suggestions.push("Check for missing library dependencies");
+    suggestions.push("Verify library paths are correctly configured");
+    suggestions.push("Ensure all object files are being linked");
+  }
+
+  // Permission errors
+  if (
+    combinedError.includes("permission denied") ||
+    combinedError.includes("access denied")
+  ) {
+    suggestions.push("Check file and directory permissions");
+    suggestions.push(
+      "Ensure Docker container has write access to build directories",
+    );
+  }
+
+  // Docker-specific errors
+  if (combinedError.includes("docker") || combinedError.includes("container")) {
+    suggestions.push("Verify Docker is running and accessible");
+    suggestions.push("Check that the Docker image is built and available");
+    suggestions.push("Ensure container has required build tools installed");
+  }
+
+  // Network/dependency errors
+  if (
+    combinedError.includes("network") ||
+    combinedError.includes("download") ||
+    combinedError.includes("fetch")
+  ) {
+    suggestions.push("Check network connectivity for downloading dependencies");
+    suggestions.push("Verify package repositories are accessible");
+  }
+
+  // Generic fallback suggestions
+  if (suggestions.length === 0) {
+    suggestions.push("Check the build output above for specific error details");
+    suggestions.push("Verify all build dependencies are installed");
+    suggestions.push("Try building with verbose output for more information");
+    suggestions.push("Consider cleaning build directories and rebuilding");
+  }
+
+  return suggestions;
+}
+
+/**
+ * Build a specific fuzzer (legacy function name for backward compatibility)
+ * @param {string} workspacePath - Path to the workspace
+ * @param {string} fuzzerName - Name of the fuzzer to build
+ * @returns {Promise<Object>} Build results
+ */
+async function buildFuzzer(workspacePath, fuzzerName) {
+  return buildFuzzTarget(workspacePath, fuzzerName);
+}
+
+/**
+ * Run a specific fuzzer (legacy function name for backward compatibility)
+ * @param {string} workspacePath - Path to the workspace
+ * @param {string} fuzzerName - Name of the fuzzer to run
+ * @returns {Promise<Object>} Run results
+ */
+async function runFuzzer(workspacePath, fuzzerName) {
+  return runFuzzTarget(workspacePath, fuzzerName);
+}
+
+/**
+ * Stop a specific fuzzer (legacy function name for backward compatibility)
+ * @param {string} workspacePath - Path to the workspace
+ * @param {string} fuzzerName - Name of the fuzzer to stop
+ * @returns {Promise<Object>} Stop results
+ */
+async function stopFuzzer(workspacePath, fuzzerName) {
+  return stopFuzzTarget(workspacePath, fuzzerName);
+}
+
 module.exports = {
   runFuzzingTests,
   buildFuzzingTargetsOnly,
@@ -1427,4 +1945,16 @@ module.exports = {
   parseScriptExecutionResults,
   parseSuccessfulBuilds,
   parseScriptBuildErrors,
+  // Individual fuzzer operations (new functions)
+  buildFuzzTarget,
+  runFuzzTarget,
+  stopFuzzTarget,
+  // Legacy function names for backward compatibility
+  buildFuzzer,
+  runFuzzer,
+  stopFuzzer,
+  // Enhanced error handling functions (now exported for testing)
+  createDetailedBuildErrorMessage,
+  generateBuildErrorSuggestions,
+  categorizeError,
 };

@@ -354,6 +354,158 @@ function createMockCrashData() {
 }
 
 /**
+ * Create mock fuzzer data for testing (new fuzzer-centric approach)
+ */
+function createMockFuzzerData() {
+  return [
+    {
+      name: "libfuzzer_test",
+      preset: "Debug",
+      status: "ready",
+      buildInfo: {
+        isBuilt: true,
+        lastBuild: "2024-01-15T10:00:00.000Z",
+        buildPath: "/test/workspace/build/Debug/libfuzzer_test",
+      },
+      runInfo: {
+        isRunning: false,
+        pid: null,
+        startTime: null,
+        duration: null,
+      },
+      crashes: [
+        {
+          id: "crash-abc123",
+          filePath:
+            "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer_test-fuzz-output/corpus/crash-abc123",
+          fileName: "crash-abc123",
+          fileSize: 1024,
+          createdAt: "2024-01-15T10:30:00.000Z",
+          fuzzerName: "libfuzzer_test",
+        },
+        {
+          id: "crash-def456",
+          filePath:
+            "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer_test-fuzz-output/corpus/crash-def456",
+          fileName: "crash-def456",
+          fileSize: 2048,
+          createdAt: "2024-01-15T11:45:00.000Z",
+          fuzzerName: "libfuzzer_test",
+        },
+      ],
+      lastUpdated: new Date("2024-01-15T12:00:00.000Z"),
+    },
+    {
+      name: "afl_test",
+      preset: "Debug",
+      status: "building",
+      buildInfo: {
+        isBuilt: false,
+        lastBuild: null,
+        buildPath: "/test/workspace/build/Debug/afl_test",
+      },
+      runInfo: {
+        isRunning: false,
+        pid: null,
+        startTime: null,
+        duration: null,
+      },
+      crashes: [
+        {
+          id: "crash-ghi789",
+          filePath:
+            "/test/workspace/.codeforge/fuzzing/codeforge-afl_test-fuzz-output/corpus/crash-ghi789",
+          fileName: "crash-ghi789",
+          fileSize: 512,
+          createdAt: "2024-01-15T09:15:00.000Z",
+          fuzzerName: "afl_test",
+        },
+      ],
+      lastUpdated: new Date("2024-01-15T12:00:00.000Z"),
+    },
+    {
+      name: "running_fuzzer",
+      preset: "Debug",
+      status: "running",
+      buildInfo: {
+        isBuilt: true,
+        lastBuild: "2024-01-15T08:00:00.000Z",
+        buildPath: "/test/workspace/build/Debug/running_fuzzer",
+      },
+      runInfo: {
+        isRunning: true,
+        pid: 12345,
+        startTime: "2024-01-15T12:00:00.000Z",
+        duration: 3600,
+      },
+      crashes: [],
+      lastUpdated: new Date("2024-01-15T12:00:00.000Z"),
+    },
+  ];
+}
+
+/**
+ * Assert fuzzer data structure is valid
+ */
+function assertFuzzerDataStructure(fuzzerData) {
+  assert.ok(Array.isArray(fuzzerData), "Fuzzer data should be an array");
+
+  fuzzerData.forEach((fuzzer, index) => {
+    assert.ok(fuzzer.name, `Fuzzer ${index} should have a name`);
+    assert.ok(fuzzer.preset, `Fuzzer ${index} should have a preset`);
+    assert.ok(fuzzer.status, `Fuzzer ${index} should have a status`);
+    assert.ok(fuzzer.buildInfo, `Fuzzer ${index} should have buildInfo`);
+    assert.ok(fuzzer.runInfo, `Fuzzer ${index} should have runInfo`);
+    assert.ok(
+      Array.isArray(fuzzer.crashes),
+      `Fuzzer ${index} crashes should be an array`,
+    );
+    assert.ok(fuzzer.lastUpdated, `Fuzzer ${index} should have lastUpdated`);
+
+    // Validate buildInfo structure
+    assert.ok(
+      typeof fuzzer.buildInfo.isBuilt === "boolean",
+      `Fuzzer ${index} buildInfo.isBuilt should be boolean`,
+    );
+    assert.ok(
+      fuzzer.buildInfo.buildPath,
+      `Fuzzer ${index} should have buildPath`,
+    );
+
+    // Validate runInfo structure
+    assert.ok(
+      typeof fuzzer.runInfo.isRunning === "boolean",
+      `Fuzzer ${index} runInfo.isRunning should be boolean`,
+    );
+
+    // Validate crash structure
+    fuzzer.crashes.forEach((crash, crashIndex) => {
+      assert.ok(crash.id, `Fuzzer ${index} crash ${crashIndex} should have id`);
+      assert.ok(
+        crash.filePath,
+        `Fuzzer ${index} crash ${crashIndex} should have filePath`,
+      );
+      assert.ok(
+        crash.fileName,
+        `Fuzzer ${index} crash ${crashIndex} should have fileName`,
+      );
+      assert.ok(
+        typeof crash.fileSize === "number",
+        `Fuzzer ${index} crash ${crashIndex} fileSize should be number`,
+      );
+      assert.ok(
+        crash.createdAt,
+        `Fuzzer ${index} crash ${crashIndex} should have createdAt`,
+      );
+      assert.ok(
+        crash.fuzzerName,
+        `Fuzzer ${index} crash ${crashIndex} should have fuzzerName`,
+      );
+    });
+  });
+}
+
+/**
  * Create mock webview messages for testing
  */
 function createMockWebviewMessages() {
@@ -369,7 +521,20 @@ function createMockWebviewMessages() {
       type: "unknown",
       data: "test",
     },
-    // Crash-related messages
+    // Fuzzer-related messages
+    refreshFuzzers: {
+      type: "command",
+      command: "refreshFuzzers",
+    },
+    buildFuzzer: {
+      type: "command",
+      command: "buildFuzzer",
+      params: {
+        fuzzerName: "libfuzzer_test",
+        preset: "Debug",
+      },
+    },
+    // Crash-related messages (still needed for crash operations within fuzzers)
     refreshCrashes: {
       type: "command",
       command: "refreshCrashes",
@@ -380,7 +545,7 @@ function createMockWebviewMessages() {
       params: {
         crashId: "crash-abc123",
         filePath:
-          "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/corpus/crash-abc123",
+          "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer_test-fuzz-output/corpus/crash-abc123",
       },
     },
     analyzeCrash: {
@@ -388,16 +553,16 @@ function createMockWebviewMessages() {
       command: "analyzeCrash",
       params: {
         crashId: "crash-abc123",
-        fuzzerName: "libfuzzer",
+        fuzzerName: "libfuzzer_test",
         filePath:
-          "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/corpus/crash-abc123",
+          "/test/workspace/.codeforge/fuzzing/codeforge-libfuzzer_test-fuzz-output/corpus/crash-abc123",
       },
     },
     clearCrashes: {
       type: "command",
       command: "clearCrashes",
       params: {
-        fuzzerName: "libfuzzer",
+        fuzzerName: "libfuzzer_test",
       },
     },
   };
@@ -558,6 +723,62 @@ function createCrashDiscoveryServiceMocks(sandbox) {
 }
 
 /**
+ * Mock FuzzerDiscoveryService operations
+ */
+function createFuzzerDiscoveryServiceMocks(sandbox) {
+  const mockFunctions = {
+    discoverFuzzers: sandbox.stub().resolves(createMockFuzzerData()),
+    getFuzzerStatus: sandbox.stub().resolves({
+      status: "ready",
+      buildInfo: {
+        isBuilt: true,
+        lastBuild: "2024-01-15T10:00:00.000Z",
+        buildPath: "/test/workspace/build/Debug/libfuzzer_test",
+      },
+      runInfo: {
+        isRunning: false,
+        pid: null,
+        startTime: null,
+        duration: null,
+      },
+    }),
+    updateFuzzerStatus: sandbox.stub().resolves(),
+    associateCrashesWithFuzzers: sandbox.stub().returns([]),
+    refreshFuzzerData: sandbox.stub().resolves(createMockFuzzerData()),
+  };
+
+  // Try to stub the actual module if it exists
+  try {
+    const {
+      FuzzerDiscoveryService,
+    } = require("../../src/fuzzing/fuzzerDiscoveryService");
+    Object.keys(mockFunctions).forEach((methodName) => {
+      if (typeof FuzzerDiscoveryService.prototype[methodName] === "function") {
+        try {
+          if (!FuzzerDiscoveryService.prototype[methodName].isSinonProxy) {
+            sandbox
+              .stub(FuzzerDiscoveryService.prototype, methodName)
+              .callsFake(mockFunctions[methodName]);
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to stub FuzzerDiscoveryService.${methodName}:`,
+            error.message,
+          );
+        }
+      }
+    });
+  } catch (error) {
+    console.warn(
+      "FuzzerDiscoveryService module not available for stubbing:",
+      error.message,
+    );
+  }
+
+  return mockFunctions;
+}
+
+/**
  * Setup comprehensive test environment
  */
 function setupTestEnvironment(sandbox) {
@@ -565,6 +786,7 @@ function setupTestEnvironment(sandbox) {
   const fsMocks = createFileSystemMocks(sandbox);
   const dockerMocks = createDockerOperationsMocks(sandbox);
   const crashMocks = createCrashDiscoveryServiceMocks(sandbox);
+  const fuzzerMocks = createFuzzerDiscoveryServiceMocks(sandbox);
 
   // Apply VSCode mocks more carefully
   try {
@@ -650,8 +872,10 @@ function setupTestEnvironment(sandbox) {
     fsMocks,
     dockerMocks,
     crashMocks,
+    fuzzerMocks,
     mockContainers: createMockContainers(),
     mockCrashData: createMockCrashData(),
+    mockFuzzerData: createMockFuzzerData(),
     mockMessages: createMockWebviewMessages(),
   };
 }
@@ -834,6 +1058,37 @@ function createMockExtensionContext() {
   };
 }
 
+/**
+ * Assert webview state contains fuzzer data
+ */
+function assertWebviewFuzzerState(state, expectedFuzzerCount = null) {
+  if (!state || !state.fuzzers) {
+    throw new Error("State should contain fuzzers object");
+  }
+
+  const fuzzers = state.fuzzers;
+
+  if (typeof fuzzers.isLoading !== "boolean") {
+    throw new Error("fuzzers.isLoading should have isLoading boolean");
+  }
+
+  if (fuzzers.error !== null && typeof fuzzers.error !== "string") {
+    throw new Error("fuzzers.error should be null or string");
+  }
+
+  if (!Array.isArray(fuzzers.data)) {
+    throw new Error("fuzzers.data should be an array");
+  }
+
+  if (expectedFuzzerCount !== null) {
+    if (fuzzers.data.length !== expectedFuzzerCount) {
+      throw new Error(
+        `Expected ${expectedFuzzerCount} fuzzers, got ${fuzzers.data.length}`,
+      );
+    }
+  }
+}
+
 module.exports = {
   MockWebview,
   MockWebviewView,
@@ -842,15 +1097,19 @@ module.exports = {
   createVSCodeMocks,
   createMockContainers,
   createMockCrashData,
+  createMockFuzzerData,
   createMockWebviewMessages,
   createFileSystemMocks,
   createDockerOperationsMocks,
   createCrashDiscoveryServiceMocks,
+  createFuzzerDiscoveryServiceMocks,
   setupTestEnvironment,
   cleanupTestEnvironment,
   assertWebviewHTML,
   assertCrashDataStructure,
+  assertFuzzerDataStructure,
   assertWebviewCrashState,
+  assertWebviewFuzzerState,
   assertCrashMessage,
   waitForAsync,
   createMockExtensionContext,

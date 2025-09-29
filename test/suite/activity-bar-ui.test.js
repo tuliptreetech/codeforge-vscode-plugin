@@ -1,11 +1,13 @@
 /**
  * Activity Bar UI Test Suite
  *
- * This file contains tests for the simplified CodeForge activity bar UI components:
- * - WebviewProvider functionality
- * - Webview HTML content generation
- * - Message handling between webview and extension
- * - UI state updates and button enabling/disabling
+ * This file contains tests for the CodeForge activity bar UI components:
+ * - WebviewProvider functionality with fuzzer-centric approach
+ * - Webview HTML content generation for fuzzer display
+ * - Message handling between webview and extension for fuzzer operations
+ * - UI state updates for fuzzer and crash information
+ * - Simplified fuzzer display without status badges or action buttons
+ * - Collapsible crash sections within fuzzers
  */
 
 const assert = require("assert");
@@ -23,11 +25,14 @@ const {
   createMockExtensionContext,
   createMockWebviewMessages,
   createMockCrashData,
+  createMockFuzzerData,
   setupTestEnvironment,
   cleanupTestEnvironment,
   assertWebviewHTML,
   assertCrashDataStructure,
+  assertFuzzerDataStructure,
   assertWebviewCrashState,
+  assertWebviewFuzzerState,
   assertCrashMessage,
   waitForAsync,
 } = require("../utils/activity-bar-test-helpers");
@@ -75,7 +80,7 @@ suite("Activity Bar UI Test Suite", () => {
             missingComponents: [],
             details: {},
           },
-          crashes: {
+          fuzzers: {
             isLoading: false,
             lastUpdated: null,
             data: [],
@@ -178,7 +183,7 @@ suite("Activity Bar UI Test Suite", () => {
             missingComponents: [],
             details: {},
           },
-          crashes: {
+          fuzzers: {
             isLoading: false,
             lastUpdated: null,
             data: [],
@@ -312,7 +317,10 @@ suite("Activity Bar UI Test Suite", () => {
         !html.includes("Advanced Operations"),
         "Should not contain Advanced Operations section",
       );
-      assert.ok(!html.includes("build-btn"), "Should not contain Build button");
+      assert.ok(
+        !html.includes("build-btn"),
+        "Should not contain Build button (removed from interface)",
+      );
     });
 
     test("Should have buttons with no emoji spans and neutral styling", () => {
@@ -419,31 +427,31 @@ suite("Activity Bar UI Test Suite", () => {
       );
       const mockWebviewView = new MockWebviewView();
 
-      // Mock crash data
-      const mockCrashData = createMockCrashData();
+      // Mock fuzzer data
+      const mockFuzzerData = createMockFuzzerData();
 
       await webviewProvider.resolveWebviewView(mockWebviewView);
 
-      // Simulate auto-discovery populating crash data
-      webviewProvider._updateCrashState({
-        data: mockCrashData,
+      // Simulate auto-discovery populating fuzzer data
+      webviewProvider._updateFuzzerState({
+        data: mockFuzzerData,
         lastUpdated: new Date().toISOString(),
         isLoading: false,
         error: null,
       });
 
-      // Verify crash data is immediately available
+      // Verify fuzzer data is immediately available
       assert.deepStrictEqual(
-        webviewProvider._currentState.crashes.data,
-        mockCrashData,
-        "Crash data should be immediately available when webview opens",
+        webviewProvider._currentState.fuzzers.data,
+        mockFuzzerData,
+        "Fuzzer data should be immediately available when webview opens",
       );
 
       // Verify state update message was sent
-      assertCrashMessage(mockWebviewView.webview, "stateUpdate");
+      assertWebviewFuzzerState(webviewProvider._currentState);
     });
 
-    test("Should handle auto-discovery when no crashes exist", async () => {
+    test("Should handle auto-discovery when no fuzzers exist", async () => {
       const webviewProvider = new CodeForgeWebviewProvider(
         createMockExtensionContext(),
       );
@@ -451,8 +459,8 @@ suite("Activity Bar UI Test Suite", () => {
 
       await webviewProvider.resolveWebviewView(mockWebviewView);
 
-      // Simulate auto-discovery finding no crashes
-      webviewProvider._updateCrashState({
+      // Simulate auto-discovery finding no fuzzers
+      webviewProvider._updateFuzzerState({
         data: [],
         lastUpdated: new Date().toISOString(),
         isLoading: false,
@@ -461,14 +469,186 @@ suite("Activity Bar UI Test Suite", () => {
 
       // Verify empty state is handled correctly
       assert.deepStrictEqual(
-        webviewProvider._currentState.crashes.data,
+        webviewProvider._currentState.fuzzers.data,
         [],
-        "Empty crash data should be handled correctly",
+        "Empty fuzzer data should be handled correctly",
+      );
+    });
+  });
+
+  suite("Fuzzer Status Badge Tests", () => {
+    let webviewProvider;
+    let mockWebviewView;
+
+    setup(async () => {
+      webviewProvider = new CodeForgeWebviewProvider(
+        createMockExtensionContext(),
+      );
+      mockWebviewView = new MockWebviewView();
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+    });
+
+    test("Should render simplified fuzzer display", async () => {
+      const mockFuzzerData = [
+        {
+          name: "test_fuzzer",
+          preset: "Debug",
+          crashes: [],
+          lastUpdated: new Date(),
+        },
+      ];
+
+      webviewProvider._updateFuzzerState({
+        data: mockFuzzerData,
+        lastUpdated: new Date().toISOString(),
+        isLoading: false,
+        error: null,
+      });
+
+      // Regenerate HTML after state update
+      mockWebviewView.webview.html = webviewProvider._getHtmlForWebview(
+        mockWebviewView.webview,
+      );
+
+      const html = mockWebviewView.webview.html;
+      assert.ok(html.includes("test_fuzzer"), "Should show fuzzer name");
+      assert.ok(html.includes("Debug"), "Should show preset");
+      assert.ok(
+        !html.includes("status-badge"),
+        "Should not show status badges",
+      );
+    });
+  });
+
+  suite("Collapsible Crash Section Tests", () => {
+    let webviewProvider;
+    let mockWebviewView;
+
+    setup(async () => {
+      webviewProvider = new CodeForgeWebviewProvider(
+        createMockExtensionContext(),
+      );
+      mockWebviewView = new MockWebviewView();
+      await webviewProvider.resolveWebviewView(mockWebviewView);
+    });
+
+    test("Should render collapsible crash section for fuzzer with crashes", async () => {
+      const mockFuzzerData = [
+        {
+          name: "fuzzer_with_crashes",
+          preset: "Debug",
+          status: "ready",
+          buildInfo: { isBuilt: true },
+          runInfo: { isRunning: false },
+          crashes: [
+            {
+              id: "crash-123",
+              filePath: "/path/to/crash-123",
+              fileName: "crash-123",
+              fileSize: 1024,
+              createdAt: "2024-01-15T10:30:00.000Z",
+              fuzzerName: "fuzzer_with_crashes",
+            },
+            {
+              id: "crash-456",
+              filePath: "/path/to/crash-456",
+              fileName: "crash-456",
+              fileSize: 2048,
+              createdAt: "2024-01-15T11:45:00.000Z",
+              fuzzerName: "fuzzer_with_crashes",
+            },
+          ],
+          lastUpdated: new Date(),
+        },
+      ];
+
+      webviewProvider._updateFuzzerState({
+        data: mockFuzzerData,
+        lastUpdated: new Date().toISOString(),
+        isLoading: false,
+        error: null,
+      });
+
+      // Verify the state was updated correctly
+      const currentState = webviewProvider._currentState;
+      assert.ok(
+        currentState.fuzzers.data.length > 0,
+        "Should have fuzzer data",
+      );
+
+      const fuzzer = currentState.fuzzers.data[0];
+      assert.strictEqual(
+        fuzzer.name,
+        "fuzzer_with_crashes",
+        "Should have correct fuzzer name",
+      );
+      assert.strictEqual(fuzzer.crashes.length, 2, "Should show crash count");
+      assert.strictEqual(
+        fuzzer.crashes[0].id,
+        "crash-123",
+        "Should show first crash",
       );
       assert.strictEqual(
-        webviewProvider._currentState.crashes.error,
-        null,
-        "No error should be present for empty results",
+        fuzzer.crashes[1].id,
+        "crash-456",
+        "Should show second crash",
+      );
+    });
+
+    test("Should render no crashes message for fuzzer without crashes", async () => {
+      const mockFuzzerData = [
+        {
+          name: "fuzzer_no_crashes",
+          preset: "Debug",
+          status: "ready",
+          buildInfo: { isBuilt: true },
+          runInfo: { isRunning: false },
+          crashes: [],
+          lastUpdated: new Date(),
+        },
+      ];
+
+      webviewProvider._updateFuzzerState({
+        data: mockFuzzerData,
+        lastUpdated: new Date().toISOString(),
+        isLoading: false,
+        error: null,
+      });
+
+      // Verify the state was updated correctly
+      const currentState = webviewProvider._currentState;
+      assert.ok(
+        currentState.fuzzers.data.length > 0,
+        "Should have fuzzer data",
+      );
+
+      const fuzzer = currentState.fuzzers.data[0];
+      assert.strictEqual(
+        fuzzer.name,
+        "fuzzer_no_crashes",
+        "Should have correct fuzzer name",
+      );
+      assert.strictEqual(fuzzer.crashes.length, 0, "Should show no crashes");
+    });
+
+    test("Should handle crash action buttons", async () => {
+      const viewCrashMessage = {
+        type: "command",
+        command: "viewCrash",
+        params: {
+          crashId: "crash-123",
+          filePath: "/path/to/crash-123",
+        },
+      };
+
+      await webviewProvider._handleMessage(viewCrashMessage);
+
+      assert.ok(
+        testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
+          "codeforge.viewCrash",
+          viewCrashMessage.params,
+        ),
+        "Should execute viewCrash command",
       );
     });
 
@@ -560,14 +740,14 @@ suite("Activity Bar UI Test Suite", () => {
 
     test("Should initialize with correct crash state", () => {
       assert.deepStrictEqual(
-        webviewProvider._currentState.crashes,
+        webviewProvider._currentState.fuzzers,
         {
           isLoading: false,
           lastUpdated: null,
           data: [],
           error: null,
         },
-        "Initial crash state should be correct",
+        "Initial fuzzer state should be correct",
       );
     });
 
@@ -576,13 +756,13 @@ suite("Activity Bar UI Test Suite", () => {
 
       const crashMessages = testEnvironment.mockMessages;
 
-      // Test refreshCrashes message
+      // Test refreshCrashes message (maps to refreshFuzzers)
       await webviewProvider._handleMessage(crashMessages.refreshCrashes);
       assert.ok(
         testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
-          "codeforge.refreshCrashes",
+          "codeforge.refreshFuzzers",
         ),
-        "Should execute refreshCrashes command",
+        "Should execute refreshFuzzers command",
       );
 
       // Test viewCrash message
@@ -805,10 +985,10 @@ suite("Activity Bar UI Test Suite", () => {
     test("Should integrate crash discovery service", async () => {
       await webviewProvider.resolveWebviewView(mockWebviewView);
 
-      // Verify crash discovery service is initialized
+      // Verify fuzzer discovery service is initialized (replaces crash discovery service)
       assert.ok(
-        webviewProvider._crashDiscoveryService,
-        "Should have crash discovery service",
+        webviewProvider._fuzzerDiscoveryService,
+        "Should have fuzzer discovery service",
       );
     });
 
@@ -822,21 +1002,35 @@ suite("Activity Bar UI Test Suite", () => {
       // Verify command was executed
       assert.ok(
         testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
-          "codeforge.refreshCrashes",
+          "codeforge.refreshFuzzers",
         ),
         "Should execute refresh command",
       );
 
       // Simulate successful command completion
-      webviewProvider._updateCrashState({
-        data: createMockCrashData(),
+      webviewProvider._updateFuzzerState({
+        data: [
+          {
+            name: "test-fuzzer",
+            preset: "debug",
+            status: "built",
+            buildInfo: { binaryPath: "/path/to/binary" },
+            runInfo: {},
+            crashes: [],
+            lastUpdated: new Date(),
+            outputDir: "/path/to/output",
+          },
+        ],
         lastUpdated: new Date().toISOString(),
         isLoading: false,
         error: null,
       });
 
       // Verify state was updated
-      assertWebviewCrashState(webviewProvider._currentState, 3);
+      assert.ok(
+        webviewProvider._currentState.fuzzers.data.length > 0,
+        "Should have fuzzer data",
+      );
 
       // Simulate viewing a crash
       const viewMessage = testEnvironment.mockMessages.viewCrash;
@@ -855,12 +1049,16 @@ suite("Activity Bar UI Test Suite", () => {
       await webviewProvider.resolveWebviewView(mockWebviewView);
 
       // Initial state
-      assertWebviewCrashState(webviewProvider._currentState, 0);
+      assert.strictEqual(
+        webviewProvider._currentState.fuzzers.data.length,
+        0,
+        "Should start with no fuzzers",
+      );
 
       // Loading state
-      webviewProvider._setCrashLoading(true);
+      webviewProvider._setFuzzerLoading(true);
       assert.strictEqual(
-        webviewProvider._currentState.crashes.isLoading,
+        webviewProvider._currentState.fuzzers.isLoading,
         true,
         "Should be in loading state",
       );
@@ -903,7 +1101,7 @@ suite("Activity Bar UI Test Suite", () => {
       // Verify all commands were executed
       assert.ok(
         testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
-          "codeforge.refreshCrashes",
+          "codeforge.refreshFuzzers",
         ),
         "Should execute refresh command",
       );
