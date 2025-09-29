@@ -5,7 +5,7 @@ const {
   CodeForgeFuzzingTerminal,
   CodeForgeBuildTerminal,
 } = require("../fuzzing/fuzzingTerminal");
-const { CrashDiscoveryService } = require("../fuzzing/crashDiscoveryService");
+const { FuzzerDiscoveryService } = require("../fuzzing/fuzzerDiscoveryService");
 const { GdbIntegration } = require("../fuzzing/gdbIntegration");
 const { HexDocumentProvider } = require("./hexDocumentProvider");
 const {
@@ -31,7 +31,7 @@ class CodeForgeCommandHandlers {
     this.containerTreeProvider = containerTreeProvider;
     this.webviewProvider = webviewProvider;
     this.resourceManager = resourceManager;
-    this.crashDiscoveryService = new CrashDiscoveryService();
+    this.fuzzerDiscoveryService = new FuzzerDiscoveryService();
     this.gdbIntegration = new GdbIntegration(dockerOperations);
     this.initializationService = new InitializationDetectionService(
       resourceManager,
@@ -520,12 +520,50 @@ class CodeForgeCommandHandlers {
     const message = error.message.toLowerCase();
     const actions = ["View Logs"];
 
-    if (message.includes("docker")) {
-      actions.push("Check Docker");
+    // Add specific actions based on error type
+    if (error.errorType) {
+      switch (error.errorType) {
+        case "cmake_preset_error":
+        case "cmake_target_error":
+        case "cmake_error":
+          actions.push("Check CMake Config");
+          break;
+        case "docker_error":
+          actions.push("Check Docker");
+          break;
+        case "compilation_error":
+        case "linker_error":
+          actions.push("Troubleshoot");
+          break;
+        case "permission_error":
+          actions.push("Check Docker");
+          break;
+        case "network_error":
+          actions.push("Check Docker");
+          break;
+      }
+    } else {
+      // Fallback to message-based detection
+      if (message.includes("docker")) {
+        actions.push("Check Docker");
+      }
+
+      if (message.includes("cmake") || message.includes("preset")) {
+        actions.push("Check CMake Config");
+      }
+
+      if (
+        message.includes("compilation") ||
+        message.includes("linker") ||
+        message.includes("undefined reference")
+      ) {
+        actions.push("Troubleshoot");
+      }
     }
 
-    if (message.includes("cmake") || message.includes("preset")) {
-      actions.push("Check CMake Config");
+    // Always add troubleshoot if not already added
+    if (!actions.includes("Troubleshoot")) {
+      actions.push("Troubleshoot");
     }
 
     actions.push("Retry");
@@ -537,29 +575,188 @@ class CodeForgeCommandHandlers {
    * @param {string} action - The selected action
    * @param {Error} error - The original error
    */
-  handleBuildErrorAction(action, error) {
+  handleBuildErrorAction(action, error, fuzzerName) {
     switch (action) {
       case "View Logs":
-        this.safeOutputLog(`Build Error Details: ${error.message}`, true);
+        this.safeOutputLog(
+          `Build error details for ${fuzzerName || "fuzzer"}:`,
+          true,
+        );
+        this.safeOutputLog(error.message, true);
+        if (error.buildContext && error.buildContext.stderr) {
+          this.safeOutputLog("Build output:", true);
+          this.safeOutputLog(error.buildContext.stderr, true);
+        }
+        if (error.stack) {
+          this.safeOutputLog("Stack trace:", true);
+          this.safeOutputLog(error.stack, true);
+        }
         break;
       case "Check Docker":
         vscode.window.showInformationMessage(
-          "Docker Troubleshooting:\n• Ensure Docker Desktop is running\n• Check Docker daemon is accessible\n• Verify Docker permissions",
+          "Docker Troubleshooting:\n• Ensure Docker Desktop is running\n• Check Docker daemon is accessible\n• Verify Docker permissions\n• Try rebuilding the Docker image",
           { modal: true },
         );
         break;
       case "Check CMake Config":
         vscode.window.showInformationMessage(
-          "CMake Configuration:\n• Verify CMakePresets.json exists\n• Check preset configurations\n• Ensure all dependencies are specified",
+          "CMake Configuration:\n• Verify CMakePresets.json exists\n• Check preset configurations\n• Ensure all dependencies are specified\n• Verify fuzzer target is defined in CMakeLists.txt",
           { modal: true },
         );
         break;
       case "Retry":
         setTimeout(() => {
-          vscode.commands.executeCommand("codeforge.buildFuzzTargets");
+          if (fuzzerName) {
+            vscode.commands.executeCommand("codeforge.buildFuzzer", {
+              fuzzerName,
+            });
+          } else {
+            vscode.commands.executeCommand("codeforge.buildFuzzTargets");
+          }
         }, 1000);
         break;
+      case "Troubleshoot":
+        const troubleshootMessage = this.generateTroubleshootMessage(
+          error,
+          fuzzerName,
+        );
+        vscode.window.showInformationMessage(troubleshootMessage, {
+          modal: true,
+        });
+        break;
     }
+  }
+
+  /**
+   * Generates detailed build error information with user-friendly messages
+   * @param {Error} error - The build error
+   * @param {string} fuzzerName - Name of the fuzzer that failed to build
+   * @returns {Object} Object with message and suggestions
+   */
+  generateDetailedBuildError(error, fuzzerName) {
+    let message = `CodeForge: Failed to build ${fuzzerName}`;
+    let suggestions = [];
+
+    // Check if error has enhanced context from buildFuzzTarget
+    if (error.suggestions && Array.isArray(error.suggestions)) {
+      suggestions = error.suggestions;
+    }
+
+    if (error.errorType) {
+      switch (error.errorType) {
+        case "cmake_preset_error":
+          message += " - CMake preset configuration error";
+          break;
+        case "cmake_target_error":
+          message += " - CMake target not found";
+          break;
+        case "compilation_error":
+          message += " - Source code compilation failed";
+          break;
+        case "linker_error":
+          message += " - Linking failed";
+          break;
+        case "docker_error":
+          message += " - Docker container issue";
+          break;
+        case "permission_error":
+          message += " - Permission denied";
+          break;
+        case "network_error":
+          message += " - Network connectivity issue";
+          break;
+        case "no_targets_built":
+          message += " - No build targets found";
+          break;
+        default:
+          message += " - Build process failed";
+      }
+    }
+
+    // Add specific error details if available
+    if (error.buildContext && error.buildContext.stderr) {
+      const stderr = error.buildContext.stderr.trim();
+      if (stderr && stderr.length < 200) {
+        message += `\n\nError details: ${stderr}`;
+      }
+    }
+
+    // Fallback suggestions if none provided
+    if (suggestions.length === 0) {
+      suggestions = [
+        "Check the Output panel for detailed build logs",
+        "Verify the fuzzer name exists in your CMakePresets.json",
+        "Ensure Docker container has required build tools",
+        "Try cleaning build directories and rebuilding",
+      ];
+    }
+
+    return { message, suggestions };
+  }
+
+  /**
+   * Generates troubleshooting message based on error type
+   * @param {Error} error - The build error
+   * @param {string} fuzzerName - Name of the fuzzer that failed to build
+   * @returns {string} Troubleshooting message
+   */
+  generateTroubleshootMessage(error, fuzzerName) {
+    let message = `Troubleshooting ${fuzzerName || "fuzzer"} build failure:\n\n`;
+
+    if (error.errorType) {
+      switch (error.errorType) {
+        case "cmake_preset_error":
+          message += `CMake Preset Issues:
+• Check that your CMakePresets.json file exists and is valid
+• Verify the preset name matches exactly (case-sensitive)
+• Ensure all required variables are defined in the preset
+• Try running 'cmake --list-presets' to see available presets`;
+          break;
+        case "cmake_target_error":
+          message += `CMake Target Issues:
+• Verify the fuzzer target '${fuzzerName}' is defined in CMakeLists.txt
+• Check that the target name matches exactly
+• Ensure the target is properly configured for fuzzing
+• Try building other targets to isolate the issue`;
+          break;
+        case "compilation_error":
+          message += `Compilation Issues:
+• Check for syntax errors in your source code
+• Verify all required header files are included
+• Ensure compiler flags are correctly set
+• Check for missing dependencies or libraries`;
+          break;
+        case "linker_error":
+          message += `Linking Issues:
+• Verify all required libraries are available
+• Check library paths and linking flags
+• Ensure all object files are being linked correctly
+• Look for undefined symbol errors`;
+          break;
+        case "docker_error":
+          message += `Docker Issues:
+• Ensure Docker is running and accessible
+• Verify the Docker image is built and available
+• Check container permissions and resource limits
+• Try rebuilding the Docker image`;
+          break;
+        default:
+          message += `General Build Issues:
+• Check the build output for specific error messages
+• Verify all build dependencies are installed
+• Try cleaning build directories and rebuilding
+• Ensure sufficient disk space and memory`;
+      }
+    } else {
+      message += `General troubleshooting steps:
+• Check the Output panel for detailed error logs
+• Verify your CMakePresets.json configuration
+• Ensure Docker container has required build tools
+• Try building with verbose output for more information
+• Consider cleaning build directories and rebuilding`;
+    }
+
+    return message;
   }
 
   /**
@@ -654,46 +851,53 @@ class CodeForgeCommandHandlers {
   /**
    * Refresh crash data
    */
-  async handleRefreshCrashes() {
+  async handleRefreshFuzzers() {
     try {
       const { path: workspacePath } = this.getWorkspaceInfo();
 
       // Set loading state
       if (this.webviewProvider) {
-        this.webviewProvider._setCrashLoading(true);
+        this.webviewProvider._setFuzzerLoading(true);
       }
 
-      // Discover crashes
-      const crashData =
-        await this.crashDiscoveryService.discoverCrashes(workspacePath);
+      // Discover fuzzers with associated crashes
+      const imageName = dockerOperations.generateContainerName(workspacePath);
+      const fuzzerData = await this.fuzzerDiscoveryService.discoverFuzzers(
+        workspacePath,
+        imageName,
+      );
 
       // Update state
       if (this.webviewProvider) {
-        this.webviewProvider._updateCrashState({
-          data: crashData,
+        this.webviewProvider._updateFuzzerState({
+          data: fuzzerData,
           lastUpdated: new Date().toISOString(),
           isLoading: false,
           error: null,
         });
       }
 
-      const totalCrashes = crashData.reduce(
+      const totalCrashes = fuzzerData.reduce(
         (sum, fuzzer) => sum + fuzzer.crashes.length,
         0,
       );
       this.safeOutputLog(
-        `Found ${crashData.length} fuzzer(s) with ${totalCrashes} total crashes`,
+        `Found ${fuzzerData.length} fuzzer(s) with ${totalCrashes} total crashes`,
       );
     } catch (error) {
       if (this.webviewProvider) {
-        this.webviewProvider._setCrashLoading(false, error.message);
+        this.webviewProvider._setFuzzerLoading(false, error.message);
       }
-      this.safeOutputLog(`Error refreshing crashes: ${error.message}`, false);
+      this.safeOutputLog(`Error refreshing fuzzers: ${error.message}`, false);
       vscode.window.showErrorMessage(
-        `CodeForge: Failed to refresh crashes - ${error.message}`,
+        `CodeForge: Failed to refresh fuzzers - ${error.message}`,
       );
     }
   }
+
+  /**
+   * Run a specific fuzzer
+   */
 
   /**
    * Generate hex dump content for binary files
@@ -1027,8 +1231,8 @@ class CodeForgeCommandHandlers {
         `Cleared ${deletedCount} crash files for ${fuzzerName}`,
       );
 
-      // Refresh crash data
-      await this.handleRefreshCrashes();
+      // Refresh fuzzer data
+      await this.handleRefreshFuzzers();
     } catch (error) {
       this.safeOutputLog(`Error clearing crashes: ${error.message}`, false);
       vscode.window.showErrorMessage(
@@ -1162,7 +1366,7 @@ class CodeForgeCommandHandlers {
       "codeforge.runFuzzingTests": this.handleRunFuzzing.bind(this),
       "codeforge.buildFuzzingTests": this.handleBuildFuzzTargets.bind(this),
       "codeforge.refreshContainers": this.handleRefreshContainers.bind(this),
-      "codeforge.refreshCrashes": this.handleRefreshCrashes.bind(this),
+      "codeforge.refreshFuzzers": this.handleRefreshFuzzers.bind(this),
       "codeforge.viewCrash": this.handleViewCrash.bind(this),
       "codeforge.analyzeCrash": this.handleAnalyzeCrash.bind(this),
       "codeforge.clearCrashes": this.handleClearCrashes.bind(this),

@@ -15,10 +15,10 @@ const { CodeForgeCommandHandlers } = require("../../src/ui/commandHandlers");
 // Import test helpers
 const {
   createMockExtensionContext,
-  createMockCrashData,
+  createMockFuzzerData,
   setupTestEnvironment,
   cleanupTestEnvironment,
-  assertCrashDataStructure,
+  assertFuzzerDataStructure,
   waitForAsync,
 } = require("../utils/activity-bar-test-helpers");
 
@@ -45,8 +45,8 @@ suite("Command Handlers Test Suite", () => {
     // Create mock webview provider
     mockWebviewProvider = {
       _updateState: sandbox.stub(),
-      _updateCrashState: sandbox.stub(),
-      _setCrashLoading: sandbox.stub(),
+      _updateFuzzerState: sandbox.stub(),
+      _setFuzzerLoading: sandbox.stub(),
       refresh: sandbox.stub(),
     };
 
@@ -104,8 +104,8 @@ suite("Command Handlers Test Suite", () => {
         "Should have refreshContainers handler",
       );
       assert.ok(
-        handlers["codeforge.refreshCrashes"],
-        "Should have refreshCrashes handler",
+        handlers["codeforge.refreshFuzzers"],
+        "Should have refreshFuzzers handler",
       );
       assert.ok(
         handlers["codeforge.viewCrash"],
@@ -455,76 +455,76 @@ suite("Command Handlers Test Suite", () => {
   });
 
   suite("Crash Command Handlers", () => {
-    test("Should have crash discovery service initialized", () => {
+    test("Should have fuzzer discovery service initialized", () => {
       assert.ok(
-        commandHandlers.crashDiscoveryService,
-        "Should have crash discovery service",
+        commandHandlers.fuzzerDiscoveryService,
+        "Should have fuzzer discovery service",
       );
     });
 
-    test("handleRefreshCrashes should discover and update crash data", async () => {
-      // Mock successful crash discovery
-      const mockCrashData = createMockCrashData();
-      testEnvironment.crashMocks.discoverCrashes.resolves(mockCrashData);
+    test("handleRefreshFuzzers should discover and update fuzzer data", async () => {
+      // Mock successful fuzzer discovery
+      const mockFuzzerData = createMockFuzzerData();
+      testEnvironment.fuzzerMocks.discoverFuzzers.resolves(mockFuzzerData);
 
-      await commandHandlers.handleRefreshCrashes();
+      await commandHandlers.handleRefreshFuzzers();
 
       assert.ok(
-        testEnvironment.crashMocks.discoverCrashes.called,
-        "Should call discoverCrashes",
+        testEnvironment.fuzzerMocks.discoverFuzzers.called,
+        "Should call discoverFuzzers",
       );
       assert.ok(
-        mockWebviewProvider._updateCrashState.called,
-        "Should update webview crash state",
+        mockWebviewProvider._updateFuzzerState.called,
+        "Should update webview fuzzer state",
       );
       assert.ok(
         mockOutputChannel.appendLine.called,
-        "Should log crash discovery results",
+        "Should log fuzzer discovery results",
       );
     });
 
-    test("handleRefreshCrashes should handle no crashes found", async () => {
-      // Mock empty crash discovery
-      testEnvironment.crashMocks.discoverCrashes.resolves([]);
+    test("handleRefreshFuzzers should handle no fuzzers found", async () => {
+      // Mock empty fuzzer discovery
+      testEnvironment.fuzzerMocks.discoverFuzzers.resolves([]);
 
-      await commandHandlers.handleRefreshCrashes();
+      await commandHandlers.handleRefreshFuzzers();
 
       assert.ok(
-        testEnvironment.crashMocks.discoverCrashes.called,
-        "Should call discoverCrashes",
+        testEnvironment.fuzzerMocks.discoverFuzzers.called,
+        "Should call discoverFuzzers",
       );
       assert.ok(
-        mockWebviewProvider._updateCrashState.called,
-        "Should update webview crash state",
+        mockWebviewProvider._updateFuzzerState.called,
+        "Should update webview fuzzer state",
       );
 
-      // Should not show information message for no crashes
+      // Should not show information message for no fuzzers
       const infoMessageCalls =
         testEnvironment.vscodeMocks.window.showInformationMessage.getCalls();
-      const crashInfoMessages = infoMessageCalls.filter(
+      const fuzzerInfoMessages = infoMessageCalls.filter(
         (call) =>
           call.args[0] &&
           call.args[0].includes("Found") &&
-          call.args[0].includes("crash"),
+          call.args[0].includes("fuzzer"),
       );
       assert.strictEqual(
-        crashInfoMessages.length,
+        fuzzerInfoMessages.length,
         0,
-        "Should not show crash count message for zero crashes",
+        "Should not show fuzzer count message for zero fuzzers",
       );
     });
 
-    test("handleRefreshCrashes should handle errors", async () => {
-      // Mock crash discovery error
+    test("handleRefreshFuzzers should handle errors", async () => {
+      // Mock fuzzer discovery error
       const errorMessage = "Permission denied";
-      testEnvironment.crashMocks.discoverCrashes.rejects(
+      testEnvironment.fuzzerMocks.discoverFuzzers.rejects(
         new Error(errorMessage),
       );
 
-      await commandHandlers.handleRefreshCrashes();
+      await commandHandlers.handleRefreshFuzzers();
 
       assert.ok(
-        mockWebviewProvider._setCrashLoading.calledWith(false, errorMessage),
+        mockWebviewProvider._setFuzzerLoading.calledWith(false, errorMessage),
         "Should set error state in webview",
       );
       assert.ok(
@@ -1390,31 +1390,31 @@ suite("Command Handlers Test Suite", () => {
       ]);
       testEnvironment.fsMocks.unlink.resolves();
 
-      // Spy on handleRefreshCrashes
-      const refreshSpy = sinon.spy(commandHandlers, "handleRefreshCrashes");
+      // Spy on handleRefreshFuzzers
+      const refreshSpy = sinon.spy(commandHandlers, "handleRefreshFuzzers");
 
       await commandHandlers.handleClearCrashes(clearParams);
 
       assert.ok(
         refreshSpy.called,
-        "Should call handleRefreshCrashes after clearing",
+        "Should call handleRefreshFuzzers after clearing",
       );
 
       refreshSpy.restore();
     });
   });
 
-  suite("Crash Command Integration Tests", () => {
-    test("Should handle complete crash workflow", async () => {
-      // 1. Refresh crashes
-      const mockCrashData = createMockCrashData();
-      testEnvironment.crashMocks.discoverCrashes.resolves(mockCrashData);
+  suite("Fuzzer Command Integration Tests", () => {
+    test("Should handle complete fuzzer workflow", async () => {
+      // 1. Refresh fuzzers
+      const mockFuzzerData = createMockFuzzerData();
+      testEnvironment.fuzzerMocks.discoverFuzzers.resolves(mockFuzzerData);
 
-      await commandHandlers.handleRefreshCrashes();
+      await commandHandlers.handleRefreshFuzzers();
 
       assert.ok(
-        mockWebviewProvider._updateCrashState.called,
-        "Should update crash state after refresh",
+        mockWebviewProvider._updateFuzzerState.called,
+        "Should update fuzzer state after refresh",
       );
 
       // 2. View a crash (should use read-only hex document provider)
@@ -1469,16 +1469,16 @@ suite("Command Handlers Test Suite", () => {
       );
     });
 
-    test("Should handle concurrent crash operations", async () => {
-      const mockCrashData = createMockCrashData();
-      testEnvironment.crashMocks.discoverCrashes.resolves(mockCrashData);
+    test("Should handle concurrent fuzzer operations", async () => {
+      const mockFuzzerData = createMockFuzzerData();
+      testEnvironment.fuzzerMocks.discoverFuzzers.resolves(mockFuzzerData);
 
       // Execute multiple operations concurrently
       const promises = [
-        commandHandlers.handleRefreshCrashes(),
+        commandHandlers.handleRefreshFuzzers(),
         commandHandlers.handleAnalyzeCrash({
           crashId: "crash-abc123",
-          fuzzerName: "libfuzzer",
+          fuzzerName: "libfuzzer_test",
           filePath: "/test/crash.txt",
         }),
       ];
@@ -1486,477 +1486,483 @@ suite("Command Handlers Test Suite", () => {
       await Promise.all(promises);
 
       assert.ok(
-        testEnvironment.crashMocks.discoverCrashes.called,
+        testEnvironment.fuzzerMocks.discoverFuzzers.called,
         "Should handle refresh operation",
       );
     });
 
-    test("Should validate crash data structure in refresh", async () => {
-      const mockCrashData = createMockCrashData();
-      testEnvironment.crashMocks.discoverCrashes.resolves(mockCrashData);
+    test("Should validate fuzzer data structure in refresh", async () => {
+      const mockFuzzerData = [
+        {
+          name: "test-fuzzer",
+          preset: "debug",
+          status: "built",
+          buildInfo: { binaryPath: "/path/to/binary" },
+          runInfo: {},
+          crashes: [],
+          lastUpdated: new Date(),
+          outputDir: "/path/to/output",
+        },
+      ];
 
-      await commandHandlers.handleRefreshCrashes();
+      // The fuzzerDiscoveryService.discoverFuzzers is already stubbed by setupTestEnvironment
+      // Just configure it to return our mock data
+      commandHandlers.fuzzerDiscoveryService.discoverFuzzers.resolves(
+        mockFuzzerData,
+      );
 
-      // Verify the crash data structure is valid
-      const updateCall = mockWebviewProvider._updateCrashState.getCall(0);
-      if (updateCall) {
-        const crashState = updateCall.args[0];
-        assert.doesNotThrow(() => {
-          assertCrashDataStructure(crashState.data);
-        }, "Should have valid crash data structure");
+      await commandHandlers.handleRefreshFuzzers();
+
+      assert.ok(
+        commandHandlers.fuzzerDiscoveryService.discoverFuzzers.called,
+        "Should call discoverFuzzers",
+      );
+    });
+  });
+
+  suite("handleInitializeProject Command", () => {
+    let mockInitializationService;
+    let mockProgress;
+    let mockProgressCallback;
+
+    setup(() => {
+      // Mock initialization service
+      mockInitializationService = {
+        initializeProjectWithProgress: sandbox.stub(),
+      };
+      commandHandlers.initializationService = mockInitializationService;
+
+      // Mock progress object for vscode.window.withProgress
+      mockProgress = {
+        report: sandbox.stub(),
+        _lastPercentage: 0,
+      };
+
+      // Mock progress callback
+      mockProgressCallback = sandbox.stub();
+
+      // Mock workspace
+      sandbox
+        .stub(vscode.workspace, "workspaceFolders")
+        .value([{ uri: { fsPath: "/test/workspace" } }]);
+
+      // Mock vscode.window.withProgress
+      testEnvironment.vscodeMocks.window.withProgress = sandbox
+        .stub()
+        .callsFake(async (options, callback) => {
+          return await callback(mockProgress, null);
+        });
+
+      // Ensure VSCode window methods are properly stubbed on the actual vscode module
+      if (
+        !vscode.window.showInformationMessage ||
+        !vscode.window.showInformationMessage.isSinonProxy
+      ) {
+        sandbox
+          .stub(vscode.window, "showInformationMessage")
+          .callsFake(testEnvironment.vscodeMocks.window.showInformationMessage);
+      }
+
+      if (
+        !vscode.window.withProgress ||
+        !vscode.window.withProgress.isSinonProxy
+      ) {
+        sandbox
+          .stub(vscode.window, "withProgress")
+          .callsFake(testEnvironment.vscodeMocks.window.withProgress);
       }
     });
 
-    suite("handleInitializeProject Command", () => {
-      let mockInitializationService;
-      let mockProgress;
-      let mockProgressCallback;
+    test("Should initialize project successfully", async () => {
+      // Mock successful initialization
+      const mockResult = {
+        success: true,
+        details: {
+          message: "CodeForge initialized successfully",
+          createdComponents: ["dockerfile", "gitignore", "scripts"],
+        },
+      };
+      mockInitializationService.initializeProjectWithProgress.resolves(
+        mockResult,
+      );
 
-      setup(() => {
-        // Mock initialization service
-        mockInitializationService = {
-          initializeProjectWithProgress: sandbox.stub(),
-        };
-        commandHandlers.initializationService = mockInitializationService;
+      await commandHandlers.handleInitializeProject();
 
-        // Mock progress object for vscode.window.withProgress
-        mockProgress = {
-          report: sandbox.stub(),
-          _lastPercentage: 0,
-        };
+      // Verify initialization service was called
+      assert.ok(
+        mockInitializationService.initializeProjectWithProgress.calledWith(
+          "/test/workspace",
+          sinon.match.func,
+        ),
+        "Should call initializeProjectWithProgress with workspace path and progress callback",
+      );
 
-        // Mock progress callback
-        mockProgressCallback = sandbox.stub();
+      // Verify progress was configured correctly
+      assert.ok(
+        testEnvironment.vscodeMocks.window.withProgress.called,
+        "Should show progress notification",
+      );
 
-        // Mock workspace
-        sandbox
-          .stub(vscode.workspace, "workspaceFolders")
-          .value([{ uri: { fsPath: "/test/workspace" } }]);
-
-        // Mock vscode.window.withProgress
-        testEnvironment.vscodeMocks.window.withProgress = sandbox
-          .stub()
-          .callsFake(async (options, callback) => {
-            return await callback(mockProgress, null);
-          });
-
-        // Ensure VSCode window methods are properly stubbed on the actual vscode module
-        if (
-          !vscode.window.showInformationMessage ||
-          !vscode.window.showInformationMessage.isSinonProxy
-        ) {
-          sandbox
-            .stub(vscode.window, "showInformationMessage")
-            .callsFake(
-              testEnvironment.vscodeMocks.window.showInformationMessage,
-            );
-        }
-
-        if (
-          !vscode.window.withProgress ||
-          !vscode.window.withProgress.isSinonProxy
-        ) {
-          sandbox
-            .stub(vscode.window, "withProgress")
-            .callsFake(testEnvironment.vscodeMocks.window.withProgress);
-        }
-      });
-
-      test("Should initialize project successfully", async () => {
-        // Mock successful initialization
-        const mockResult = {
-          success: true,
-          details: {
-            message: "CodeForge initialized successfully",
-            createdComponents: ["dockerfile", "gitignore", "scripts"],
-          },
-        };
-        mockInitializationService.initializeProjectWithProgress.resolves(
-          mockResult,
-        );
-
-        await commandHandlers.handleInitializeProject();
-
-        // Verify initialization service was called
-        assert.ok(
-          mockInitializationService.initializeProjectWithProgress.calledWith(
-            "/test/workspace",
-            sinon.match.func,
+      // Verify success message was shown
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
+          sinon.match(
+            /Project initialized successfully.*dockerfile, gitignore, scripts/,
           ),
-          "Should call initializeProjectWithProgress with workspace path and progress callback",
-        );
+        ),
+        "Should show success message with created components",
+      );
 
-        // Verify progress was configured correctly
-        assert.ok(
-          testEnvironment.vscodeMocks.window.withProgress.called,
-          "Should show progress notification",
-        );
+      // Verify output logging
+      assert.ok(
+        mockOutputChannel.appendLine.calledWith(
+          "CodeForge: Project initialization completed successfully",
+        ),
+        "Should log success message",
+      );
+    });
 
-        // Verify success message was shown
-        assert.ok(
-          testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
-            sinon.match(
-              /Project initialized successfully.*dockerfile, gitignore, scripts/,
-            ),
-          ),
-          "Should show success message with created components",
-        );
+    test("Should handle already initialized project", async () => {
+      // Mock already initialized result
+      const mockResult = {
+        success: true,
+        details: {
+          message: "CodeForge was already initialized",
+          createdComponents: [],
+        },
+      };
+      mockInitializationService.initializeProjectWithProgress.resolves(
+        mockResult,
+      );
 
-        // Verify output logging
-        assert.ok(
-          mockOutputChannel.appendLine.calledWith(
-            "CodeForge: Project initialization completed successfully",
-          ),
-          "Should log success message",
-        );
-      });
+      await commandHandlers.handleInitializeProject();
 
-      test("Should handle already initialized project", async () => {
-        // Mock already initialized result
-        const mockResult = {
-          success: true,
-          details: {
-            message: "CodeForge was already initialized",
-            createdComponents: [],
-          },
-        };
-        mockInitializationService.initializeProjectWithProgress.resolves(
-          mockResult,
-        );
+      // Verify appropriate message for already initialized project
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
+          "CodeForge: Project was already initialized and is ready to use!",
+        ),
+        "Should show already initialized message",
+      );
+    });
 
-        await commandHandlers.handleInitializeProject();
+    test("Should update webview state after successful initialization", async () => {
+      // Mock successful initialization
+      const mockResult = {
+        success: true,
+        details: { createdComponents: ["dockerfile"] },
+      };
+      mockInitializationService.initializeProjectWithProgress.resolves(
+        mockResult,
+      );
 
-        // Verify appropriate message for already initialized project
-        assert.ok(
-          testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
-            "CodeForge: Project was already initialized and is ready to use!",
-          ),
-          "Should show already initialized message",
-        );
-      });
+      // Mock webview provider with _checkInitializationStatus method
+      const mockWebviewProvider = {
+        _checkInitializationStatus: sandbox.stub(),
+      };
+      commandHandlers.webviewProvider = mockWebviewProvider;
 
-      test("Should update webview state after successful initialization", async () => {
-        // Mock successful initialization
-        const mockResult = {
-          success: true,
-          details: { createdComponents: ["dockerfile"] },
-        };
-        mockInitializationService.initializeProjectWithProgress.resolves(
-          mockResult,
-        );
+      await commandHandlers.handleInitializeProject();
 
-        // Mock webview provider with _checkInitializationStatus method
-        const mockWebviewProvider = {
-          _checkInitializationStatus: sandbox.stub(),
-        };
-        commandHandlers.webviewProvider = mockWebviewProvider;
+      // Wait for setTimeout to execute
+      await waitForAsync(150);
 
-        await commandHandlers.handleInitializeProject();
+      assert.ok(
+        mockWebviewProvider._checkInitializationStatus.called,
+        "Should update webview initialization status",
+      );
+    });
 
-        // Wait for setTimeout to execute
-        await waitForAsync(150);
+    test("Should handle progress reporting correctly", async () => {
+      // Mock successful initialization
+      const mockResult = {
+        success: true,
+        details: { createdComponents: [] },
+      };
 
-        assert.ok(
-          mockWebviewProvider._checkInitializationStatus.called,
-          "Should update webview initialization status",
-        );
-      });
+      // Capture the progress callback and simulate progress updates
+      let capturedProgressCallback = null;
+      mockInitializationService.initializeProjectWithProgress.callsFake(
+        async (workspacePath, progressCallback) => {
+          capturedProgressCallback = progressCallback;
+          // Simulate progress updates
+          progressCallback("Creating .codeforge directory...", 20);
+          progressCallback("Creating Dockerfile...", 60);
+          progressCallback("CodeForge initialization complete!", 100);
+          return mockResult;
+        },
+      );
 
-      test("Should handle progress reporting correctly", async () => {
-        // Mock successful initialization
-        const mockResult = {
-          success: true,
-          details: { createdComponents: [] },
-        };
+      await commandHandlers.handleInitializeProject();
 
-        // Capture the progress callback and simulate progress updates
-        let capturedProgressCallback = null;
-        mockInitializationService.initializeProjectWithProgress.callsFake(
-          async (workspacePath, progressCallback) => {
-            capturedProgressCallback = progressCallback;
-            // Simulate progress updates
-            progressCallback("Creating .codeforge directory...", 20);
-            progressCallback("Creating Dockerfile...", 60);
-            progressCallback("CodeForge initialization complete!", 100);
-            return mockResult;
-          },
-        );
+      // Verify progress callback was provided and called
+      assert.ok(capturedProgressCallback, "Should provide progress callback");
+      assert.ok(mockProgress.report.called, "Should report progress");
+    });
 
-        await commandHandlers.handleInitializeProject();
+    test("Should handle initialization service errors", async () => {
+      // Mock initialization service error
+      const errorMessage = "Permission denied";
+      mockInitializationService.initializeProjectWithProgress.rejects(
+        new Error(errorMessage),
+      );
 
-        // Verify progress callback was provided and called
-        assert.ok(capturedProgressCallback, "Should provide progress callback");
-        assert.ok(mockProgress.report.called, "Should report progress");
-      });
+      await commandHandlers.handleInitializeProject();
 
-      test("Should handle initialization service errors", async () => {
-        // Mock initialization service error
-        const errorMessage = "Permission denied";
-        mockInitializationService.initializeProjectWithProgress.rejects(
-          new Error(errorMessage),
-        );
-
-        await commandHandlers.handleInitializeProject();
-
-        // Verify error message was shown
-        assert.ok(
-          testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
-            sinon.match(/Failed to initialize project.*Permission denied/),
-            "View Logs",
-            "Retry",
-            "Check Permissions",
-          ),
-          "Should show error message with appropriate actions",
-        );
-
-        // Verify error was logged
-        assert.ok(
-          mockOutputChannel.appendLine.calledWith(
-            sinon.match(/Initialization failed.*Permission denied/),
-          ),
-          "Should log error message",
-        );
-      });
-
-      test("Should handle initialization failure result", async () => {
-        // Mock initialization failure
-        const mockResult = {
-          success: false,
-          error: "Missing required components",
-        };
-        mockInitializationService.initializeProjectWithProgress.resolves(
-          mockResult,
-        );
-
-        await commandHandlers.handleInitializeProject();
-
-        // Verify error handling
-        assert.ok(
-          testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
-            sinon.match(
-              /Failed to initialize project.*Missing required components/,
-            ),
-          ),
-          "Should show error message for initialization failure",
-        );
-      });
-
-      test("Should handle workspace errors", async () => {
-        // Mock no workspace folder
-        sandbox.stub(vscode.workspace, "workspaceFolders").value(undefined);
-
-        await commandHandlers.handleInitializeProject();
-
-        // Verify workspace error handling
-        assert.ok(
-          testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
-            sinon.match(/Failed to initialize project.*No workspace folder/),
-          ),
-          "Should show workspace error message",
-        );
-      });
-
-      test("Should provide appropriate error actions based on error type", async () => {
-        // Test permission error
-        mockInitializationService.initializeProjectWithProgress.rejects(
-          new Error("Permission denied accessing file"),
-        );
-
-        await commandHandlers.handleInitializeProject();
-
-        assert.ok(
-          testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
-            sinon.match.string,
-            "View Logs",
-            "Retry",
-            "Check Permissions",
-          ),
-          "Should include Check Permissions action for permission errors",
-        );
-
-        // Reset for resource error test
-        testEnvironment.vscodeMocks.window.showErrorMessage.reset();
-        mockInitializationService.initializeProjectWithProgress.rejects(
-          new Error("Resource not available"),
-        );
-
-        await commandHandlers.handleInitializeProject();
-
-        assert.ok(
-          testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
-            sinon.match.string,
-            "View Logs",
-            "Retry",
-            "Check Resources",
-          ),
-          "Should include Check Resources action for resource errors",
-        );
-      });
-
-      test("Should handle user action responses", async () => {
-        // Mock initialization error
-        mockInitializationService.initializeProjectWithProgress.rejects(
-          new Error("Test error"),
-        );
-
-        // Test "View Logs" action
-        testEnvironment.vscodeMocks.window.showErrorMessage.resolves(
+      // Verify error message was shown
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match(/Failed to initialize project.*Permission denied/),
           "View Logs",
-        );
-
-        await commandHandlers.handleInitializeProject();
-
-        assert.ok(
-          mockOutputChannel.show.called,
-          "Should show output channel when View Logs is selected",
-        );
-
-        // Reset for retry test
-        mockOutputChannel.show.reset();
-        testEnvironment.vscodeMocks.window.showErrorMessage.reset();
-        testEnvironment.vscodeMocks.window.showErrorMessage.resolves("Retry");
-
-        // Mock setTimeout to avoid actual delay in tests
-        const setTimeoutStub = sandbox
-          .stub(global, "setTimeout")
-          .callsFake((fn) => fn());
-
-        await commandHandlers.handleInitializeProject();
-
-        assert.ok(
-          setTimeoutStub.called,
-          "Should schedule retry when Retry is selected",
-        );
-
-        setTimeoutStub.restore();
-      });
-
-      test("Should handle Check Permissions action", async () => {
-        // Mock permission error
-        mockInitializationService.initializeProjectWithProgress.rejects(
-          new Error("Permission denied"),
-        );
-        testEnvironment.vscodeMocks.window.showErrorMessage.resolves(
+          "Retry",
           "Check Permissions",
-        );
+        ),
+        "Should show error message with appropriate actions",
+      );
 
-        await commandHandlers.handleInitializeProject();
+      // Verify error was logged
+      assert.ok(
+        mockOutputChannel.appendLine.calledWith(
+          sinon.match(/Initialization failed.*Permission denied/),
+        ),
+        "Should log error message",
+      );
+    });
 
-        assert.ok(
-          testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
-            sinon.match(/ensure you have write permissions/),
-            { modal: true },
+    test("Should handle initialization failure result", async () => {
+      // Mock initialization failure
+      const mockResult = {
+        success: false,
+        error: "Missing required components",
+      };
+      mockInitializationService.initializeProjectWithProgress.resolves(
+        mockResult,
+      );
+
+      await commandHandlers.handleInitializeProject();
+
+      // Verify error handling
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match(
+            /Failed to initialize project.*Missing required components/,
           ),
-          "Should show permissions help message",
-        );
-      });
+        ),
+        "Should show error message for initialization failure",
+      );
+    });
 
-      test("Should handle Check Resources action", async () => {
-        // Mock resource error
-        mockInitializationService.initializeProjectWithProgress.rejects(
-          new Error("Resource not available"),
-        );
-        testEnvironment.vscodeMocks.window.showErrorMessage.resolves(
+    test("Should handle workspace errors", async () => {
+      // Mock no workspace folder
+      sandbox.stub(vscode.workspace, "workspaceFolders").value(undefined);
+
+      await commandHandlers.handleInitializeProject();
+
+      // Verify workspace error handling
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match(/Failed to initialize project.*No workspace folder/),
+        ),
+        "Should show workspace error message",
+      );
+    });
+
+    test("Should provide appropriate error actions based on error type", async () => {
+      // Test permission error
+      mockInitializationService.initializeProjectWithProgress.rejects(
+        new Error("Permission denied accessing file"),
+      );
+
+      await commandHandlers.handleInitializeProject();
+
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match.string,
+          "View Logs",
+          "Retry",
+          "Check Permissions",
+        ),
+        "Should include Check Permissions action for permission errors",
+      );
+
+      // Reset for resource error test
+      testEnvironment.vscodeMocks.window.showErrorMessage.reset();
+      mockInitializationService.initializeProjectWithProgress.rejects(
+        new Error("Resource not available"),
+      );
+
+      await commandHandlers.handleInitializeProject();
+
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match.string,
+          "View Logs",
+          "Retry",
           "Check Resources",
-        );
+        ),
+        "Should include Check Resources action for resource errors",
+      );
+    });
 
-        await commandHandlers.handleInitializeProject();
+    test("Should handle user action responses", async () => {
+      // Mock initialization error
+      mockInitializationService.initializeProjectWithProgress.rejects(
+        new Error("Test error"),
+      );
 
-        assert.ok(
-          testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
-            sinon.match(
-              /ensure the CodeForge extension resources are available/,
-            ),
-            { modal: true },
-          ),
-          "Should show resources help message",
-        );
-      });
+      // Test "View Logs" action
+      testEnvironment.vscodeMocks.window.showErrorMessage.resolves("View Logs");
 
-      test("Should work without webview provider", async () => {
-        // Remove webview provider
-        commandHandlers.webviewProvider = null;
+      await commandHandlers.handleInitializeProject();
 
-        // Mock successful initialization
-        const mockResult = {
-          success: true,
-          details: { createdComponents: ["dockerfile"] },
-        };
-        mockInitializationService.initializeProjectWithProgress.resolves(
-          mockResult,
-        );
+      assert.ok(
+        mockOutputChannel.show.called,
+        "Should show output channel when View Logs is selected",
+      );
 
-        // Should not throw error
-        await commandHandlers.handleInitializeProject();
+      // Reset for retry test
+      mockOutputChannel.show.reset();
+      testEnvironment.vscodeMocks.window.showErrorMessage.reset();
+      testEnvironment.vscodeMocks.window.showErrorMessage.resolves("Retry");
 
-        assert.ok(
-          testEnvironment.vscodeMocks.window.showInformationMessage.called,
-          "Should still show success message without webview provider",
-        );
-      });
+      // Mock setTimeout to avoid actual delay in tests
+      const setTimeoutStub = sandbox
+        .stub(global, "setTimeout")
+        .callsFake((fn) => fn());
 
-      test("Should handle webview provider without _checkInitializationStatus method", async () => {
-        // Mock webview provider without the method
-        commandHandlers.webviewProvider = {};
+      await commandHandlers.handleInitializeProject();
 
-        // Mock successful initialization
-        const mockResult = {
-          success: true,
-          details: { createdComponents: ["dockerfile"] },
-        };
-        mockInitializationService.initializeProjectWithProgress.resolves(
-          mockResult,
-        );
+      assert.ok(
+        setTimeoutStub.called,
+        "Should schedule retry when Retry is selected",
+      );
 
-        // Should not throw error
-        await commandHandlers.handleInitializeProject();
+      setTimeoutStub.restore();
+    });
 
-        assert.ok(
-          testEnvironment.vscodeMocks.window.showInformationMessage.called,
-          "Should handle webview provider without _checkInitializationStatus method",
-        );
-      });
+    test("Should handle Check Permissions action", async () => {
+      // Mock permission error
+      mockInitializationService.initializeProjectWithProgress.rejects(
+        new Error("Permission denied"),
+      );
+      testEnvironment.vscodeMocks.window.showErrorMessage.resolves(
+        "Check Permissions",
+      );
 
-      test("Should be registered in command handlers map", () => {
-        const handlers = commandHandlers.getCommandHandlers();
+      await commandHandlers.handleInitializeProject();
 
-        assert.ok(
-          handlers["codeforge.initializeProject"],
-          "Should have initializeProject handler registered",
-        );
-        assert.strictEqual(
-          typeof handlers["codeforge.initializeProject"],
-          "function",
-          "Handler should be a function",
-        );
-      });
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
+          sinon.match(/ensure you have write permissions/),
+          { modal: true },
+        ),
+        "Should show permissions help message",
+      );
+    });
 
-      test("Should handle concurrent initialization attempts", async () => {
-        // Mock successful initialization
-        const mockResult = {
-          success: true,
-          details: { createdComponents: [] },
-        };
-        mockInitializationService.initializeProjectWithProgress.resolves(
-          mockResult,
-        );
+    test("Should handle Check Resources action", async () => {
+      // Mock resource error
+      mockInitializationService.initializeProjectWithProgress.rejects(
+        new Error("Resource not available"),
+      );
+      testEnvironment.vscodeMocks.window.showErrorMessage.resolves(
+        "Check Resources",
+      );
 
-        // Run multiple concurrent initializations
-        const promises = [
-          commandHandlers.handleInitializeProject(),
-          commandHandlers.handleInitializeProject(),
-          commandHandlers.handleInitializeProject(),
-        ];
+      await commandHandlers.handleInitializeProject();
 
-        await Promise.all(promises);
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
+          sinon.match(/ensure the CodeForge extension resources are available/),
+          { modal: true },
+        ),
+        "Should show resources help message",
+      );
+    });
 
-        // All should complete successfully
-        assert.strictEqual(
-          mockInitializationService.initializeProjectWithProgress.callCount,
-          3,
-          "Should handle concurrent initialization attempts",
-        );
-      });
+    test("Should work without webview provider", async () => {
+      // Remove webview provider
+      commandHandlers.webviewProvider = null;
+
+      // Mock successful initialization
+      const mockResult = {
+        success: true,
+        details: { createdComponents: ["dockerfile"] },
+      };
+      mockInitializationService.initializeProjectWithProgress.resolves(
+        mockResult,
+      );
+
+      // Should not throw error
+      await commandHandlers.handleInitializeProject();
+
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.called,
+        "Should still show success message without webview provider",
+      );
+    });
+
+    test("Should handle webview provider without _checkInitializationStatus method", async () => {
+      // Mock webview provider without the method
+      commandHandlers.webviewProvider = {};
+
+      // Mock successful initialization
+      const mockResult = {
+        success: true,
+        details: { createdComponents: ["dockerfile"] },
+      };
+      mockInitializationService.initializeProjectWithProgress.resolves(
+        mockResult,
+      );
+
+      // Should not throw error
+      await commandHandlers.handleInitializeProject();
+
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.called,
+        "Should handle webview provider without _checkInitializationStatus method",
+      );
+    });
+
+    test("Should be registered in command handlers map", () => {
+      const handlers = commandHandlers.getCommandHandlers();
+
+      assert.ok(
+        handlers["codeforge.initializeProject"],
+        "Should have initializeProject handler registered",
+      );
+      assert.strictEqual(
+        typeof handlers["codeforge.initializeProject"],
+        "function",
+        "Handler should be a function",
+      );
+    });
+
+    test("Should handle concurrent initialization attempts", async () => {
+      // Mock successful initialization
+      const mockResult = {
+        success: true,
+        details: { createdComponents: [] },
+      };
+      mockInitializationService.initializeProjectWithProgress.resolves(
+        mockResult,
+      );
+
+      // Run multiple concurrent initializations
+      const promises = [
+        commandHandlers.handleInitializeProject(),
+        commandHandlers.handleInitializeProject(),
+        commandHandlers.handleInitializeProject(),
+      ];
+
+      await Promise.all(promises);
+
+      // All should complete successfully
+      assert.strictEqual(
+        mockInitializationService.initializeProjectWithProgress.callCount,
+        3,
+        "Should handle concurrent initialization attempts",
+      );
     });
   });
 });

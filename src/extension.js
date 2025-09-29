@@ -172,8 +172,8 @@ function activate(context) {
     }
   }, 500);
 
-  // Run crash discovery asynchronously after extension activation
-  runInitialCrashDiscovery();
+  // Run fuzzer discovery asynchronously after extension activation
+  runInitialFuzzerDiscovery();
 
   // Check if Docker is available
   const config = vscode.workspace.getConfiguration("codeforge");
@@ -577,16 +577,16 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
   }
 }
 /**
- * Runs initial crash discovery asynchronously after extension activation
- * This ensures crashes are available immediately when the webview is opened
+ * Runs initial fuzzer discovery asynchronously after extension activation
+ * This ensures fuzzers are available immediately when the webview is opened
  */
-async function runInitialCrashDiscovery() {
+async function runInitialFuzzerDiscovery() {
   try {
     // Check if there's an open workspace
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
       safeOutputLog(
-        "No workspace folder open, skipping initial crash discovery",
+        "No workspace folder open, skipping initial fuzzer discovery",
       );
       return;
     }
@@ -598,20 +598,20 @@ async function runInitialCrashDiscovery() {
     try {
       await fs.access(codeforgeDir);
     } catch (error) {
-      // .codeforge directory doesn't exist yet, skip crash discovery
+      // .codeforge directory doesn't exist yet, skip fuzzer discovery
       safeOutputLog(
-        "CodeForge directory not found, skipping initial crash discovery",
+        "CodeForge directory not found, skipping initial fuzzer discovery",
       );
       return;
     }
 
-    // Run crash discovery asynchronously without blocking extension activation
+    // Run fuzzer discovery asynchronously without blocking extension activation
     setTimeout(async () => {
       try {
         if (webviewProvider) {
-          safeOutputLog("Running initial crash discovery...");
+          safeOutputLog("Running initial fuzzer discovery...");
 
-          // Use the command handler to refresh crashes
+          // Use the command handler to refresh fuzzers
           const { CodeForgeCommandHandlers } = require("./ui/commandHandlers");
           const commandHandlers = new CodeForgeCommandHandlers(
             null, // context not needed for this operation
@@ -621,16 +621,20 @@ async function runInitialCrashDiscovery() {
             resourceManager,
           );
 
-          await commandHandlers.handleRefreshCrashes();
-          safeOutputLog("Initial crash discovery completed");
+          await commandHandlers.handleRefreshFuzzers();
+          safeOutputLog("Initial fuzzer discovery completed");
         }
       } catch (error) {
-        safeOutputLog(`Error during initial crash discovery: ${error.message}`);
+        safeOutputLog(
+          `Error during initial fuzzer discovery: ${error.message}`,
+        );
         // Don't show error to user as this is a background operation
       }
     }, 1000); // Delay to ensure extension is fully activated
   } catch (error) {
-    safeOutputLog(`Error setting up initial crash discovery: ${error.message}`);
+    safeOutputLog(
+      `Error setting up initial fuzzer discovery: ${error.message}`,
+    );
   }
 }
 
@@ -668,5 +672,6 @@ module.exports = {
   activate,
   deactivate,
   initializeCodeForgeOnActivation,
-  runInitialCrashDiscovery,
+  runInitialFuzzerDiscovery,
+  runInitialCrashDiscovery: runInitialFuzzerDiscovery, // Backward compatibility
 };

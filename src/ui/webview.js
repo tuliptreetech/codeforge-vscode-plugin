@@ -13,7 +13,7 @@
       missingComponents: [],
       details: {},
     },
-    crashes: {
+    fuzzers: {
       isLoading: false,
       lastUpdated: null,
       data: [],
@@ -27,8 +27,8 @@
     fuzzingBtn: document.getElementById("fuzzing-btn"),
     loadingOverlay: document.getElementById("loading-overlay"),
     loadingText: document.getElementById("loading-text"),
-    refreshCrashesBtn: document.getElementById("refresh-crashes-btn"),
-    crashesContent: document.getElementById("crashes-content"),
+    refreshFuzzersBtn: document.getElementById("refresh-fuzzers-btn"),
+    fuzzersContent: document.getElementById("fuzzers-content"),
     // Initialization elements
     initializationSection: document.getElementById("initialization-section"),
     initializeBtn: document.getElementById("initialize-btn"),
@@ -39,7 +39,7 @@
     initStatusMessage: document.getElementById("init-status-message"),
     unknownStateSection: document.getElementById("unknown-state-section"),
     actionsSection: document.getElementById("actions-section"),
-    crashesSection: document.getElementById("crashes-section"),
+    fuzzersSection: document.getElementById("fuzzers-section"),
   };
 
   // Verify all elements exist
@@ -62,9 +62,9 @@
       executeCommand("runFuzzingTests"),
     );
   }
-  if (elements.refreshCrashesBtn) {
-    elements.refreshCrashesBtn.addEventListener("click", () =>
-      executeCommand("refreshCrashes"),
+  if (elements.refreshFuzzersBtn) {
+    elements.refreshFuzzersBtn.addEventListener("click", () =>
+      executeCommand("refreshFuzzers"),
     );
   }
   if (elements.initializeBtn) {
@@ -116,7 +116,7 @@
   function updateUI() {
     updateInitializationUI();
     updateButtonStates();
-    updateCrashDisplay();
+    updateFuzzerDisplay();
   }
 
   function updateButtonStates() {
@@ -159,7 +159,7 @@
     const messages = {
       launchTerminal: "Launching terminal...",
       runFuzzingTests: "Running fuzzing tests...",
-      refreshCrashes: "Scanning for crashes...",
+      refreshFuzzers: "Scanning for fuzzers...",
       viewCrash: "Opening crash file...",
       analyzeCrash: "Analyzing crash...",
       clearCrashes: "Clearing crashes...",
@@ -216,7 +216,7 @@
     if (elements.unknownStateSection)
       elements.unknownStateSection.style.display = "none";
     if (elements.actionsSection) elements.actionsSection.style.display = "none";
-    if (elements.crashesSection) elements.crashesSection.style.display = "none";
+    if (elements.fuzzersSection) elements.fuzzersSection.style.display = "none";
   }
 
   function showInitializationSection(hasError) {
@@ -255,8 +255,8 @@
   function showMainInterface() {
     if (elements.actionsSection)
       elements.actionsSection.style.display = "block";
-    if (elements.crashesSection)
-      elements.crashesSection.style.display = "block";
+    if (elements.fuzzersSection)
+      elements.fuzzersSection.style.display = "block";
   }
 
   function updateInitializationProgress() {
@@ -370,98 +370,143 @@
 
   // Enhanced state update with announcements - removed duplicate declaration
 
-  // Crash display management
-  function updateCrashDisplay() {
-    if (!elements.crashesContent) return;
+  // Fuzzer display management
+  function updateFuzzerDisplay() {
+    if (!elements.fuzzersContent) return;
 
-    const { crashes } = currentState;
+    const { fuzzers } = currentState;
 
-    if (crashes.isLoading) {
-      elements.crashesContent.innerHTML = `
-        <div class="crashes-loading">
+    if (fuzzers.isLoading) {
+      elements.fuzzersContent.innerHTML = `
+        <div class="fuzzers-loading">
           <div class="loading-spinner"></div>
-          <div class="loading-text">Scanning for crashes...</div>
+          <div class="loading-text">Scanning for fuzzers...</div>
         </div>
       `;
       return;
     }
 
-    if (crashes.error) {
-      elements.crashesContent.innerHTML = `
-        <div class="crashes-error">
+    if (fuzzers.error) {
+      elements.fuzzersContent.innerHTML = `
+        <div class="fuzzers-error">
           <div class="error-icon">⚠️</div>
-          <div class="error-text">Failed to load crash data</div>
-          <button class="retry-btn" onclick="executeCommand('refreshCrashes')">Retry</button>
+          <div class="error-text">Failed to load fuzzer data</div>
+          <button class="retry-btn" onclick="executeCommand('refreshFuzzers')">Retry</button>
         </div>
       `;
       return;
     }
 
-    if (!crashes.data || crashes.data.length === 0) {
-      elements.crashesContent.innerHTML = `
-        <div class="no-crashes-state">
+    if (!fuzzers.data || fuzzers.data.length === 0) {
+      elements.fuzzersContent.innerHTML = `
+        <div class="no-fuzzers-state">
           <div class="empty-icon">🎯</div>
-          <div class="empty-text">No crashes found</div>
-          <div class="empty-subtext">Run fuzzing tests to discover crashes</div>
+          <div class="empty-text">No fuzzers found</div>
+          <div class="empty-subtext">Create fuzz targets to get started</div>
         </div>
       `;
       return;
     }
 
-    // Render crash data
+    // Render fuzzer data
     let html = "";
-    crashes.data.forEach((fuzzerData) => {
-      html += renderFuzzerGroup(fuzzerData);
+    fuzzers.data.forEach((fuzzer) => {
+      html += renderFuzzerItem(fuzzer);
     });
-    elements.crashesContent.innerHTML = html;
+    elements.fuzzersContent.innerHTML = html;
 
-    // Add event listeners for crash actions
-    addCrashEventListeners();
+    // Add event listeners for fuzzer and crash actions
+    addFuzzerEventListeners();
   }
 
-  function renderFuzzerGroup(fuzzerData) {
-    const crashCount = fuzzerData.crashes.length;
+  function renderFuzzerItem(fuzzer) {
+    const crashCount = fuzzer.crashes.length;
     const crashText = crashCount === 1 ? "crash" : "crashes";
 
+    // Render crashes as collapsible sub-items
     let crashItems = "";
-    fuzzerData.crashes.forEach((crash) => {
-      const formattedDate = formatCrashDate(crash.createdAt);
-      crashItems += `
-        <div class="crash-item" data-crash-id="${crash.id}">
-          <div class="crash-info">
-            <span class="crash-id">${crash.id}</span>
-            <span class="crash-size">${formatFileSize(crash.fileSize)}</span>
-            <span class="crash-date">${formattedDate}</span>
+    if (crashCount > 0) {
+      fuzzer.crashes.forEach((crash) => {
+        const formattedDate = formatCrashDate(crash.createdAt);
+        crashItems += `
+          <div class="crash-item" data-crash-id="${crash.id}">
+            <div class="crash-info">
+              <span class="crash-id">${crash.id}</span>
+              <span class="crash-size">${formatFileSize(crash.fileSize)}</span>
+              <span class="crash-date">${formattedDate}</span>
+            </div>
+            <div class="crash-actions">
+              <button class="crash-action-btn" data-action="view" data-crash-id="${crash.id}"
+                      data-file-path="${crash.filePath}" title="View crash">👁️</button>
+              <button class="crash-action-btn" data-action="analyze" data-crash-id="${crash.id}"
+                      data-fuzzer-name="${fuzzer.name}" data-file-path="${crash.filePath}" title="Analyze crash">🔍</button>
+            </div>
           </div>
-          <div class="crash-actions">
-            <button class="crash-action-btn" data-action="view" data-crash-id="${crash.id}"
-                    data-file-path="${crash.filePath}" title="View crash">👁️</button>
-            <button class="crash-action-btn" data-action="analyze" data-crash-id="${crash.id}"
-                    data-fuzzer-name="${crash.fuzzerName}" data-file-path="${crash.filePath}" title="Analyze crash">🔍</button>
-          </div>
+        `;
+      });
+    }
+
+    const crashSection =
+      crashCount > 0
+        ? `
+      <div class="fuzzer-crashes ${crashCount > 0 ? "has-crashes" : ""}" data-fuzzer="${fuzzer.name}">
+        <div class="crashes-header" onclick="toggleCrashSection('${fuzzer.name}')">
+          <span class="crashes-toggle">▶</span>
+          <span class="crashes-label">${crashCount} ${crashText}</span>
         </div>
-      `;
-    });
+        <div class="crash-list collapsed" id="crashes-${fuzzer.name}">
+          ${crashItems}
+          ${
+            crashCount > 0
+              ? `<div class="crash-actions-footer">
+            <button class="clear-all-btn" data-fuzzer="${fuzzer.name}" title="Clear all crashes for this fuzzer">Clear All Crashes</button>
+          </div>`
+              : ""
+          }
+        </div>
+      </div>
+    `
+        : `
+      <div class="fuzzer-crashes">
+        <span class="no-crashes-text">No crashes</span>
+      </div>
+    `;
 
     return `
-      <div class="fuzzer-group" data-fuzzer="${fuzzerData.fuzzerName}">
+      <div class="fuzzer-item" data-fuzzer="${fuzzer.name}">
         <div class="fuzzer-header">
-          <div>
-            <span class="fuzzer-name">${fuzzerData.fuzzerName}</span>
-            <span class="crash-count">${crashCount} ${crashText}</span>
-          </div>
-          <div class="fuzzer-actions">
-            <button class="clear-all-btn" data-fuzzer="${fuzzerData.fuzzerName}" title="Clear all crashes for this fuzzer">Clear All</button>
+          <div class="fuzzer-info">
+            <span class="fuzzer-name">${fuzzer.name}</span>
+            <span class="fuzzer-preset">${fuzzer.preset}</span>
           </div>
         </div>
-        <div class="crash-list">
-          ${crashItems}
-        </div>
+        ${crashSection}
       </div>
     `;
   }
 
-  function addCrashEventListeners() {
+  function toggleCrashSection(fuzzerName) {
+    const crashList = document.getElementById(`crashes-${fuzzerName}`);
+    const toggle = document.querySelector(
+      `[data-fuzzer="${fuzzerName}"] .crashes-toggle`,
+    );
+
+    if (crashList && toggle) {
+      const isCollapsed = crashList.classList.contains("collapsed");
+      if (isCollapsed) {
+        crashList.classList.remove("collapsed");
+        toggle.textContent = "▼";
+      } else {
+        crashList.classList.add("collapsed");
+        toggle.textContent = "▶";
+      }
+    }
+  }
+
+  // Make toggleCrashSection available globally
+  window.toggleCrashSection = toggleCrashSection;
+
+  function addFuzzerEventListeners() {
     // View crash buttons
     document
       .querySelectorAll('.crash-action-btn[data-action="view"]')
@@ -559,10 +604,10 @@
 
     baseUpdateState(newState);
 
-    // If fuzzing just completed, refresh crashes
+    // If fuzzing just completed, refresh fuzzers
     if (wasFuzzing && !isFuzzing) {
       setTimeout(() => {
-        executeCommand("refreshCrashes");
+        executeCommand("refreshFuzzers");
       }, 1000);
     }
 

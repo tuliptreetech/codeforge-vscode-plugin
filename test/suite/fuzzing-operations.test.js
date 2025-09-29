@@ -464,7 +464,7 @@ suite("Fuzzing Operations Test Suite", () => {
 
       // Verify error details
       const error = result.errors[0];
-      assert.strictEqual(error.type, "build_error");
+      assert.strictEqual(error.type, "compilation_error");
       assert(error.error.includes("test-fuzzer"));
       assert.strictEqual(error.failedTargets.length, 1);
       assert.strictEqual(error.failedTargets[0], "test-fuzzer");
@@ -596,13 +596,13 @@ suite("Fuzzing Operations Test Suite", () => {
       assert.strictEqual(result.length, 2, "Should parse 2 build errors");
 
       // First error
-      assert.strictEqual(result[0].type, "build_error");
+      assert.strictEqual(result[0].type, "compilation_error");
       assert(result[0].error.includes("test-fuzzer"));
       assert.strictEqual(result[0].preset, "debug");
       assert.strictEqual(result[0].failedTargets[0], "test-fuzzer");
 
       // Second error
-      assert.strictEqual(result[1].type, "build_error");
+      assert.strictEqual(result[1].type, "compilation_error");
       assert(result[1].error.includes("third-fuzzer"));
       assert.strictEqual(result[1].preset, "debug");
       assert.strictEqual(result[1].failedTargets[0], "third-fuzzer");
@@ -1602,6 +1602,257 @@ suite("Fuzzing Operations Test Suite", () => {
         summary.includes("CMakePresets.json configuration invalid"),
         "Should show configuration error details",
       );
+    });
+  });
+  suite("Enhanced Error Handling", () => {
+    test("buildFuzzTarget should validate inputs", async () => {
+      try {
+        await fuzzingOperations.buildFuzzTarget("/test/workspace", "");
+        assert.fail("Should have thrown error for empty fuzzer name");
+      } catch (error) {
+        assert(error.message.includes("Invalid fuzzer name"));
+        assert.strictEqual(error.fuzzerName, "");
+      }
+    });
+
+    test("buildFuzzTarget should check Docker image exists", async () => {
+      sandbox.stub(dockerOperations, "checkImageExists").resolves(false);
+
+      try {
+        await fuzzingOperations.buildFuzzTarget(
+          "/test/workspace",
+          "test-fuzzer",
+        );
+        assert.fail("Should have thrown error for missing Docker image");
+      } catch (error) {
+        assert(error.message.includes("Docker image"));
+        assert(error.message.includes("not found"));
+        assert.strictEqual(error.fuzzerName, "test-fuzzer");
+      }
+    });
+
+    test("buildFuzzTarget should provide detailed error context", async () => {
+      sandbox.stub(dockerOperations, "checkImageExists").resolves(true);
+
+      // Mock the Docker execution to return a cmake target error
+      const mockStdout = `[+] building target: test-fuzzer in preset: Debug
+[!] Failed to build target test-fuzzer
+cmake --build /build --target test-fuzzer
+cmake target does not exist
+compilation terminated.`;
+
+      // Mock runDockerCommandWithOutput to return a ChildProcess-like object
+      const EventEmitter = require("events");
+      const mockProcess = new EventEmitter();
+      mockProcess.stdout = new EventEmitter();
+      mockProcess.stderr = new EventEmitter();
+
+      sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      // Start the async operation
+      const buildPromise = fuzzingOperations.buildFuzzTarget(
+        "/test/workspace",
+        "test-fuzzer",
+      );
+
+      // Simulate the process events
+      setTimeout(() => {
+        mockProcess.stdout.emit("data", mockStdout);
+        mockProcess.emit("close", 1); // Exit code 1 for failure
+      }, 10);
+
+      try {
+        await buildPromise;
+        assert.fail("Should have thrown error for build failure");
+      } catch (error) {
+        assert.strictEqual(error.fuzzerName, "test-fuzzer");
+        assert.strictEqual(
+          error.errorType,
+          "cmake_target_error",
+          `Expected cmake_target_error but got ${error.errorType}`,
+        );
+        assert(Array.isArray(error.suggestions));
+        assert(error.suggestions.length > 0);
+      }
+    });
+
+    test("createDetailedBuildErrorMessage should format error messages", () => {
+      const buildError = {
+        buildErrors: [
+          {
+            error: "Compilation failed",
+            buildContext: {
+              stderr: "error: 'undefined_function' was not declared",
+            },
+          },
+        ],
+      };
+
+      const message = fuzzingOperations.createDetailedBuildErrorMessage(
+        "test-fuzzer",
+        "Debug",
+        buildError,
+      );
+
+      assert(message.includes("test-fuzzer"));
+      assert(message.includes("Debug"));
+      assert(message.includes("Compilation failed"));
+      assert(message.includes("undefined_function"));
+    });
+
+    test("generateBuildErrorSuggestions should provide CMake-specific suggestions", () => {
+      const buildError = {
+        buildErrors: [
+          {
+            error: "cmake target does not exist",
+            buildContext: {
+              stderr: "CMake Error: Unknown target test-fuzzer",
+            },
+          },
+        ],
+      };
+
+      const suggestions =
+        fuzzingOperations.generateBuildErrorSuggestions(buildError);
+
+      assert(Array.isArray(suggestions));
+      assert(suggestions.some((s) => s.includes("CMakeLists.txt")));
+      assert(suggestions.some((s) => s.includes("target name matches")));
+    });
+
+    test("generateBuildErrorSuggestions should provide compiler-specific suggestions", () => {
+      const buildError = {
+        buildErrors: [
+          {
+            error: "compilation error: undefined reference",
+            buildContext: {
+              stderr: "undefined reference to `missing_function'",
+            },
+          },
+        ],
+      };
+
+      const suggestions =
+        fuzzingOperations.generateBuildErrorSuggestions(buildError);
+
+      assert(Array.isArray(suggestions));
+      assert(suggestions.some((s) => s.includes("compilation errors")));
+      assert(suggestions.some((s) => s.includes("libraries are linked")));
+    });
+
+    test("categorizeError should identify error types correctly", () => {
+      assert.strictEqual(
+        fuzzingOperations.categorizeError("cmake preset not found"),
+        "cmake_preset_error",
+      );
+
+      assert.strictEqual(
+        fuzzingOperations.categorizeError("cmake target does not exist"),
+        "cmake_target_error",
+      );
+
+      assert.strictEqual(
+        fuzzingOperations.categorizeError("compilation error: syntax error"),
+        "compilation_error",
+      );
+
+      assert.strictEqual(
+        fuzzingOperations.categorizeError("undefined reference to symbol"),
+        "linker_error",
+      );
+
+      assert.strictEqual(
+        fuzzingOperations.categorizeError("permission denied"),
+        "permission_error",
+      );
+
+      assert.strictEqual(
+        fuzzingOperations.categorizeError("docker container not found"),
+        "docker_error",
+      );
+
+      assert.strictEqual(
+        fuzzingOperations.categorizeError("network timeout"),
+        "network_error",
+      );
+
+      assert.strictEqual(
+        fuzzingOperations.categorizeError("file not found"),
+        "file_not_found_error",
+      );
+
+      assert.strictEqual(
+        fuzzingOperations.categorizeError("unknown error"),
+        "build_error",
+      );
+    });
+
+    test("parseScriptBuildErrors should extract detailed error information", () => {
+      const stdout = `[+] building target: test-fuzzer in preset: debug
+[!] Failed to build target test-fuzzer
+cmake --build /build --target test-fuzzer
+error: 'undefined_function' was not declared in this scope
+compilation terminated.
+[+] built fuzzer: other-fuzzer`;
+
+      const stderr = "";
+      const fuzzTests = [{ preset: "debug", fuzzer: "test-fuzzer" }];
+
+      const errors = fuzzingOperations.parseScriptBuildErrors(
+        stdout,
+        stderr,
+        fuzzTests,
+      );
+
+      assert.strictEqual(errors.length, 1);
+      const error = errors[0];
+      assert.strictEqual(error.preset, "debug");
+      assert.strictEqual(error.type, "compilation_error");
+      assert.strictEqual(error.buildErrors.length, 1);
+      assert(error.buildErrors[0].buildCommand.includes("cmake --build"));
+      assert(
+        error.buildErrors[0].buildOutput &&
+          error.buildErrors[0].buildOutput.includes("undefined_function"),
+      );
+    });
+
+    test("parseScriptBuildErrors should handle CMake configuration errors", () => {
+      const stdout = `[+] Failed to configure preset invalid-preset - skipping
+[+] building target: test-fuzzer in preset: debug`;
+
+      const stderr = "";
+      const fuzzTests = [{ preset: "invalid-preset", fuzzer: "test-fuzzer" }];
+
+      const errors = fuzzingOperations.parseScriptBuildErrors(
+        stdout,
+        stderr,
+        fuzzTests,
+      );
+
+      assert.strictEqual(errors.length, 1);
+      const error = errors[0];
+      assert.strictEqual(error.preset, "invalid-preset");
+      assert.strictEqual(error.type, "cmake_config_error");
+      assert(error.error.includes("configure CMake preset"));
+    });
+
+    test("parseScriptBuildErrors should handle general script errors", () => {
+      const stdout = "";
+      const stderr = "Docker container not found";
+      const fuzzTests = [{ preset: "debug", fuzzer: "test-fuzzer" }];
+
+      const errors = fuzzingOperations.parseScriptBuildErrors(
+        stdout,
+        stderr,
+        fuzzTests,
+      );
+
+      assert.strictEqual(errors.length, 1);
+      const error = errors[0];
+      assert.strictEqual(error.type, "docker_error");
+      assert(error.error.includes("Script execution failed"));
     });
   });
 });

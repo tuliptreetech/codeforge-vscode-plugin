@@ -27,7 +27,7 @@ for f in $fuzzers; do
         set +e 
         cmake --preset "$preset" -S . -B "$build_dir" 1>/dev/null 2>&1
         if [ $? -ne 0 ]; then
-            [ $quiet == false ] && echo "[+] Failed to configure preset $p - skipping"
+            echo "[+] Failed to configure preset $preset - skipping"
             rm -rf "$build_dir"
             continue
         fi
