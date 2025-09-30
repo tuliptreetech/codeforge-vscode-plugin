@@ -162,9 +162,6 @@ function activate(context) {
     );
   }
 
-  // Note: Automatic initialization removed - users must explicitly initialize
-  // initializeCodeForgeOnActivation(); // Commented out - now user-driven only
-
   // Trigger initialization status check in webview after providers are ready
   setTimeout(() => {
     if (webviewProvider && webviewProvider._checkInitializationStatus) {
@@ -329,139 +326,6 @@ function activate(context) {
     },
   );
   context.subscriptions.push(checkDockerCommand);
-}
-
-/**
- * Automatically initializes the .codeforge directory when the extension is activated
- * This function runs silently and only creates the directory/Dockerfile if they don't exist
- */
-async function initializeCodeForgeOnActivation() {
-  try {
-    // Check if there's an open workspace
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
-      // No workspace open, silently skip initialization
-      safeOutputLog(
-        "No workspace folder open, skipping automatic initialization",
-      );
-      return;
-    }
-
-    const workspacePath = workspaceFolder.uri.fsPath;
-    const codeforgeDir = path.join(workspacePath, ".codeforge");
-    const scriptsDir = path.join(codeforgeDir, "scripts");
-    const gitignorePath = path.join(codeforgeDir, ".gitignore");
-    const dockerfilePath = path.join(codeforgeDir, "Dockerfile");
-
-    // Check if .codeforge directory exists
-    let dirExists = false;
-    try {
-      await fs.access(codeforgeDir);
-      dirExists = true;
-    } catch (error) {
-      // Directory doesn't exist
-      dirExists = false;
-    }
-
-    // Check if .gitignore exists
-    let gitignoreExists = false;
-    if (dirExists) {
-      try {
-        await fs.access(gitignorePath);
-        gitignoreExists = true;
-      } catch (error) {
-        // .gitignore doesn't exist
-        gitignoreExists = false;
-      }
-    }
-
-    // Check if Dockerfile exists
-    let dockerfileExists = false;
-    if (dirExists) {
-      try {
-        await fs.access(dockerfilePath);
-        dockerfileExists = true;
-      } catch (error) {
-        // Dockerfile doesn't exist
-        dockerfileExists = false;
-      }
-    }
-
-    // Check if scripts directory exists
-    let scriptsExist = false;
-    if (dirExists) {
-      try {
-        await fs.access(scriptsDir);
-        scriptsExist = true;
-      } catch (error) {
-        // Scripts directory doesn't exist
-        scriptsExist = false;
-      }
-    }
-
-    // If directory, .gitignore, Dockerfile, and scripts all exist, nothing to do
-    if (dirExists && gitignoreExists && dockerfileExists && scriptsExist) {
-      safeOutputLog(
-        "CodeForge already initialized, skipping automatic initialization",
-      );
-      return;
-    }
-
-    // Create .codeforge directory if it doesn't exist
-    if (!dirExists) {
-      await fs.mkdir(codeforgeDir, { recursive: true });
-      safeOutputLog(`Auto-created .codeforge directory: ${codeforgeDir}`);
-    }
-
-    // Create .gitignore if it doesn't exist
-    if (!gitignoreExists) {
-      try {
-        await resourceManager.dumpGitignore(codeforgeDir);
-        safeOutputLog(`Auto-created .gitignore: ${gitignorePath}`);
-      } catch (error) {
-        safeOutputLog(`Error creating .gitignore: ${error.message}`);
-        throw error;
-      }
-    }
-
-    // Create Dockerfile if it doesn't exist
-    if (!dockerfileExists) {
-      try {
-        await resourceManager.dumpDockerfile(codeforgeDir);
-        safeOutputLog(`Auto-created Dockerfile: ${dockerfilePath}`);
-      } catch (error) {
-        safeOutputLog(`Error creating Dockerfile: ${error.message}`);
-        throw error;
-      }
-    }
-
-    // Create scripts directory and copy scripts if they don't exist
-    if (!scriptsExist) {
-      try {
-        await fs.mkdir(scriptsDir, { recursive: true });
-        safeOutputLog(`Auto-created scripts directory: ${scriptsDir}`);
-
-        const scriptPaths = await resourceManager.dumpScripts(scriptsDir);
-        safeOutputLog(`Auto-created scripts: ${scriptPaths.join(", ")}`);
-      } catch (error) {
-        safeOutputLog(`Error creating scripts: ${error.message}`);
-        throw error;
-      }
-    }
-
-    // Show a subtle notification if any files were created
-    if (!dirExists || !gitignoreExists || !dockerfileExists || !scriptsExist) {
-      vscode.window.showInformationMessage(
-        "CodeForge: Initialized .codeforge directory with configuration files and scripts",
-      );
-    }
-  } catch (error) {
-    // Log the error but don't show an error message to avoid disrupting the user
-    outputChannel.appendLine(
-      `Error during automatic initialization: ${error.message}`,
-    );
-    // Silently fail - the user can still manually initialize if needed
-  }
 }
 
 /**
@@ -671,7 +535,6 @@ async function deactivate() {
 module.exports = {
   activate,
   deactivate,
-  initializeCodeForgeOnActivation,
   runInitialFuzzerDiscovery,
   runInitialCrashDiscovery: runInitialFuzzerDiscovery, // Backward compatibility
 };
