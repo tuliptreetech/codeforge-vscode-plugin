@@ -454,10 +454,10 @@ class CodeForgeWebviewProvider {
       this._setFuzzerLoading(true);
 
       // Discover fuzzers - use a default container name for discovery
-      const containerName = "codeforge-fuzzer-discovery";
+      const imageName = dockerOperations.generateContainerName(workspacePath);
       const fuzzerData = await this._fuzzerDiscoveryService.discoverFuzzers(
         workspacePath,
-        containerName,
+        imageName,
       );
 
       // Update state with discovered fuzzers

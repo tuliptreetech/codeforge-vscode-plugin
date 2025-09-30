@@ -422,6 +422,8 @@
   function renderFuzzerItem(fuzzer) {
     const crashCount = fuzzer.crashes.length;
     const crashText = crashCount === 1 ? "crash" : "crashes";
+    // Use displayName from backend (formatted by fuzzerUtils) or fallback to name
+    const displayName = fuzzer.displayName || fuzzer.name;
 
     // Render crashes as collapsible sub-items
     let crashItems = "";
@@ -476,8 +478,7 @@
       <div class="fuzzer-item" data-fuzzer="${fuzzer.name}">
         <div class="fuzzer-header">
           <div class="fuzzer-info">
-            <span class="fuzzer-name">${fuzzer.name}</span>
-            <span class="fuzzer-preset">${fuzzer.preset}</span>
+            <span class="fuzzer-name">${displayName}</span>
           </div>
         </div>
         ${crashSection}
