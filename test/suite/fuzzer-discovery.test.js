@@ -175,12 +175,19 @@ another-invalid-line
   suite("Integration Tests", function () {
     const sinon = require("sinon");
     let sandbox;
+    let clock;
 
     setup(function () {
       sandbox = sinon.createSandbox();
+      // Use fake timers to control Date.now() and new Date() for consistent timestamps
+      clock = sinon.useFakeTimers({
+        now: new Date("2024-01-15T10:30:00.000Z"),
+        toFake: ["Date"],
+      });
     });
 
     teardown(function () {
+      clock.restore();
       sandbox.restore();
     });
 
@@ -418,13 +425,14 @@ another-invalid-line
     });
 
     test("should refresh specific fuzzer data", async function () {
-      // Setup cache with initial data
+      // Setup cache with initial data - use a different timestamp for initial data
+      const initialTimestamp = new Date("2024-01-15T10:00:00.000Z"); // Earlier than mocked time
       const initialFuzzers = [
         {
           name: "example-fuzz",
           preset: "Debug",
           crashes: [],
-          lastUpdated: new Date(Date.now() - 10000), // 10 seconds ago
+          lastUpdated: initialTimestamp,
           outputDir: "/test/output",
         },
       ];
@@ -489,12 +497,19 @@ another-invalid-line
   suite("Error Handling Tests", function () {
     const sinon = require("sinon");
     let sandbox;
+    let clock;
 
     setup(function () {
       sandbox = sinon.createSandbox();
+      // Use fake timers to control Date.now() and new Date() for consistent timestamps
+      clock = sinon.useFakeTimers({
+        now: new Date("2024-01-15T10:30:00.000Z"),
+        toFake: ["Date"],
+      });
     });
 
     teardown(function () {
+      clock.restore();
       sandbox.restore();
     });
 
@@ -574,7 +589,7 @@ another-invalid-line
 
       // Mock file system operations with fixed timestamp to prevent timing issues
       const fs = require("fs").promises;
-      const fixedMtime = new Date("2023-01-01T00:00:00.000Z");
+      const fixedMtime = new Date("2024-01-15T10:30:00.000Z"); // Same as mocked time
       sandbox.stub(fs, "access").resolves();
       sandbox.stub(fs, "stat").resolves({
         isFile: () => true,
