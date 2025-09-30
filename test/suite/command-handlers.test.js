@@ -571,8 +571,8 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(capturedUri, "Should have captured URI");
       assert.strictEqual(
         capturedUri.scheme,
-        "codeforge-hex",
-        "Should use codeforge-hex scheme",
+        "codeforge-crash",
+        "Should use codeforge-crash scheme",
       );
       assert.ok(
         capturedUri.path.includes(crashParams.crashId),
@@ -1446,8 +1446,8 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(capturedUri, "Should have captured URI");
       assert.strictEqual(
         capturedUri.scheme,
-        "codeforge-hex",
-        "Should use codeforge-hex scheme",
+        "codeforge-crash",
+        "Should use codeforge-crash scheme",
       );
       assert.ok(
         testEnvironment.vscodeMocks.workspace.openTextDocument.called,

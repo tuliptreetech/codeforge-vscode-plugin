@@ -97,24 +97,28 @@ function activate(context) {
     );
   }
 
-  // Register the hex document provider for read-only crash file viewing
+  // Register the crash report document provider for read-only crash file viewing
   try {
     const hexDocumentProvider = new HexDocumentProvider();
     const hexProviderDisposable =
       vscode.workspace.registerTextDocumentContentProvider(
-        "codeforge-hex",
+        "codeforge-crash",
         hexDocumentProvider,
       );
 
     if (!hexProviderDisposable) {
-      throw new Error("Failed to create hex document provider disposable");
+      throw new Error(
+        "Failed to create crash report document provider disposable",
+      );
     }
 
     context.subscriptions.push(hexProviderDisposable);
-    safeOutputLog("CodeForge: ✓ Hex document provider registered successfully");
+    safeOutputLog(
+      "CodeForge: ✓ Crash report document provider registered successfully",
+    );
   } catch (error) {
     vscode.window.showErrorMessage(
-      `CodeForge: Failed to register hex document provider - ${error.message}`,
+      `CodeForge: Failed to register crash report document provider - ${error.message}`,
     );
   }
 

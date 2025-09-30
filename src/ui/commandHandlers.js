@@ -973,7 +973,7 @@ class CodeForgeCommandHandlers {
    */
   async handleViewCrash(params) {
     try {
-      const { crashId, filePath } = params;
+      const { crashId, filePath, fuzzerName } = params;
 
       if (!filePath) {
         throw new Error("Crash file path not provided");
@@ -985,6 +985,9 @@ class CodeForgeCommandHandlers {
       } catch (error) {
         throw new Error(`Crash file not found: ${filePath}`);
       }
+
+      // Get workspace path
+      const { path: workspacePath } = this.getWorkspaceInfo();
 
       // Get file stats for size information
       const stats = await fs.stat(filePath);
@@ -1013,8 +1016,13 @@ class CodeForgeCommandHandlers {
         }
       }
 
-      // Create virtual URI for the read-only hex document
-      const hexUri = HexDocumentProvider.createHexUri(filePath, crashId);
+      // Create virtual URI for the read-only hex document with backtrace support
+      const hexUri = HexDocumentProvider.createHexUri(
+        filePath,
+        crashId,
+        fuzzerName,
+        workspacePath,
+      );
 
       this.safeOutputLog(
         `Opening read-only hex document for crash file: ${crashId}`,
@@ -1023,25 +1031,11 @@ class CodeForgeCommandHandlers {
       // Open the virtual document using the hex document provider
       const document = await vscode.workspace.openTextDocument(hexUri);
 
-      // Show the document in read-only mode
-      const editor = await vscode.window.showTextDocument(document, {
-        preview: false,
+      // Show document in editor - VSCode will detect ANSI escape codes and render colors
+      await vscode.window.showTextDocument(document, {
+        preview: true,
         preserveFocus: false,
-        viewColumn: vscode.ViewColumn.Active,
       });
-
-      // Move cursor to the start of actual hex content (after the header)
-      if (editor) {
-        // Position after the header comments (around line 8-10)
-        const startOfHexContent = new vscode.Position(8, 0);
-        editor.selection = new vscode.Selection(
-          startOfHexContent,
-          startOfHexContent,
-        );
-        editor.revealRange(
-          new vscode.Range(startOfHexContent, startOfHexContent),
-        );
-      }
 
       this.safeOutputLog(
         `Opened crash file with read-only hex viewer: ${crashId}`,

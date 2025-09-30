@@ -116,8 +116,8 @@ suite("HexDocumentProvider Test Suite", () => {
 
     const uri = HexDocumentProvider.createHexUri(filePath, crashId);
 
-    assert.strictEqual(uri.scheme, "codeforge-hex");
-    assert.strictEqual(uri.path, "crash-001.hex");
+    assert.strictEqual(uri.scheme, "codeforge-crash");
+    assert.strictEqual(uri.path, "crash-001.txt");
 
     const query = new URLSearchParams(uri.query);
     assert.strictEqual(query.get("file"), filePath);
@@ -131,17 +131,9 @@ suite("HexDocumentProvider Test Suite", () => {
     const content = await hexProvider.provideTextDocumentContent(uri);
 
     // Verify content structure
-    assert(
-      content.includes("# READ-ONLY HEX VIEW - CANNOT BE EDITED OR SAVED"),
-    );
-    assert(
-      content.includes(
-        "# This is a virtual document showing hex dump of crash file",
-      ),
-    );
-    assert(content.includes(`Crash ID: ${crashId}`));
-    assert(content.includes(`File: ${path.basename(testCrashFile)}`));
-    assert(content.includes(`Path: ${testCrashFile}`));
+    assert(content.includes(`Crash ID:    ${crashId}`));
+    assert(content.includes(`File:        ${path.basename(testCrashFile)}`));
+    assert(content.includes(`Path:        ${testCrashFile}`));
 
     // Verify hex dump format
     assert(
@@ -167,9 +159,9 @@ suite("HexDocumentProvider Test Suite", () => {
     const content = await hexProvider.provideTextDocumentContent(uri);
 
     // Should return error content
-    assert(content.includes("# ERROR: Failed to generate hex dump"));
+    assert(content.includes("ERROR: Failed to generate hex dump"));
     assert(
-      content.includes("# This document is read-only and cannot be edited."),
+      content.includes("This document is read-only and cannot be edited."),
     );
   });
 
@@ -217,8 +209,8 @@ suite("HexDocumentProvider Test Suite", () => {
 
       const content = await hexProvider.provideTextDocumentContent(uri);
 
-      assert(content.includes("# Empty file - no content to display"));
-      assert(content.includes("File Size: 0 bytes"));
+      assert(content.includes("Empty file - no content to display"));
+      assert(content.includes("0 bytes"));
     } finally {
       // Clean up
       try {
@@ -241,10 +233,8 @@ suite("HexDocumentProvider Test Suite", () => {
 
       const content = await hexProvider.provideTextDocumentContent(uri);
 
-      assert(content.includes("File Size: 102400 bytes (showing first 64KB)"));
-      assert(
-        content.includes("... (file truncated at 65536 bytes for display)"),
-      );
+      assert(content.includes("102400 bytes (showing first 64KB)"));
+      assert(content.includes("File truncated at 65536 bytes for display"));
       assert(content.includes("Total file size: 102400 bytes"));
     } finally {
       // Clean up

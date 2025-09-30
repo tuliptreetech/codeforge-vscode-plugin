@@ -439,7 +439,7 @@
             </div>
             <div class="crash-actions">
               <button class="crash-action-btn" data-action="view" data-crash-id="${crash.id}"
-                      data-file-path="${crash.filePath}" title="View crash">👁️</button>
+                      data-file-path="${crash.filePath}" data-fuzzer-name="${fuzzer.name}" title="View crash">👁️</button>
               <button class="crash-action-btn" data-action="analyze" data-crash-id="${crash.id}"
                       data-fuzzer-name="${fuzzer.name}" data-file-path="${crash.filePath}" title="Analyze crash">🔍</button>
             </div>
@@ -493,7 +493,8 @@
         btn.addEventListener("click", (e) => {
           const crashId = e.target.dataset.crashId;
           const filePath = e.target.dataset.filePath;
-          executeCommand("viewCrash", { crashId, filePath });
+          const fuzzerName = e.target.dataset.fuzzerName;
+          executeCommand("viewCrash", { crashId, filePath, fuzzerName });
         });
       });
 
