@@ -572,12 +572,13 @@ another-invalid-line
         .stub(fuzzerDiscoveryService.crashDiscoveryService, "discoverCrashes")
         .resolves([]);
 
-      // Mock file system operations
+      // Mock file system operations with fixed timestamp to prevent timing issues
       const fs = require("fs").promises;
+      const fixedMtime = new Date("2023-01-01T00:00:00.000Z");
       sandbox.stub(fs, "access").resolves();
       sandbox.stub(fs, "stat").resolves({
         isFile: () => true,
-        mtime: new Date(),
+        mtime: fixedMtime,
       });
 
       // Start multiple concurrent discovery requests
@@ -595,7 +596,7 @@ another-invalid-line
         assert.ok(result.length > 0, "Should find fuzzers");
       });
 
-      // Results should be consistent
+      // Results should be consistent - fixed timing issue by using fixed mtime in fs.stat mock
       assert.deepStrictEqual(
         results[0],
         results[1],
