@@ -63,8 +63,10 @@ class FuzzerDiscoveryService {
       // Get crash data from CrashDiscoveryService (handle failures gracefully)
       let crashData = [];
       try {
-        crashData =
-          await this.crashDiscoveryService.discoverCrashes(workspacePath);
+        crashData = await this.crashDiscoveryService.discoverCrashes(
+          workspacePath,
+          imageName,
+        );
       } catch (crashError) {
         console.warn(
           "Crash discovery failed, continuing without crash data:",
@@ -308,8 +310,10 @@ class FuzzerDiscoveryService {
         const cachedFuzzer = this.cachedFuzzers.get(fuzzerName);
         if (cachedFuzzer) {
           // Update crashes for specific fuzzer
-          const crashData =
-            await this.crashDiscoveryService.discoverCrashes(workspacePath);
+          const crashData = await this.crashDiscoveryService.discoverCrashes(
+            workspacePath,
+            containerName,
+          );
           const crashes = this.associateCrashesWithFuzzers(
             fuzzerName,
             crashData,

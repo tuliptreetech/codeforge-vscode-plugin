@@ -452,11 +452,10 @@
       crashCount > 0
         ? `
       <div class="fuzzer-crashes ${crashCount > 0 ? "has-crashes" : ""}" data-fuzzer="${fuzzer.name}">
-        <div class="crashes-header" onclick="toggleCrashSection('${fuzzer.name}')">
-          <span class="crashes-toggle">▶</span>
+        <div class="crashes-header">
           <span class="crashes-label">${crashCount} ${crashText}</span>
         </div>
-        <div class="crash-list collapsed" id="crashes-${fuzzer.name}">
+        <div class="crash-list" id="crashes-${fuzzer.name}">
           ${crashItems}
           ${
             crashCount > 0
@@ -485,27 +484,6 @@
       </div>
     `;
   }
-
-  function toggleCrashSection(fuzzerName) {
-    const crashList = document.getElementById(`crashes-${fuzzerName}`);
-    const toggle = document.querySelector(
-      `[data-fuzzer="${fuzzerName}"] .crashes-toggle`,
-    );
-
-    if (crashList && toggle) {
-      const isCollapsed = crashList.classList.contains("collapsed");
-      if (isCollapsed) {
-        crashList.classList.remove("collapsed");
-        toggle.textContent = "▼";
-      } else {
-        crashList.classList.add("collapsed");
-        toggle.textContent = "▶";
-      }
-    }
-  }
-
-  // Make toggleCrashSection available globally
-  window.toggleCrashSection = toggleCrashSection;
 
   function addFuzzerEventListeners() {
     // View crash buttons

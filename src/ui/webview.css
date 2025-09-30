@@ -604,22 +604,11 @@ body {
 .fuzzer-crashes.has-crashes .crashes-header {
   padding: 8px 16px;
   background-color: var(--vscode-editor-background);
-  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
   color: var(--vscode-descriptionForeground);
-  transition: background-color 0.2s ease;
-}
-
-.fuzzer-crashes.has-crashes .crashes-header:hover {
-  background-color: var(--vscode-list-hoverBackground);
-}
-
-.crashes-toggle {
-  font-size: 10px;
-  transition: transform 0.2s ease;
 }
 
 .crashes-label {
@@ -657,14 +646,9 @@ body {
 
 /* Crash Items */
 .crash-list {
-  max-height: 200px;
+  max-height: 320px;
   overflow-y: auto;
-  transition: max-height 0.3s ease;
-}
-
-.crash-list.collapsed {
-  max-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .crash-item {
@@ -815,8 +799,6 @@ body {
   .crash-item,
   .crash-action-btn,
   .crashes-header,
-  .crash-list,
-  .crashes-toggle,
   .refresh-btn,
   .clear-all-btn,
   .retry-btn {
