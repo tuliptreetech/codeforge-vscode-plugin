@@ -3,6 +3,7 @@ const fs = require("fs").promises;
 const path = require("path");
 const dockerOperations = require("../core/dockerOperations");
 const { CrashDiscoveryService } = require("./crashDiscoveryService");
+const { formatFuzzerDisplayName } = require("./fuzzerUtils");
 const { getOutputDirectory } = require("./fuzzingConfig");
 
 /**
@@ -78,10 +79,17 @@ class FuzzerDiscoveryService {
         crashData,
       );
 
-      // Update cache
-      this.updateCache(fuzzers);
+      // Add displayName to each fuzzer for UI display
+      const fuzzersWithDisplayNames = fuzzers.map((fuzzer) => ({
+        ...fuzzer,
+        displayName: formatFuzzerDisplayName(fuzzer.name),
+      }));
 
-      return fuzzers;
+
+      // Update cache
+      this.updateCache(fuzzersWithDisplayNames);
+
+      return fuzzersWithDisplayNames;
     } catch (error) {
       console.error("Error discovering fuzzers:", error);
       throw new Error(`Failed to discover fuzzers: ${error.message}`);
