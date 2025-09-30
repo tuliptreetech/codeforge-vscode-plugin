@@ -91,9 +91,6 @@ class CodeForgeWebviewProvider {
       this._view = undefined;
     });
 
-    // Check initialization status when webview is first created
-    setTimeout(() => this._checkInitializationStatus(), 0);
-
     // Trigger initial fuzzer discovery when webview is first created (asynchronously)
     setTimeout(() => this._performInitialFuzzerDiscovery(), 100);
   }
