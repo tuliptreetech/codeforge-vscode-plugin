@@ -85,7 +85,6 @@ class FuzzerDiscoveryService {
         displayName: formatFuzzerDisplayName(fuzzer.name),
       }));
 
-
       // Update cache
       this.updateCache(fuzzersWithDisplayNames);
 
