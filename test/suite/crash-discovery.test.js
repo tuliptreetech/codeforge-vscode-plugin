@@ -1,6 +1,7 @@
 const assert = require("assert");
 const path = require("path");
 const fs = require("fs").promises;
+const sinon = require("sinon");
 const {
   CrashDiscoveryService,
 } = require("../../src/fuzzing/crashDiscoveryService");
@@ -17,7 +18,10 @@ suite("CrashDiscoveryService Tests", () => {
   suite("Basic Functionality", () => {
     test("should return empty array when no .codeforge directory exists", async () => {
       const nonExistentPath = path.join(__dirname, "non-existent-workspace");
-      const result = await crashService.discoverCrashes(nonExistentPath);
+      const result = await crashService.discoverCrashes(
+        nonExistentPath,
+        "test-image",
+      );
 
       assert.strictEqual(Array.isArray(result), true);
       assert.strictEqual(result.length, 0);
@@ -33,57 +37,72 @@ suite("CrashDiscoveryService Tests", () => {
         "fuzzing",
         "codeforge-cmake",
       );
-      const result = await crashService.discoverCrashes(examplePath);
+      const result = await crashService.discoverCrashes(
+        examplePath,
+        "test-image",
+      );
 
       assert.strictEqual(Array.isArray(result), true);
       assert.strictEqual(result.length, 0);
     });
 
-    test("should extract fuzzer name correctly", () => {
-      const testDir = path.join(
-        "path",
-        "to",
-        "codeforge-test-fuzzer-fuzz-output",
-      );
-      const fuzzerName = crashService.extractFuzzerName(testDir);
+    test("should parse script output correctly", () => {
+      const scriptOutput =
+        "test-fuzzer/abc123def456\nanother-fuzzer/xyz789abc123\n";
+      const crashList = crashService.parseFindCrashesScriptOutput(scriptOutput);
 
-      assert.strictEqual(fuzzerName, "test-fuzzer");
+      assert.strictEqual(crashList.length, 2);
+      assert.strictEqual(crashList[0].fuzzerName, "test-fuzzer");
+      assert.strictEqual(crashList[0].crashHash, "abc123def456");
+      assert.strictEqual(crashList[1].fuzzerName, "another-fuzzer");
+      assert.strictEqual(crashList[1].crashHash, "xyz789abc123");
     });
 
-    test("should extract fuzzer name from path correctly", () => {
-      const testPath = path.join(
-        "workspace",
+    test("should handle empty script output", () => {
+      const scriptOutput = "";
+      const crashList = crashService.parseFindCrashesScriptOutput(scriptOutput);
+
+      assert.strictEqual(crashList.length, 0);
+    });
+
+    test("should handle malformed script output lines", () => {
+      const scriptOutput = "valid-fuzzer/abc123\ninvalid-line-no-slash\n";
+      const crashList = crashService.parseFindCrashesScriptOutput(scriptOutput);
+
+      assert.strictEqual(crashList.length, 1);
+      assert.strictEqual(crashList[0].fuzzerName, "valid-fuzzer");
+      assert.strictEqual(crashList[0].crashHash, "abc123");
+    });
+
+    test("should truncate crash hash to 9 characters for id", async () => {
+      const mockCrashFilePath = path.join(
+        testWorkspacePath,
         ".codeforge",
         "fuzzing",
-        "codeforge-libfuzzer-fuzz-output",
-        "crash-abc123",
+        "test-fuzzer-output",
+        "crash-abc123def456ghi789",
       );
-      const fuzzerName = crashService.extractFuzzerNameFromPath(testPath);
 
-      assert.strictEqual(fuzzerName, "libfuzzer");
-    });
+      // Mock fs.stat to return valid stats
+      const originalStat = crashService.fs.stat;
+      crashService.fs.stat = async () => ({
+        size: 1024,
+        birthtime: new Date("2024-01-01T00:00:00Z"),
+      });
 
-    test("should extract fuzzer name from Windows path correctly", () => {
-      const testPath =
-        "C:\\workspace\\.codeforge\\fuzzing\\codeforge-libfuzzer-fuzz-output\\crash-abc123";
-      const fuzzerName = crashService.extractFuzzerNameFromPath(testPath);
+      try {
+        const crashInfo = await crashService.buildCrashInfo(
+          mockCrashFilePath,
+          "abc123def456ghi789",
+          "test-fuzzer",
+        );
 
-      assert.strictEqual(fuzzerName, "libfuzzer");
-    });
-
-    test("should extract fuzzer name from Unix path correctly", () => {
-      const testPath =
-        "/workspace/.codeforge/fuzzing/codeforge-libfuzzer-fuzz-output/crash-abc123";
-      const fuzzerName = crashService.extractFuzzerNameFromPath(testPath);
-
-      assert.strictEqual(fuzzerName, "libfuzzer");
-    });
-
-    test("should handle malformed directory names gracefully", () => {
-      const testDir = path.join("path", "to", "invalid-directory-name");
-      const fuzzerName = crashService.extractFuzzerName(testDir);
-
-      assert.strictEqual(fuzzerName, "invalid-directory-name");
+        assert.strictEqual(crashInfo.id, "abc123def");
+        assert.strictEqual(crashInfo.fullHash, "abc123def456ghi789");
+        assert.strictEqual(crashInfo.fuzzerName, "test-fuzzer");
+      } finally {
+        crashService.fs.stat = originalStat;
+      }
     });
   });
 
@@ -93,9 +112,9 @@ suite("CrashDiscoveryService Tests", () => {
       const testService = new CrashDiscoveryService();
 
       // Override fs.access to simulate that .codeforge/fuzzing exists
-      // but then findFuzzerDirectories throws permission error
+      // but then executeFindCrashesScript throws permission error
       const originalAccess = testService.fs.access;
-      const originalFindFuzzerDirectories = testService.findFuzzerDirectories;
+      const originalExecuteScript = testService.executeFindCrashesScript;
 
       testService.fs.access = async (dir) => {
         if (dir.includes(path.join(".codeforge", "fuzzing"))) {
@@ -105,14 +124,14 @@ suite("CrashDiscoveryService Tests", () => {
         return originalAccess.call(testService.fs, dir);
       };
 
-      testService.findFuzzerDirectories = async () => {
+      testService.executeFindCrashesScript = async () => {
         const error = new Error("Permission denied");
         error.code = "EACCES";
         throw error;
       };
 
       try {
-        await testService.discoverCrashes(testWorkspacePath);
+        await testService.discoverCrashes(testWorkspacePath, "test-image");
         assert.fail("Should have thrown an error");
       } catch (error) {
         assert.strictEqual(
@@ -124,7 +143,7 @@ suite("CrashDiscoveryService Tests", () => {
       } finally {
         // Restore original methods
         testService.fs.access = originalAccess;
-        testService.findFuzzerDirectories = originalFindFuzzerDirectories;
+        testService.executeFindCrashesScript = originalExecuteScript;
       }
     });
 
@@ -133,7 +152,7 @@ suite("CrashDiscoveryService Tests", () => {
       const testService = new CrashDiscoveryService();
 
       const originalAccess = testService.fs.access;
-      const originalFindFuzzerDirectories = testService.findFuzzerDirectories;
+      const originalExecuteScript = testService.executeFindCrashesScript;
 
       testService.fs.access = async (dir) => {
         if (dir.includes(path.join(".codeforge", "fuzzing"))) {
@@ -142,14 +161,14 @@ suite("CrashDiscoveryService Tests", () => {
         return originalAccess.call(testService.fs, dir);
       };
 
-      testService.findFuzzerDirectories = async () => {
+      testService.executeFindCrashesScript = async () => {
         const error = new Error("Access denied");
         error.code = "EBUSY";
         throw error;
       };
 
       try {
-        await testService.discoverCrashes(testWorkspacePath);
+        await testService.discoverCrashes(testWorkspacePath, "test-image");
         assert.fail("Should have thrown an error");
       } catch (error) {
         assert.strictEqual(
@@ -161,13 +180,13 @@ suite("CrashDiscoveryService Tests", () => {
       } finally {
         // Restore original methods
         testService.fs.access = originalAccess;
-        testService.findFuzzerDirectories = originalFindFuzzerDirectories;
+        testService.executeFindCrashesScript = originalExecuteScript;
       }
     });
 
-    test("should handle individual crash file parsing errors", async () => {
-      // This test verifies that if one crash file is malformed,
-      // the service continues processing other files
+    test("should handle individual crash file stat errors", async () => {
+      // This test verifies that if one crash file stat fails,
+      // the error is handled gracefully
       const testCrashPath = "/test/crash-malformed";
 
       // Mock fs.stat to throw error for specific file
@@ -180,7 +199,11 @@ suite("CrashDiscoveryService Tests", () => {
       };
 
       try {
-        const result = await crashService.parseCrashFile(testCrashPath);
+        await crashService.buildCrashInfo(
+          testCrashPath,
+          "abc123",
+          "test-fuzzer",
+        );
         assert.fail("Should have thrown an error");
       } catch (error) {
         assert.strictEqual(
@@ -190,6 +213,33 @@ suite("CrashDiscoveryService Tests", () => {
       } finally {
         // Restore original method
         crashService.fs.stat = originalStat;
+      }
+    });
+
+    test("should handle script execution errors", async () => {
+      const testService = new CrashDiscoveryService();
+
+      // Mock fs.access to simulate directory exists
+      const originalAccess = testService.fs.access;
+      testService.fs.access = async () => Promise.resolve();
+
+      // Mock executeFindCrashesScript to throw error
+      const originalExecuteScript = testService.executeFindCrashesScript;
+      testService.executeFindCrashesScript = async () => {
+        throw new Error("Script execution failed");
+      };
+
+      try {
+        await testService.discoverCrashes(testWorkspacePath, "test-image");
+        assert.fail("Should have thrown an error");
+      } catch (error) {
+        assert.strictEqual(
+          error.message.includes("Failed to scan for crashes"),
+          true,
+        );
+      } finally {
+        testService.fs.access = originalAccess;
+        testService.executeFindCrashesScript = originalExecuteScript;
       }
     });
   });
