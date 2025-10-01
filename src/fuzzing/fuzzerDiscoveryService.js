@@ -81,7 +81,7 @@ class FuzzerDiscoveryService {
         crashData,
       );
 
-      // Add displayName to each fuzzer for UI display
+      // Add displayName to each fuzzer for UI display (testCount already added in buildFuzzerObjects)
       const fuzzersWithDisplayNames = fuzzers.map((fuzzer) => ({
         ...fuzzer,
         displayName: formatFuzzerDisplayName(fuzzer.name),
@@ -226,6 +226,9 @@ class FuzzerDiscoveryService {
           fuzzerInfo.fuzzer,
         );
 
+        // Get test count for this fuzzer
+        const testCount = await this.getTestCount(outputDir);
+
         // Build simplified fuzzer object
         const fuzzer = {
           name: fuzzerInfo.fuzzer,
@@ -233,6 +236,7 @@ class FuzzerDiscoveryService {
           crashes: crashes,
           lastUpdated: now,
           outputDir: outputDir,
+          testCount: testCount,
         };
 
         fuzzers.push(fuzzer);
@@ -243,15 +247,17 @@ class FuzzerDiscoveryService {
         );
 
         // Create minimal fuzzer object
+        const outputDir = this.getFuzzerOutputDirectory(
+          workspacePath,
+          fuzzerInfo.fuzzer,
+        );
         fuzzers.push({
           name: fuzzerInfo.fuzzer,
           preset: fuzzerInfo.preset,
           crashes: [],
           lastUpdated: now,
-          outputDir: this.getFuzzerOutputDirectory(
-            workspacePath,
-            fuzzerInfo.fuzzer,
-          ),
+          outputDir: outputDir,
+          testCount: 0,
         });
       }
     }
@@ -292,8 +298,25 @@ class FuzzerDiscoveryService {
       workspacePath,
       ".codeforge",
       "fuzzing",
-      `codeforge-${fuzzerName}-fuzz-output`,
+      `${fuzzerName}-output`,
     );
+  }
+
+  /**
+   * Reads the test count from a fuzzer's output directory
+   * @param {string} outputDir - Path to the fuzzer output directory
+   * @returns {Promise<number>} Test count or 0 if file doesn't exist
+   */
+  async getTestCount(outputDir) {
+    try {
+      const testCountPath = this.path.join(outputDir, "test-count.txt");
+      const content = await this.fs.readFile(testCountPath, "utf8");
+      const count = parseInt(content.trim(), 10);
+      return isNaN(count) ? 0 : count;
+    } catch (error) {
+      // File doesn't exist or can't be read, return 0
+      return 0;
+    }
   }
 
   /**

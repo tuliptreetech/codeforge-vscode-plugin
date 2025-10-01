@@ -586,6 +586,17 @@ body {
   font-weight: 600;
 }
 
+.test-count {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .fuzzer-preset {
   color: var(--vscode-descriptionForeground);
   font-size: 12px;

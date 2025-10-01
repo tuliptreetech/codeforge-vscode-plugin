@@ -424,6 +424,8 @@
     const crashText = crashCount === 1 ? "crash" : "crashes";
     // Use displayName from backend (formatted by fuzzerUtils) or fallback to name
     const displayName = fuzzer.displayName || fuzzer.name;
+    const testCount = fuzzer.testCount || 0;
+    const formattedTestCount = formatTestCount(testCount);
 
     // Render crashes as collapsible sub-items
     let crashItems = "";
@@ -478,6 +480,7 @@
         <div class="fuzzer-header">
           <div class="fuzzer-info">
             <span class="fuzzer-name">${displayName}</span>
+            ${testCount > 0 ? `<span class="test-count" title="${testCount} test cases executed">${formattedTestCount}</span>` : ""}
           </div>
         </div>
         ${crashSection}
@@ -560,6 +563,13 @@
       console.warn("Failed to format crash date:", error);
       return "Invalid date";
     }
+  }
+
+  function formatTestCount(count) {
+    if (count === 0) return "0";
+    if (count < 1000) return count.toString();
+    if (count < 1000000) return (count / 1000).toFixed(1) + "k";
+    return (count / 1000000).toFixed(1) + "M";
   }
 
   // Initialize with initial state if available
