@@ -484,6 +484,7 @@
             ${testCount > 0 ? `<span class="test-count" title="${testCount} test cases executed">${formattedTestCount}</span>` : ""}
           </div>
           <div class="fuzzer-actions">
+            <button class="fuzzer-action-btn" data-action="runFuzzer" data-fuzzer-name="${fuzzer.name}" title="Run this fuzzer">▶️</button>
             <button class="fuzzer-action-btn" data-action="viewCorpus" data-fuzzer-name="${fuzzer.name}" title="View corpus files">📁</button>
           </div>
         </div>
@@ -493,6 +494,16 @@
   }
 
   function addFuzzerEventListeners() {
+    // Run fuzzer buttons
+    document
+      .querySelectorAll('.fuzzer-action-btn[data-action="runFuzzer"]')
+      .forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const fuzzerName = e.target.dataset.fuzzerName;
+          executeCommand("runFuzzer", { fuzzerName });
+        });
+      });
+
     // View corpus buttons
     document
       .querySelectorAll('.fuzzer-action-btn[data-action="viewCorpus"]')

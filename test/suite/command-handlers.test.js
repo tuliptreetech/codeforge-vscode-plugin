@@ -88,8 +88,8 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(handlers, "Should return handlers object");
       assert.strictEqual(
         Object.keys(handlers).length,
-        10,
-        "Should have 9 handlers",
+        11,
+        "Should have 11 handlers",
       );
       assert.ok(
         handlers["codeforge.launchTerminal"],
@@ -291,6 +291,93 @@ suite("Command Handlers Test Suite", () => {
           "Error was thrown but this is acceptable for this test scenario",
         );
       }
+    });
+  });
+
+  suite("handleRunFuzzer Command", () => {
+    let mockTerminal;
+    let ensureInitializedStub;
+
+    setup(() => {
+      mockTerminal = {
+        show: sandbox.stub(),
+        dispose: sandbox.stub(),
+      };
+      ensureInitializedStub = sandbox
+        .stub(commandHandlers, "ensureInitializedAndBuilt")
+        .resolves(true);
+    });
+
+    test("Should run a specific fuzzer successfully", async () => {
+      const fuzzerName = "test-fuzzer";
+      const params = { fuzzerName };
+
+      await commandHandlers.handleRunFuzzer(params);
+
+      assert.ok(
+        ensureInitializedStub.calledOnce,
+        "Should check initialization and build status",
+      );
+      assert.ok(
+        testEnvironment.vscodeMocks.window.createTerminal.calledOnce,
+        "Should create a terminal for fuzzing",
+      );
+
+      const terminalOptions =
+        testEnvironment.vscodeMocks.window.createTerminal.firstCall.args[0];
+      assert.ok(
+        terminalOptions.name.includes(fuzzerName),
+        "Terminal name should include fuzzer name",
+      );
+    });
+
+    test("Should handle missing fuzzer name", async () => {
+      const params = {}; // Missing fuzzerName
+
+      await commandHandlers.handleRunFuzzer(params);
+
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match(/Fuzzer name not provided/),
+        ),
+        "Should show error for missing fuzzer name",
+      );
+    });
+
+    test("Should handle initialization failure", async () => {
+      ensureInitializedStub.resolves(false);
+      const params = { fuzzerName: "test-fuzzer" };
+
+      await commandHandlers.handleRunFuzzer(params);
+
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
+          sinon.match(
+            /Fuzzer run cancelled.*initialization and Docker build required/,
+          ),
+        ),
+        "Should show cancellation message when initialization fails",
+      );
+      assert.ok(
+        testEnvironment.vscodeMocks.window.createTerminal.notCalled,
+        "Should not create terminal when initialization cancelled",
+      );
+    });
+
+    test("Should handle workspace errors", async () => {
+      sandbox
+        .stub(commandHandlers, "getWorkspaceInfo")
+        .throws(new Error("No workspace"));
+      const params = { fuzzerName: "test-fuzzer" };
+
+      await commandHandlers.handleRunFuzzer(params);
+
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match(/Failed to run fuzzer/),
+        ),
+        "Should show error message for workspace errors",
+      );
     });
   });
 

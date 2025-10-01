@@ -8,8 +8,9 @@ const fs = require("fs").promises;
  * Based on CodeForgeTaskTerminal pattern from taskProvider.js
  */
 class CodeForgeFuzzingTerminal {
-  constructor(workspacePath) {
+  constructor(workspacePath, specificFuzzer = null) {
     this.workspacePath = workspacePath;
+    this.specificFuzzer = specificFuzzer;
     this.writeEmitter = new vscode.EventEmitter();
     this.closeEmitter = new vscode.EventEmitter();
     this.fuzzingStartTime = null;
@@ -84,7 +85,9 @@ class CodeForgeFuzzingTerminal {
       }
 
       // Start fuzzing workflow
-      const startMessage = `CodeForge: Starting fuzzing workflow...`;
+      const startMessage = this.specificFuzzer
+        ? `CodeForge: Starting fuzzer: ${this.specificFuzzer}...`
+        : `CodeForge: Starting fuzzing workflow...`;
       const containerMessage = `Container: ${containerName}`;
       this.writeEmitter.fire(`\x1b[36m${startMessage}\x1b[0m\r\n`);
       this.writeEmitter.fire(`\x1b[90m${containerMessage}\x1b[0m\r\n\r\n`);
@@ -99,11 +102,23 @@ class CodeForgeFuzzingTerminal {
       };
 
       try {
-        const results = await fuzzingOperations.runFuzzingTests(
-          this.workspacePath,
-          this, // Pass terminal as output channel replacement
-          progressCallback,
-        );
+        let results;
+        if (this.specificFuzzer) {
+          // Run specific fuzzer
+          results = await this.runSpecificFuzzer(
+            this.specificFuzzer,
+            containerName,
+            fuzzingOperations,
+            progressCallback,
+          );
+        } else {
+          // Run all fuzzers
+          results = await fuzzingOperations.runFuzzingTests(
+            this.workspacePath,
+            this, // Pass terminal as output channel replacement
+            progressCallback,
+          );
+        }
 
         // Show completion message
         const endTime = new Date();
@@ -135,6 +150,78 @@ class CodeForgeFuzzingTerminal {
       this.writeEmitter.fire(`\r\n\x1b[31m${errorMessage}\x1b[0m\r\n`);
       this.closeEmitter.fire(1);
     }
+  }
+
+  /**
+   * Run a specific fuzzer
+   * @param {string} fuzzerName - Name of the fuzzer to run
+   * @param {string} containerName - Docker container name
+   * @param {Object} fuzzingOperations - Fuzzing operations module
+   * @param {Function} progressCallback - Progress callback function
+   * @returns {Promise<Object>} Fuzzing results
+   */
+  async runSpecificFuzzer(
+    fuzzerName,
+    containerName,
+    fuzzingOperations,
+    progressCallback,
+  ) {
+    progressCallback("Discovering fuzzer configuration", 10);
+
+    // Import discovery service
+    const cmakePresetDiscovery = require("./cmakePresetDiscovery");
+
+    // Discover all fuzz tests to find the specific fuzzer
+    const allFuzzTests = await cmakePresetDiscovery.discoverFuzzTestsWithScript(
+      this.workspacePath,
+      containerName,
+      this,
+    );
+
+    // Find the specific fuzzer
+    const fuzzerTest = allFuzzTests.find((ft) => ft.fuzzer === fuzzerName);
+
+    if (!fuzzerTest) {
+      throw new Error(
+        `Fuzzer '${fuzzerName}' not found in CMake configuration`,
+      );
+    }
+
+    this.writeEmitter.fire(
+      `\x1b[32mFound fuzzer: ${fuzzerName} (preset: ${fuzzerTest.preset})\x1b[0m\r\n\r\n`,
+    );
+
+    // Build the fuzzer
+    progressCallback(`Building ${fuzzerName}`, 30);
+    const buildResults = await fuzzingOperations.buildFuzzTestsWithScript(
+      this.workspacePath,
+      containerName,
+      [fuzzerTest],
+      this,
+    );
+
+    if (buildResults.builtTargets === 0) {
+      throw new Error(
+        `Failed to build fuzzer '${fuzzerName}': ${buildResults.errors.map((e) => e.error).join(", ")}`,
+      );
+    }
+
+    // Run the fuzzer
+    progressCallback(`Running ${fuzzerName}`, 70);
+    const runResults = await fuzzingOperations.runFuzzTestsWithScript(
+      this.workspacePath,
+      containerName,
+      [fuzzerTest],
+      this,
+    );
+
+    progressCallback("Fuzzing complete", 100);
+
+    return {
+      crashes: runResults.crashes,
+      executedFuzzers: runResults.executed,
+      errors: [...buildResults.errors, ...runResults.errors],
+    };
   }
 
   /**

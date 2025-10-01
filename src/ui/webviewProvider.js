@@ -146,6 +146,7 @@ class CodeForgeWebviewProvider {
         refreshContainers: "codeforge.refreshContainers",
         refreshFuzzers: "codeforge.refreshFuzzers",
         refreshCrashes: "codeforge.refreshFuzzers", // Backward compatibility
+        runFuzzer: "codeforge.runFuzzer",
         viewCrash: "codeforge.viewCrash",
         analyzeCrash: "codeforge.analyzeCrash",
         clearCrashes: "codeforge.clearCrashes",

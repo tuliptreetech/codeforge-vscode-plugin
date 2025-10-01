@@ -899,6 +899,61 @@ class CodeForgeCommandHandlers {
   /**
    * Run a specific fuzzer
    */
+  async handleRunFuzzer(params) {
+    try {
+      const { fuzzerName } = params;
+      const { path: workspacePath } = this.getWorkspaceInfo();
+
+      if (!fuzzerName) {
+        throw new Error("Fuzzer name not provided");
+      }
+
+      // Check initialization and build status
+      const containerName =
+        dockerOperations.generateContainerName(workspacePath);
+      const initialized = await this.ensureInitializedAndBuilt(
+        workspacePath,
+        containerName,
+      );
+      if (!initialized) {
+        vscode.window.showInformationMessage(
+          "CodeForge: Fuzzer run cancelled - project initialization and Docker build required",
+        );
+        return;
+      }
+
+      this.safeOutputLog(`Starting fuzzer: ${fuzzerName}`, true);
+
+      // Create a unique terminal name with timestamp
+      const timestamp = new Date().toLocaleTimeString();
+      const terminalName = `CodeForge Fuzzing: ${fuzzerName} - ${timestamp}`;
+
+      // Create the fuzzing terminal
+      const fuzzingTerminal = new CodeForgeFuzzingTerminal(
+        workspacePath,
+        fuzzerName,
+      );
+
+      // Create the VSCode terminal with our custom implementation
+      const terminal = vscode.window.createTerminal({
+        name: terminalName,
+        pty: fuzzingTerminal,
+        scrollback: 3000,
+      });
+
+      // Show the terminal immediately
+      terminal.show();
+
+      this.safeOutputLog(
+        `Fuzzer ${fuzzerName} started in terminal: ${terminalName}`,
+      );
+    } catch (error) {
+      this.safeOutputLog(`Error running fuzzer: ${error.message}`, false);
+      vscode.window.showErrorMessage(
+        `CodeForge: Failed to run fuzzer - ${error.message}`,
+      );
+    }
+  }
 
   /**
    * Generate hex dump content for binary files
@@ -1403,6 +1458,7 @@ class CodeForgeCommandHandlers {
       "codeforge.buildFuzzingTests": this.handleBuildFuzzTargets.bind(this),
       "codeforge.refreshContainers": this.handleRefreshContainers.bind(this),
       "codeforge.refreshFuzzers": this.handleRefreshFuzzers.bind(this),
+      "codeforge.runFuzzer": this.handleRunFuzzer.bind(this),
       "codeforge.viewCrash": this.handleViewCrash.bind(this),
       "codeforge.analyzeCrash": this.handleAnalyzeCrash.bind(this),
       "codeforge.clearCrashes": this.handleClearCrashes.bind(this),
