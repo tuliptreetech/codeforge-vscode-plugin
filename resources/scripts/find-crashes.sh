@@ -23,7 +23,7 @@ for f in $fuzzers; do
     output_dir="$fuzzing_directory/$fuzzer_name-output"
 
     if [[ ! -d "$output_dir" ]]; then
-        exit 0
+        continue
     fi
 
     for file in ${output_dir}/crash-*; do
