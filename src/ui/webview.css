@@ -607,6 +607,34 @@ body {
   font-family: var(--vscode-editor-font-family);
 }
 
+/* Fuzzer Actions */
+.fuzzer-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.fuzzer-action-btn {
+  background: transparent;
+  border: 1px solid var(--vscode-button-border);
+  color: var(--vscode-button-foreground);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 14px;
+  border-radius: var(--border-radius);
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.fuzzer-action-btn:hover {
+  background-color: var(--vscode-button-hoverBackground);
+  border-color: var(--vscode-button-hoverBackground);
+}
+
+.fuzzer-action-btn:active {
+  transform: scale(0.95);
+}
+
 /* Fuzzer Crashes Section */
 .fuzzer-crashes {
   border-top: 1px solid var(--vscode-input-border);

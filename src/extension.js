@@ -5,6 +5,7 @@ const { CodeForgeTaskProvider } = require("./tasks/taskProvider");
 const { CodeForgeWebviewProvider } = require("./ui/webviewProvider");
 const { CodeForgeCommandHandlers } = require("./ui/commandHandlers");
 const { HexDocumentProvider } = require("./ui/hexDocumentProvider");
+const { CorpusDocumentProvider } = require("./ui/corpusDocumentProvider");
 const fs = require("fs").promises;
 const path = require("path");
 
@@ -119,6 +120,29 @@ function activate(context) {
   } catch (error) {
     vscode.window.showErrorMessage(
       `CodeForge: Failed to register crash report document provider - ${error.message}`,
+    );
+  }
+
+  // Register the corpus document provider for read-only corpus file viewing
+  try {
+    const corpusDocumentProvider = new CorpusDocumentProvider();
+    const corpusProviderDisposable =
+      vscode.workspace.registerTextDocumentContentProvider(
+        "codeforge-corpus",
+        corpusDocumentProvider,
+      );
+
+    if (!corpusProviderDisposable) {
+      throw new Error("Failed to create corpus document provider disposable");
+    }
+
+    context.subscriptions.push(corpusProviderDisposable);
+    safeOutputLog(
+      "CodeForge: ✓ Corpus document provider registered successfully",
+    );
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `CodeForge: Failed to register corpus document provider - ${error.message}`,
     );
   }
 
