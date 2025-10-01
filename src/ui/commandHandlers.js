@@ -8,6 +8,7 @@ const {
 const { FuzzerDiscoveryService } = require("../fuzzing/fuzzerDiscoveryService");
 const { GdbIntegration } = require("../fuzzing/gdbIntegration");
 const { HexDocumentProvider } = require("./hexDocumentProvider");
+const { CorpusDocumentProvider } = require("./corpusDocumentProvider");
 const {
   InitializationDetectionService,
 } = require("../core/initializationDetectionService");
@@ -1236,6 +1237,47 @@ class CodeForgeCommandHandlers {
   }
 
   /**
+   * View corpus files for a fuzzer
+   */
+  async handleViewCorpus(params) {
+    try {
+      const { fuzzerName } = params;
+
+      if (!fuzzerName) {
+        throw new Error("Fuzzer name not provided");
+      }
+
+      // Get workspace path
+      const { path: workspacePath } = this.getWorkspaceInfo();
+
+      // Log the action
+      this.safeOutputLog(`Opening corpus viewer for fuzzer: ${fuzzerName}`);
+
+      // Create virtual URI for the corpus document
+      const corpusUri = CorpusDocumentProvider.createCorpusUri(
+        fuzzerName,
+        workspacePath,
+      );
+
+      // Open the virtual document using the corpus document provider
+      const document = await vscode.workspace.openTextDocument(corpusUri);
+
+      // Show document in editor
+      await vscode.window.showTextDocument(document, {
+        preview: true,
+        preserveFocus: false,
+      });
+
+      this.safeOutputLog(`Opened corpus viewer for fuzzer: ${fuzzerName}`);
+    } catch (error) {
+      this.safeOutputLog(`Error viewing corpus: ${error.message}`, false);
+      vscode.window.showErrorMessage(
+        `CodeForge: Failed to open corpus viewer - ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * Handle project initialization with progress feedback
    */
   async handleInitializeProject() {
@@ -1364,6 +1406,7 @@ class CodeForgeCommandHandlers {
       "codeforge.viewCrash": this.handleViewCrash.bind(this),
       "codeforge.analyzeCrash": this.handleAnalyzeCrash.bind(this),
       "codeforge.clearCrashes": this.handleClearCrashes.bind(this),
+      "codeforge.viewCorpus": this.handleViewCorpus.bind(this),
       "codeforge.initializeProject": this.handleInitializeProject.bind(this),
     };
   }

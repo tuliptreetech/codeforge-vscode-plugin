@@ -163,6 +163,7 @@
       viewCrash: "Opening crash file...",
       analyzeCrash: "Analyzing crash...",
       clearCrashes: "Clearing crashes...",
+      viewCorpus: "Opening corpus viewer...",
       initializeCodeForge: "Initializing CodeForge...",
     };
     return messages[command] || "Processing...";
@@ -482,6 +483,9 @@
             <span class="fuzzer-name">${displayName}</span>
             ${testCount > 0 ? `<span class="test-count" title="${testCount} test cases executed">${formattedTestCount}</span>` : ""}
           </div>
+          <div class="fuzzer-actions">
+            <button class="fuzzer-action-btn" data-action="viewCorpus" data-fuzzer-name="${fuzzer.name}" title="View corpus files">📁</button>
+          </div>
         </div>
         ${crashSection}
       </div>
@@ -489,6 +493,16 @@
   }
 
   function addFuzzerEventListeners() {
+    // View corpus buttons
+    document
+      .querySelectorAll('.fuzzer-action-btn[data-action="viewCorpus"]')
+      .forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const fuzzerName = e.target.dataset.fuzzerName;
+          executeCommand("viewCorpus", { fuzzerName });
+        });
+      });
+
     // View crash buttons
     document
       .querySelectorAll('.crash-action-btn[data-action="view"]')
