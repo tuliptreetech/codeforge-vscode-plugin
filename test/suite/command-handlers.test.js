@@ -10,6 +10,7 @@
 const assert = require("assert");
 const sinon = require("sinon");
 const vscode = require("vscode");
+const { EventEmitter } = require("events");
 const { CodeForgeCommandHandlers } = require("../../src/ui/commandHandlers");
 
 // Import test helpers
@@ -1398,41 +1399,83 @@ suite("Command Handlers Test Suite", () => {
     test("handleClearCrashes should clear crash files", async () => {
       const clearParams = { fuzzerName: "libfuzzer" };
 
-      // Mock file system operations
-      testEnvironment.fsMocks.access.resolves(); // corpus directory exists
-      testEnvironment.fsMocks.readdir.resolves([
-        { name: "crash-abc123", isFile: () => true },
-        { name: "crash-def456", isFile: () => true },
-        { name: "regular-file", isFile: () => true },
-      ]);
-      testEnvironment.fsMocks.unlink.resolves();
+      // Mock ensureInitializedAndBuilt to return true
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
 
-      await commandHandlers.handleClearCrashes(clearParams);
+      // Create mock child process
+      const mockChildProcess = new EventEmitter();
+      mockChildProcess.stdout = new EventEmitter();
+      mockChildProcess.stderr = new EventEmitter();
 
-      assert.ok(
-        testEnvironment.fsMocks.readdir.called,
-        "Should read corpus directory",
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockChildProcess,
       );
-      assert.strictEqual(
-        testEnvironment.fsMocks.unlink.callCount,
-        2,
-        "Should delete 2 crash files",
+
+      // Call the handler
+      const handlePromise = commandHandlers.handleClearCrashes(clearParams);
+
+      // Simulate successful execution
+      setTimeout(() => {
+        mockChildProcess.emit("close", 0);
+      }, 10);
+
+      await handlePromise;
+
+      // Verify docker command was called with correct script and preset:fuzzer format
+      assert.ok(
+        testEnvironment.dockerMocks.runDockerCommandWithOutput.calledWith(
+          sinon.match.string, // workspacePath
+          sinon.match.string, // containerName
+          sinon.match(
+            /\.codeforge\/scripts\/clear-crashes\.sh "libfuzzer:libfuzzer"/,
+          ),
+          "/bin/bash",
+          sinon.match.object,
+        ),
+        "Should call runDockerCommandWithOutput with clear-crashes.sh script and preset:fuzzer format",
+      );
+
+      // Verify success message was shown
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
+          sinon.match(/Cleared crashes for/),
+        ),
+        "Should show success message",
       );
     });
 
-    test("handleClearCrashes should handle no crashes found", async () => {
+    test("handleClearCrashes should handle script execution failure", async () => {
       const clearParams = { fuzzerName: "libfuzzer" };
 
-      // Mock corpus directory doesn't exist
-      testEnvironment.fsMocks.access.rejects(new Error("ENOENT"));
+      // Mock ensureInitializedAndBuilt to return true
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
 
-      await commandHandlers.handleClearCrashes(clearParams);
+      // Create mock child process
+      const mockChildProcess = new EventEmitter();
+      mockChildProcess.stdout = new EventEmitter();
+      mockChildProcess.stderr = new EventEmitter();
 
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockChildProcess,
+      );
+
+      // Call the handler
+      const handlePromise = commandHandlers.handleClearCrashes(clearParams);
+
+      // Simulate failure
+      setTimeout(() => {
+        mockChildProcess.stderr.emit("data", "Script error occurred");
+        mockChildProcess.emit("close", 1);
+      }, 10);
+
+      await handlePromise;
+
+      // Verify error message was shown
       assert.ok(
-        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
-          sinon.match(/No crashes found/),
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match(/Failed to clear crashes/),
         ),
-        "Should show no crashes message",
+        "Should show error message on script failure",
       );
     });
 
@@ -1445,46 +1488,74 @@ suite("Command Handlers Test Suite", () => {
       );
     });
 
-    test("handleClearCrashes should handle partial deletion failures", async () => {
-      const clearParams = { fuzzerName: "libfuzzer" };
+    test("handleClearCrashes should handle fuzzer not in cache", async () => {
+      const clearParams = { fuzzerName: "unknown-fuzzer" };
 
-      // Mock file system operations
-      testEnvironment.fsMocks.access.resolves();
-      testEnvironment.fsMocks.readdir.resolves([
-        { name: "crash-abc123", isFile: () => true },
-        { name: "crash-def456", isFile: () => true },
-      ]);
-
-      // Mock partial failure
-      testEnvironment.fsMocks.unlink.onFirstCall().resolves();
-      testEnvironment.fsMocks.unlink
-        .onSecondCall()
-        .rejects(new Error("Permission denied"));
+      // Mock getCachedFuzzer to return null
+      testEnvironment.fuzzerMocks.getCachedFuzzer.returns(null);
 
       await commandHandlers.handleClearCrashes(clearParams);
 
       assert.ok(
-        mockOutputChannel.appendLine.calledWith(
-          sinon.match(/Warning: Failed to delete/),
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match(/Could not find preset for fuzzer/),
         ),
-        "Should log deletion failures",
+        "Should show error when fuzzer not found in cache",
       );
     });
 
-    test("handleClearCrashes should refresh crashes after clearing", async () => {
+    test("handleClearCrashes should handle initialization cancellation", async () => {
       const clearParams = { fuzzerName: "libfuzzer" };
 
-      // Mock successful clearing
-      testEnvironment.fsMocks.access.resolves();
-      testEnvironment.fsMocks.readdir.resolves([
-        { name: "crash-abc123", isFile: () => true },
-      ]);
-      testEnvironment.fsMocks.unlink.resolves();
+      // Mock ensureInitializedAndBuilt to return false (cancelled)
+      sandbox
+        .stub(commandHandlers, "ensureInitializedAndBuilt")
+        .resolves(false);
+
+      await commandHandlers.handleClearCrashes(clearParams);
+
+      // Verify cancellation message was shown
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
+          sinon.match(/Clear crashes cancelled.*initialization.*required/),
+        ),
+        "Should show cancellation message when initialization fails",
+      );
+
+      // Verify docker command was NOT called
+      assert.ok(
+        testEnvironment.dockerMocks.runDockerCommandWithOutput.notCalled,
+        "Should not run docker command when initialization cancelled",
+      );
+    });
+
+    test("handleClearCrashes should refresh fuzzers after clearing", async () => {
+      const clearParams = { fuzzerName: "libfuzzer" };
+
+      // Mock ensureInitializedAndBuilt to return true
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
+      // Create mock child process
+      const mockChildProcess = new EventEmitter();
+      mockChildProcess.stdout = new EventEmitter();
+      mockChildProcess.stderr = new EventEmitter();
+
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockChildProcess,
+      );
 
       // Spy on handleRefreshFuzzers
       const refreshSpy = sinon.spy(commandHandlers, "handleRefreshFuzzers");
 
-      await commandHandlers.handleClearCrashes(clearParams);
+      // Call the handler
+      const handlePromise = commandHandlers.handleClearCrashes(clearParams);
+
+      // Simulate successful execution
+      setTimeout(() => {
+        mockChildProcess.emit("close", 0);
+      }, 10);
+
+      await handlePromise;
 
       assert.ok(
         refreshSpy.called,
@@ -1492,6 +1563,40 @@ suite("Command Handlers Test Suite", () => {
       );
 
       refreshSpy.restore();
+    });
+
+    test("handleClearCrashes should handle process errors", async () => {
+      const clearParams = { fuzzerName: "libfuzzer" };
+
+      // Mock ensureInitializedAndBuilt to return true
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
+      // Create mock child process
+      const mockChildProcess = new EventEmitter();
+      mockChildProcess.stdout = new EventEmitter();
+      mockChildProcess.stderr = new EventEmitter();
+
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockChildProcess,
+      );
+
+      // Call the handler
+      const handlePromise = commandHandlers.handleClearCrashes(clearParams);
+
+      // Simulate process error
+      setTimeout(() => {
+        mockChildProcess.emit("error", new Error("Docker process failed"));
+      }, 10);
+
+      await handlePromise;
+
+      // Verify error message was shown
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match(/Failed to clear crashes/),
+        ),
+        "Should show error message on process error",
+      );
     });
   });
 
@@ -1547,16 +1652,31 @@ suite("Command Handlers Test Suite", () => {
 
       // 3. Clear crashes
       const clearParams = { fuzzerName: "libfuzzer" };
-      testEnvironment.fsMocks.readdir.resolves([
-        { name: "crash-abc123", isFile: () => true },
-      ]);
-      testEnvironment.fsMocks.unlink.resolves();
 
-      await commandHandlers.handleClearCrashes(clearParams);
+      // Mock ensureInitializedAndBuilt
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
+      // Create mock child process for clear crashes
+      const mockClearProcess = new EventEmitter();
+      mockClearProcess.stdout = new EventEmitter();
+      mockClearProcess.stderr = new EventEmitter();
+
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockClearProcess,
+      );
+
+      const clearPromise = commandHandlers.handleClearCrashes(clearParams);
+
+      // Simulate successful execution
+      setTimeout(() => {
+        mockClearProcess.emit("close", 0);
+      }, 10);
+
+      await clearPromise;
 
       assert.ok(
-        testEnvironment.fsMocks.unlink.called,
-        "Should delete crash files",
+        testEnvironment.dockerMocks.runDockerCommandWithOutput.called,
+        "Should run clear crashes script",
       );
     });
 

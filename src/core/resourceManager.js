@@ -131,6 +131,7 @@ class ResourceManager {
         "build-fuzz-tests.sh",
         "find-fuzz-tests.sh",
         "run-fuzz-tests.sh",
+        "clear-crashes.sh",
       ];
       const dumpedPaths = [];
 

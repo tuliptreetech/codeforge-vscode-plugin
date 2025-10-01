@@ -1233,56 +1233,94 @@ class CodeForgeCommandHandlers {
         throw new Error("Fuzzer name not provided");
       }
 
-      // Find the fuzzer output directory
-      const fuzzingDir = path.join(workspacePath, ".codeforge", "fuzzing");
-      const fuzzerOutputDir = path.join(
-        fuzzingDir,
-        `codeforge-${fuzzerName}-fuzz-output`,
+      // Get fuzzer preset from cache
+      const cachedFuzzer =
+        this.fuzzerDiscoveryService.getCachedFuzzer(fuzzerName);
+      if (!cachedFuzzer || !cachedFuzzer.preset) {
+        throw new Error(`Could not find preset for fuzzer: ${fuzzerName}`);
+      }
+
+      // Check initialization and build status
+      const containerName =
+        dockerOperations.generateContainerName(workspacePath);
+      const initialized = await this.ensureInitializedAndBuilt(
+        workspacePath,
+        containerName,
       );
-      const corpusDir = path.join(fuzzerOutputDir, "corpus");
-
-      try {
-        await fs.access(corpusDir);
-      } catch (error) {
-        // No corpus directory - nothing to clear
+      if (!initialized) {
         vscode.window.showInformationMessage(
-          `CodeForge: No crashes found for ${fuzzerName}`,
+          "CodeForge: Clear crashes cancelled - project initialization and Docker build required",
         );
         return;
       }
 
-      // Find and delete crash files
-      const entries = await fs.readdir(corpusDir, { withFileTypes: true });
-      const crashFiles = entries
-        .filter((entry) => entry.isFile() && entry.name.startsWith("crash-"))
-        .map((entry) => path.join(corpusDir, entry.name));
+      this.safeOutputLog(`Clearing crashes for fuzzer: ${fuzzerName}`, true);
 
-      if (crashFiles.length === 0) {
-        vscode.window.showInformationMessage(
-          `CodeForge: No crashes found for ${fuzzerName}`,
-        );
-        return;
-      }
+      // Execute clear-crashes.sh script inside Docker container
+      // The script expects fuzzer name in "preset:fuzzer_name" format
+      const fuzzerIdentifier = `${cachedFuzzer.preset}:${fuzzerName}`;
+      const clearCommand = `.codeforge/scripts/clear-crashes.sh "${fuzzerIdentifier}"`;
 
-      // Delete crash files
-      let deletedCount = 0;
-      for (const crashFile of crashFiles) {
-        try {
-          await fs.unlink(crashFile);
-          deletedCount++;
-        } catch (error) {
-          this.safeOutputLog(
-            `Warning: Failed to delete ${crashFile}: ${error.message}`,
+      const options = {
+        removeAfterRun: true,
+        mountWorkspace: true,
+        dockerCommand: "docker",
+        containerType: "clear_crashes",
+      };
+
+      const clearProcess = dockerOperations.runDockerCommandWithOutput(
+        workspacePath,
+        containerName,
+        clearCommand,
+        "/bin/bash",
+        options,
+      );
+
+      let stdout = "";
+      let stderr = "";
+
+      clearProcess.stdout.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      clearProcess.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      await new Promise((resolve, reject) => {
+        clearProcess.on("close", (code) => {
+          if (code !== 0) {
+            this.safeOutputLog(
+              `Clear crashes script failed with exit code ${code}: ${stderr}`,
+              false,
+            );
+            reject(
+              new Error(
+                `Clear crashes script failed with exit code ${code}: ${stderr}`,
+              ),
+            );
+            return;
+          }
+
+          this.safeOutputLog(`Successfully cleared crashes for ${fuzzerName}`);
+          resolve();
+        });
+
+        clearProcess.on("error", (error) => {
+          reject(
+            new Error(
+              `Failed to execute clear crashes script: ${error.message}`,
+            ),
           );
-        }
-      }
-
-      this.safeOutputLog(
-        `Cleared ${deletedCount} crash files for ${fuzzerName}`,
-      );
+        });
+      });
 
       // Refresh fuzzer data
       await this.handleRefreshFuzzers();
+
+      vscode.window.showInformationMessage(
+        `CodeForge: Cleared crashes for ${fuzzerName}`,
+      );
     } catch (error) {
       this.safeOutputLog(`Error clearing crashes: ${error.message}`, false);
       vscode.window.showErrorMessage(

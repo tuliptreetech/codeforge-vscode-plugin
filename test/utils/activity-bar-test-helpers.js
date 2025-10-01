@@ -745,6 +745,17 @@ function createFuzzerDiscoveryServiceMocks(sandbox) {
     updateFuzzerStatus: sandbox.stub().resolves(),
     associateCrashesWithFuzzers: sandbox.stub().returns([]),
     refreshFuzzerData: sandbox.stub().resolves(createMockFuzzerData()),
+    getCachedFuzzer: sandbox.stub().callsFake((fuzzerName) => {
+      // Return a mock fuzzer with preset
+      return {
+        name: fuzzerName,
+        preset: "libfuzzer",
+        crashes: [],
+        lastUpdated: new Date(),
+        outputDir: `/test/workspace/.codeforge/fuzzing/${fuzzerName}-output`,
+        testCount: 100,
+      };
+    }),
   };
 
   // Try to stub the actual module if it exists

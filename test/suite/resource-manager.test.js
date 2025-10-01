@@ -77,6 +77,10 @@ suite("ResourceManager Test Suite", () => {
       path.join(mockExtensionPath, "resources", "scripts", "run-fuzz-tests.sh"),
       "#!/usr/bin/env bash\necho 'Running fuzz tests'\n",
     );
+    await fs.writeFile(
+      path.join(mockExtensionPath, "resources", "scripts", "clear-crashes.sh"),
+      "#!/usr/bin/env bash\necho 'Clearing crashes'\n",
+    );
 
     // Initialize ResourceManager with mock extension path
     resourceManager = new ResourceManager(mockExtensionPath);
@@ -808,18 +812,19 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
         await fs.mkdir(targetDir, { recursive: true });
       });
 
-      test("Should dump all three script files with executable permissions", async () => {
+      test("Should dump all four script files with executable permissions", async () => {
         const dumpedPaths = await resourceManager.dumpScripts(targetDir);
 
         // Verify return value is an array with correct length
         assert.strictEqual(Array.isArray(dumpedPaths), true);
-        assert.strictEqual(dumpedPaths.length, 3);
+        assert.strictEqual(dumpedPaths.length, 4);
 
         // Expected script files
         const expectedScripts = [
           "build-fuzz-tests.sh",
           "find-fuzz-tests.sh",
           "run-fuzz-tests.sh",
+          "clear-crashes.sh",
         ];
 
         // Verify all scripts were dumped
@@ -865,6 +870,13 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
           runContent,
           "#!/usr/bin/env bash\necho 'Running fuzz tests'\n",
         );
+
+        // Verify clear-crashes.sh content
+        const clearContent = await fs.readFile(dumpedPaths[3], "utf8");
+        assert.strictEqual(
+          clearContent,
+          "#!/usr/bin/env bash\necho 'Clearing crashes'\n",
+        );
       });
 
       test("Should create target directory if it doesn't exist", async () => {
@@ -872,7 +884,7 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
 
         const dumpedPaths = await resourceManager.dumpScripts(newTargetDir);
 
-        assert.strictEqual(dumpedPaths.length, 3);
+        assert.strictEqual(dumpedPaths.length, 4);
 
         // Verify all files were created in the new directory
         for (const dumpedPath of dumpedPaths) {
