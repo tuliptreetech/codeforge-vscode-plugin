@@ -542,13 +542,7 @@
     document.querySelectorAll(".clear-all-btn").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         const fuzzerName = e.target.dataset.fuzzer;
-        if (
-          confirm(
-            `Are you sure you want to clear all crashes for ${fuzzerName}?`,
-          )
-        ) {
-          executeCommand("clearCrashes", { fuzzerName });
-        }
+        executeCommand("clearCrashes", { fuzzerName });
       });
     });
   }
