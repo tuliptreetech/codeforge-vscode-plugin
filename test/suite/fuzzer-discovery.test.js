@@ -121,13 +121,13 @@ another-invalid-line
   test("should get correct fuzzer output directory", function () {
     const result = fuzzerDiscoveryService.getFuzzerOutputDirectory(
       testWorkspacePath,
-      "example-fuzz",
+      "codeforge-example-fuzz",
     );
     const expected = path.join(
       testWorkspacePath,
       ".codeforge",
       "fuzzing",
-      "codeforge-example-fuzz-fuzz-output",
+      "codeforge-example-fuzz-output",
     );
     assert.strictEqual(result, expected);
   });

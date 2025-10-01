@@ -47,8 +47,32 @@ for f in $fuzzers; do
     # Using -create_missing_dirs=1 to ensure corpus directories are created
     # Using LLVM_PROFILE_FILE to generate coverage data
     set +e
-    output=$(LLVM_PROFILE_FILE=mytest.profraw "$fuzzer" -fork=1 -ignore_crashes=1 -jobs=8 -runs=16 -create_missing_dirs=1 corpus)
-    if [ $? -ne 0 ]; then
+    output=$(LLVM_PROFILE_FILE=mytest.profraw "$fuzzer" -fork=1 -ignore_crashes=1 -jobs=8 -runs=16 -create_missing_dirs=1 corpus 2>&1)
+    exit_code=$?
+
+    # Extract the number of runs from the fuzzer output
+    # LibFuzzer typically outputs lines like "#12345  DONE" or "stat::number_of_executed_units: 12345"
+    runs=$(echo "$output" | grep -oE '#[0-9]+' | tail -1 | tr -d '#')
+    if [ -z "$runs" ]; then
+        runs=$(echo "$output" | grep -oE 'stat::number_of_executed_units: [0-9]+' | grep -oE '[0-9]+')
+    fi
+    if [ -z "$runs" ]; then
+        runs=0
+    fi
+
+    echo "[+] Fuzzer executed $runs test cases"
+
+    # Store the total test count in a file in the fuzzing directory
+    test_count_file="$fuzzer_output_directory/test-count.txt"
+    if [ -f "$test_count_file" ]; then
+        previous_count=$(cat "$test_count_file")
+        echo "[+] Added $runs to previous count of $previous_count"
+        runs=$((runs + previous_count))
+    fi
+    echo "$runs" > "$test_count_file"
+    echo "[+] Total fuzz test cases executed: $runs (saved to $test_count_file)"
+
+    if [ $exit_code -ne 0 ]; then
         echo "[+] fuzzer $fuzzer encountered errors!"
         echo "$output"
         for crash_file in corpus/crash-*; do
@@ -64,3 +88,4 @@ for f in $fuzzers; do
 
     popd >/dev/null
 done
+
