@@ -191,8 +191,9 @@ class BacktraceService {
    * @returns {string} Backtrace with clickable file links
    */
   makeBacktracePathsClickable(backtrace, workspacePath) {
-    // GDB backtrace pattern: at /path/to/file.c:123
-    const fileLinePattern = /(at\s+)([\w\-_/.]+\.[\w]+):(\d+)/g;
+    // GDB backtrace pattern: at /path/to/file.c:123 or at C:\path\to\file.c:123
+    // Match both forward slashes and backslashes for cross-platform support
+    const fileLinePattern = /(at\s+)([\w\-_:/\\]+\.[\w]+):(\d+)/g;
 
     return backtrace.replace(
       fileLinePattern,
