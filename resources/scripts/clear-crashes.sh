@@ -22,11 +22,5 @@ for f in $fuzzers; do
 
     output_dir="$fuzzing_directory/$fuzzer_name-output"
 
-    if [[ ! -d "$output_dir" ]]; then
-        continue
-    fi
-
-    rm -f ${output_dir}/crash-*
-    rm -f ${output_dir}/backtrace-*
-    rm -f ${output_dir}/test-count.txt
+    rm -rf ${output_dir}
 done
