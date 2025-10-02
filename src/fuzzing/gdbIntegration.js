@@ -334,6 +334,120 @@ class GdbTerminalLauncher {
 }
 
 /**
+ * GDB Server Launcher - Launches gdbserver in a Docker container with port forwarding
+ */
+class GdbServerLauncher {
+  constructor(dockerOperations) {
+    this.dockerOperations = dockerOperations;
+  }
+
+  /**
+   * Find an available port on the host
+   * @param {number} startPort - Starting port to search from (default: 2000)
+   * @returns {Promise<number>} Available port number
+   */
+  async findAvailablePort(startPort = 2000) {
+    const net = require("net");
+    const maxAttempts = 100;
+
+    for (let port = startPort; port < startPort + maxAttempts; port++) {
+      const isAvailable = await new Promise((resolve) => {
+        const server = net.createServer();
+        server.once("error", () => resolve(false));
+        server.once("listening", () => {
+          server.close();
+          resolve(true);
+        });
+        server.listen(port, "127.0.0.1");
+      });
+
+      if (isAvailable) {
+        return port;
+      }
+    }
+
+    throw new Error(
+      `No available ports found in range ${startPort}-${startPort + maxAttempts}`,
+    );
+  }
+
+  /**
+   * Launch gdbserver in a Docker container
+   * @param {string} workspacePath - Path to the workspace root
+   * @param {string} containerCrashPath - Path to crash file in container
+   * @param {string} containerFuzzerPath - Path to fuzzer executable in container
+   * @param {Object} options - Launch options
+   * @returns {Promise<Object>} Launch result with port and container info
+   */
+  async launchGdbServer(
+    workspacePath,
+    containerCrashPath,
+    containerFuzzerPath,
+    options = {},
+  ) {
+    const {
+      containerName = null,
+      removeAfterRun = false, // Keep container running for debugging
+      additionalArgs = [],
+    } = options;
+
+    // Find an available port on the host
+    const hostPort = await this.findAvailablePort();
+    const containerPort = 2000; // Standard gdbserver port inside container
+
+    // Generate container name
+    const vscode = require("vscode");
+    const config = vscode.workspace.getConfiguration("codeforge");
+    const dockerCommand = config.get("dockerCommand", "docker");
+    const configAdditionalArgs = config.get("additionalDockerRunArgs", []);
+    const mountWorkspace = config.get("mountWorkspace", true);
+
+    // Generate base container name
+    const baseContainerName =
+      containerName ||
+      this.dockerOperations.generateContainerName(workspacePath);
+
+    // Build gdbserver command
+    // gdbserver listens on all interfaces (0.0.0.0) inside the container
+    const gdbserverCommand = `gdbserver 0.0.0.0:${containerPort} ${containerFuzzerPath} ${containerCrashPath}`;
+
+    // Prepare Docker run options with port forwarding
+    const dockerArgs = [
+      ...configAdditionalArgs,
+      ...additionalArgs,
+      "-p",
+      `${hostPort}:${containerPort}`, // Forward container port to host port
+    ];
+
+    const dockerOptions = {
+      removeAfterRun: removeAfterRun,
+      mountWorkspace: mountWorkspace,
+      workingDir: workspacePath,
+      additionalArgs: dockerArgs,
+      enableTracking: true,
+      containerType: "gdbserver",
+      stdio: "pipe", // Capture output
+    };
+
+    // Launch the container with gdbserver
+    const process = this.dockerOperations.runDockerCommandWithOutput(
+      workspacePath,
+      baseContainerName,
+      gdbserverCommand,
+      "/bin/bash",
+      dockerOptions,
+    );
+
+    return {
+      process,
+      hostPort,
+      containerPort,
+      gdbserverCommand,
+    };
+  }
+}
+
+/**
  * GDB Integration - Main orchestration class
  */
 class GdbIntegration {
@@ -343,6 +457,7 @@ class GdbIntegration {
     this.fuzzerResolver = new FuzzerResolver();
     this.pathMapper = new PathMapper();
     this.terminalLauncher = new GdbTerminalLauncher(dockerOperations);
+    this.gdbServerLauncher = new GdbServerLauncher(dockerOperations);
   }
 
   /**
@@ -408,6 +523,68 @@ class GdbIntegration {
   }
 
   /**
+   * Launch a GDB server for remote debugging of a crash
+   * @param {string} workspacePath - Path to the workspace root
+   * @param {string} fuzzerName - Name of the fuzzer
+   * @param {string} crashFilePath - Path to the crash file
+   * @param {Object} options - Launch options
+   * @returns {Promise<Object>} Launch result with connection info
+   */
+  async launchGdbServer(
+    workspacePath,
+    fuzzerName,
+    crashFilePath,
+    options = {},
+  ) {
+    try {
+      // Resolve fuzzer executable
+      const fuzzerExecutable =
+        await this.fuzzerResolver.resolveFuzzerExecutable(
+          workspacePath,
+          fuzzerName,
+        );
+
+      // Map crash file path to container path
+      const containerCrashPath = this.pathMapper.mapHostToContainer(
+        crashFilePath,
+        workspacePath,
+      );
+
+      // Map fuzzer executable to container path
+      const containerFuzzerPath = this.pathMapper.mapHostToContainer(
+        fuzzerExecutable,
+        workspacePath,
+      );
+
+      // Launch gdbserver in container
+      const launchResult = await this.gdbServerLauncher.launchGdbServer(
+        workspacePath,
+        containerCrashPath,
+        containerFuzzerPath,
+        options,
+      );
+
+      return {
+        success: true,
+        fuzzerExecutable,
+        crashFilePath,
+        hostPort: launchResult.hostPort,
+        containerPort: launchResult.containerPort,
+        process: launchResult.process,
+        gdbserverCommand: launchResult.gdbserverCommand,
+        connectionString: `localhost:${launchResult.hostPort}`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        fuzzerName,
+        crashFilePath,
+      };
+    }
+  }
+
+  /**
    * Validate that GDB analysis can be performed
    * @param {string} workspacePath - Path to the workspace root
    * @param {string} fuzzerName - Name of the fuzzer
@@ -453,5 +630,6 @@ module.exports = {
   FuzzerResolver,
   PathMapper,
   GdbTerminalLauncher,
+  GdbServerLauncher,
   GdbIntegration,
 };

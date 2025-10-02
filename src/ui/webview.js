@@ -162,6 +162,7 @@
       refreshFuzzers: "Scanning for fuzzers...",
       viewCrash: "Opening crash file...",
       analyzeCrash: "Analyzing crash...",
+      debugCrash: "Launching GDB server...",
       clearCrashes: "Clearing crashes...",
       viewCorpus: "Opening corpus viewer...",
       initializeCodeForge: "Initializing CodeForge...",
@@ -445,6 +446,8 @@
                       data-file-path="${crash.filePath}" data-fuzzer-name="${fuzzer.name}" title="View crash">👁️</button>
               <button class="crash-action-btn" data-action="analyze" data-crash-id="${crash.id}"
                       data-fuzzer-name="${fuzzer.name}" data-file-path="${crash.filePath}" title="Analyze crash">🔍</button>
+              <button class="crash-action-btn" data-action="debug" data-crash-id="${crash.id}"
+                      data-fuzzer-name="${fuzzer.name}" data-file-path="${crash.filePath}" title="Debug crash (launch GDB server)">🐛</button>
             </div>
           </div>
         `;
@@ -535,6 +538,18 @@
           const fuzzerName = e.target.dataset.fuzzerName;
           const filePath = e.target.dataset.filePath;
           executeCommand("analyzeCrash", { crashId, fuzzerName, filePath });
+        });
+      });
+
+    // Debug crash buttons
+    document
+      .querySelectorAll('.crash-action-btn[data-action="debug"]')
+      .forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const crashId = e.target.dataset.crashId;
+          const fuzzerName = e.target.dataset.fuzzerName;
+          const filePath = e.target.dataset.filePath;
+          executeCommand("debugCrash", { crashId, fuzzerName, filePath });
         });
       });
 

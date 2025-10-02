@@ -140,6 +140,59 @@ async function stopContainer(containerId, remove = true) {
 }
 
 /**
+ * Immediately kills a container (SIGKILL) without graceful shutdown
+ * @param {string} containerId - The container ID or name
+ * @param {boolean} remove - Whether to remove the container after killing (default: true)
+ * @returns {Promise<boolean>} True if successful, false otherwise
+ */
+async function killContainer(containerId, remove = true) {
+  try {
+    // Check if the container exists (by ID or name)
+    let actualContainerId = containerId;
+    try {
+      // Try to get the actual container ID if we were given a name
+      const { stdout } = await execAsync(
+        `docker ps -a --filter "id=${containerId}" --filter "name=${containerId}" --format "{{.ID}}"`,
+      );
+      const foundId = stdout.trim();
+      if (foundId) {
+        actualContainerId = foundId;
+      }
+    } catch (error) {
+      // If we can't find it, continue with the original identifier
+      console.log(
+        `Could not verify container ${containerId}, attempting to kill anyway`,
+      );
+    }
+
+    // Immediately kill the container (SIGKILL)
+    console.log(
+      `Killing container: ${actualContainerId} (requested: ${containerId})`,
+    );
+    await execAsync(`docker kill ${actualContainerId}`);
+
+    // Remove the container if requested
+    if (remove) {
+      console.log(`Removing container: ${actualContainerId}`);
+      await execAsync(`docker rm -f ${actualContainerId}`).catch((err) => {
+        console.error(
+          `Failed to remove container ${actualContainerId}: ${err.message}`,
+        );
+      });
+    }
+
+    // Untrack the container (use the original identifier for tracking)
+    untrackContainer(containerId);
+    return true;
+  } catch (error) {
+    console.error(`Error killing container ${containerId}: ${error.message}`);
+    // Still untrack it as it might have been manually removed
+    untrackContainer(containerId);
+    return false;
+  }
+}
+
+/**
  * Terminates all tracked containers
  * @param {boolean} remove - Whether to remove containers after stopping (default: true)
  * @returns {Promise<Object>} Summary of termination results
@@ -816,6 +869,7 @@ module.exports = {
   terminateAllContainers,
   isContainerRunning,
   stopContainer,
+  killContainer,
   cleanupOrphanedContainers,
   getContainerStatus,
   trackLaunchedContainer,
