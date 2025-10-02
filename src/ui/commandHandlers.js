@@ -1105,7 +1105,7 @@ class CodeForgeCommandHandlers {
   }
 
   /**
-   * Analyze crash (placeholder for future implementation)
+   * Analyze crash with GDB in a terminal
    */
   async handleAnalyzeCrash(params) {
     try {
@@ -1217,6 +1217,212 @@ class CodeForgeCommandHandlers {
       this.safeOutputLog(`Error analyzing crash: ${error.message}`, false);
       vscode.window.showErrorMessage(
         `CodeForge: Failed to analyze crash - ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Launch GDB server for remote debugging
+   */
+  async handleDebugCrash(params) {
+    try {
+      const { crashId, fuzzerName, filePath } = params;
+      const { path: workspacePath } = this.getWorkspaceInfo();
+
+      this.safeOutputLog(
+        `Launching GDB server for crash ${crashId} from ${fuzzerName}`,
+      );
+
+      // Validate parameters
+      if (!crashId || !fuzzerName || !filePath) {
+        throw new Error(
+          "Missing required parameters: crashId, fuzzerName, or filePath",
+        );
+      }
+
+      // Check initialization and build status
+      const containerName =
+        dockerOperations.generateContainerName(workspacePath);
+      const initialized = await this.ensureInitializedAndBuilt(
+        workspacePath,
+        containerName,
+      );
+      if (!initialized) {
+        vscode.window.showInformationMessage(
+          "CodeForge: GDB server launch cancelled - project initialization and Docker build required",
+        );
+        return;
+      }
+
+      // Validate analysis requirements
+      const validation = await this.gdbIntegration.validateAnalysisRequirements(
+        workspacePath,
+        fuzzerName,
+        filePath,
+      );
+
+      if (!validation.valid) {
+        const errorMessage = `Cannot launch GDB server: ${validation.issues.join(", ")}`;
+        this.safeOutputLog(errorMessage, false);
+        vscode.window.showErrorMessage(`CodeForge: ${errorMessage}`);
+        return;
+      }
+
+      // Resolve fuzzer executable and map paths
+      const fuzzerExecutable =
+        await this.gdbIntegration.fuzzerResolver.resolveFuzzerExecutable(
+          workspacePath,
+          fuzzerName,
+        );
+
+      const containerCrashPath =
+        this.gdbIntegration.pathMapper.mapHostToContainer(
+          filePath,
+          workspacePath,
+        );
+
+      const containerFuzzerPath =
+        this.gdbIntegration.pathMapper.mapHostToContainer(
+          fuzzerExecutable,
+          workspacePath,
+        );
+
+      // Find available port
+      const hostPort =
+        await this.gdbIntegration.gdbServerLauncher.findAvailablePort();
+      const containerPort = 2000;
+
+      // Build gdbserver command
+      const gdbserverCommand = `gdbserver 0.0.0.0:${containerPort} ${containerFuzzerPath} ${containerCrashPath}`;
+
+      // Get configuration
+      const config = vscode.workspace.getConfiguration("codeforge");
+      const dockerCommand = config.get("dockerCommand", "docker");
+      const additionalArgs = config.get("additionalDockerRunArgs", []);
+      const mountWorkspace = config.get("mountWorkspace", true);
+
+      // Generate unique container name for tracking
+      const gdbserverContainerName = `${containerName}_gdbserver_${Date.now()}`;
+
+      // Generate Docker run arguments with port forwarding
+      const dockerArgs = [
+        "run",
+        "--name",
+        gdbserverContainerName,
+        "-i",
+        "-t",
+        "--rm", // Auto-remove when done
+        "-p",
+        `${hostPort}:${containerPort}`,
+        ...additionalArgs,
+      ];
+
+      if (mountWorkspace) {
+        dockerArgs.push("-v", `${workspacePath}:${workspacePath}`);
+        dockerArgs.push("-w", workspacePath);
+      }
+
+      dockerArgs.push(containerName);
+      dockerArgs.push("/bin/bash", "-c", gdbserverCommand);
+
+      // Create terminal with gdbserver
+      const terminal = vscode.window.createTerminal({
+        name: `GDB Server: ${fuzzerName} - ${crashId}`,
+        shellPath: dockerCommand,
+        shellArgs: dockerArgs,
+      });
+
+      terminal.show();
+
+      // Track the container for cleanup
+      dockerOperations
+        .trackLaunchedContainer(
+          gdbserverContainerName,
+          workspacePath,
+          containerName,
+          "gdbserver",
+        )
+        .then((tracked) => {
+          if (tracked) {
+            this.safeOutputLog(
+              `Tracked GDB server container: ${gdbserverContainerName}`,
+            );
+          }
+        })
+        .catch((error) => {
+          this.safeOutputLog(
+            `Warning: Could not track GDB server container: ${error.message}`,
+          );
+        });
+
+      // Set up terminal close handler to immediately kill the container
+      const closeListener = vscode.window.onDidCloseTerminal(
+        async (closedTerminal) => {
+          if (closedTerminal === terminal) {
+            this.safeOutputLog(
+              `Terminal closed, killing GDB server container: ${gdbserverContainerName}`,
+            );
+
+            try {
+              // Immediately kill the container (SIGKILL)
+              await dockerOperations.killContainer(
+                gdbserverContainerName,
+                true,
+              );
+              this.safeOutputLog(
+                `GDB server container killed: ${gdbserverContainerName}`,
+              );
+            } catch (error) {
+              this.safeOutputLog(
+                `Container cleanup completed or failed: ${error.message}`,
+              );
+            }
+
+            // Clean up the listener
+            closeListener.dispose();
+
+            // Update webview state
+            this.updateWebviewState();
+          }
+        },
+      );
+
+      // Store the listener in context subscriptions for cleanup on extension deactivation
+      this.context.subscriptions.push(closeListener);
+
+      // Show connection info immediately
+      const connectionString = `localhost:${hostPort}`;
+      const copyCommand = `target remote ${connectionString}`;
+
+      this.safeOutputLog(
+        `GDB server launching in terminal for ${crashId} from ${fuzzerName}`,
+        false,
+      );
+      this.safeOutputLog(`Connection: ${connectionString}`, false);
+      this.safeOutputLog(`Container: ${gdbserverContainerName}`, false);
+      this.safeOutputLog(`Command: ${copyCommand}`, true);
+
+      // Wait a moment, then show info message
+      setTimeout(async () => {
+        const action = await vscode.window.showInformationMessage(
+          `GDB server running on ${connectionString}\n\nConnect with: ${copyCommand}`,
+          "Copy Command",
+          "Show Output",
+        );
+
+        if (action === "Copy Command") {
+          await vscode.env.clipboard.writeText(copyCommand);
+          vscode.window.showInformationMessage(
+            "GDB connection command copied to clipboard",
+          );
+        } else if (action === "Show Output") {
+          this.outputChannel.show();
+        }
+      }, 1000);
+    } catch (error) {
+      this.safeOutputLog(`Error launching GDB server: ${error.message}`, true);
+      vscode.window.showErrorMessage(
+        `CodeForge: Failed to launch GDB server - ${error.message}`,
       );
     }
   }
@@ -1499,6 +1705,7 @@ class CodeForgeCommandHandlers {
       "codeforge.runFuzzer": this.handleRunFuzzer.bind(this),
       "codeforge.viewCrash": this.handleViewCrash.bind(this),
       "codeforge.analyzeCrash": this.handleAnalyzeCrash.bind(this),
+      "codeforge.debugCrash": this.handleDebugCrash.bind(this),
       "codeforge.clearCrashes": this.handleClearCrashes.bind(this),
       "codeforge.viewCorpus": this.handleViewCorpus.bind(this),
       "codeforge.initializeProject": this.handleInitializeProject.bind(this),

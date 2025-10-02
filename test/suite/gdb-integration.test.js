@@ -17,6 +17,7 @@ const {
   FuzzerResolver,
   PathMapper,
   GdbTerminalLauncher,
+  GdbServerLauncher,
   GdbIntegration,
 } = require("../../src/fuzzing/gdbIntegration");
 
@@ -1225,6 +1226,171 @@ suite("GDB Integration Test Suite", () => {
         assert.strictEqual(result.success, false);
         assert.ok(result.error);
       }
+    });
+  });
+
+  suite("GdbServerLauncher", () => {
+    let gdbServerLauncher;
+    let mockDockerOperations;
+
+    setup(() => {
+      mockDockerOperations = {
+        generateContainerName: sandbox.stub().returns("test-container"),
+        runDockerCommandWithOutput: sandbox.stub().returns({
+          stdout: { on: sandbox.stub() },
+          stderr: { on: sandbox.stub() },
+          on: sandbox.stub(),
+        }),
+      };
+      gdbServerLauncher = new GdbServerLauncher(mockDockerOperations);
+    });
+
+    test("Should find available port", async () => {
+      const port = await gdbServerLauncher.findAvailablePort(2000);
+      assert.ok(port >= 2000);
+      assert.ok(port < 2100);
+    });
+
+    test("Should launch gdbserver with correct arguments", async () => {
+      const workspacePath = "/test/workspace";
+      const containerCrashPath = "/test/workspace/crash";
+      const containerFuzzerPath = "/test/workspace/fuzzer";
+
+      const result = await gdbServerLauncher.launchGdbServer(
+        workspacePath,
+        containerCrashPath,
+        containerFuzzerPath,
+      );
+
+      assert.ok(result.process);
+      assert.ok(result.hostPort >= 2000);
+      assert.strictEqual(result.containerPort, 2000);
+      assert.ok(result.gdbserverCommand.includes("gdbserver"));
+      assert.ok(result.gdbserverCommand.includes(containerFuzzerPath));
+      assert.ok(result.gdbserverCommand.includes(containerCrashPath));
+
+      // Verify docker operations were called with port forwarding
+      assert.ok(mockDockerOperations.runDockerCommandWithOutput.called);
+      const callArgs =
+        mockDockerOperations.runDockerCommandWithOutput.firstCall.args;
+      const dockerOptions = callArgs[4];
+      assert.ok(
+        dockerOptions.additionalArgs.some((arg) => arg === "-p"),
+        "Should include -p flag for port forwarding",
+      );
+    });
+
+    test("Should use correct container type for tracking", async () => {
+      const workspacePath = "/test/workspace";
+      const containerCrashPath = "/test/workspace/crash";
+      const containerFuzzerPath = "/test/workspace/fuzzer";
+
+      await gdbServerLauncher.launchGdbServer(
+        workspacePath,
+        containerCrashPath,
+        containerFuzzerPath,
+      );
+
+      const callArgs =
+        mockDockerOperations.runDockerCommandWithOutput.firstCall.args;
+      const dockerOptions = callArgs[4];
+      assert.strictEqual(dockerOptions.containerType, "gdbserver");
+      assert.strictEqual(dockerOptions.removeAfterRun, false);
+    });
+
+    test("Should format gdbserver command correctly", async () => {
+      const workspacePath = "/test/workspace";
+      const containerCrashPath = "/workspace/crash-file";
+      const containerFuzzerPath = "/workspace/fuzzer-exec";
+
+      const result = await gdbServerLauncher.launchGdbServer(
+        workspacePath,
+        containerCrashPath,
+        containerFuzzerPath,
+      );
+
+      assert.strictEqual(
+        result.gdbserverCommand,
+        `gdbserver 0.0.0.0:2000 ${containerFuzzerPath} ${containerCrashPath}`,
+      );
+    });
+  });
+
+  suite("GdbIntegration - GDB Server Launch", () => {
+    let gdbIntegration;
+    let mockDockerOperations;
+
+    setup(() => {
+      mockDockerOperations = {
+        generateContainerName: sandbox.stub().returns("test-container"),
+        runDockerCommandWithOutput: sandbox.stub().returns({
+          stdout: { on: sandbox.stub() },
+          stderr: { on: sandbox.stub() },
+          on: sandbox.stub(),
+        }),
+      };
+      gdbIntegration = new GdbIntegration(mockDockerOperations);
+    });
+
+    test("Should launch GDB server successfully", async () => {
+      const workspacePath = "/test/workspace";
+      const fuzzerName = "libfuzzer";
+      const crashFilePath = "/test/workspace/crash-file";
+
+      // Mock fuzzer resolver
+      testEnvironment.fsMocks.access.resolves();
+      testEnvironment.fsMocks.stat.resolves({ isFile: () => true });
+
+      const result = await gdbIntegration.launchGdbServer(
+        workspacePath,
+        fuzzerName,
+        crashFilePath,
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.ok(result.hostPort);
+      assert.strictEqual(result.containerPort, 2000);
+      assert.ok(result.process);
+      assert.ok(result.connectionString);
+      assert.ok(result.connectionString.includes("localhost"));
+      assert.ok(result.gdbserverCommand);
+    });
+
+    test("Should return connection string in correct format", async () => {
+      const workspacePath = "/test/workspace";
+      const fuzzerName = "libfuzzer";
+      const crashFilePath = "/test/workspace/crash-file";
+
+      testEnvironment.fsMocks.access.resolves();
+      testEnvironment.fsMocks.stat.resolves({ isFile: () => true });
+
+      const result = await gdbIntegration.launchGdbServer(
+        workspacePath,
+        fuzzerName,
+        crashFilePath,
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.match(result.connectionString, /^localhost:\d+$/);
+    });
+
+    test("Should handle fuzzer resolution failure", async () => {
+      const workspacePath = "/test/workspace";
+      const fuzzerName = "nonexistent";
+      const crashFilePath = "/test/workspace/crash-file";
+
+      testEnvironment.fsMocks.access
+        .withArgs(sinon.match(/\.codeforge.*fuzzing/))
+        .rejects(new Error("Fuzzing directory not found"));
+
+      const result = await gdbIntegration.launchGdbServer(
+        workspacePath,
+        fuzzerName,
+        crashFilePath,
+      );
+
+      assert.strictEqual(result.success, false);
+      assert.ok(result.error);
     });
   });
 });
