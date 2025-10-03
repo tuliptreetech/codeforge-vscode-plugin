@@ -248,7 +248,7 @@ suite("Initialization Detection Service Test Suite", () => {
       );
       assert.strictEqual(
         result.missingComponents.length,
-        7,
+        10,
         "Should have 7 missing components",
       );
 
@@ -293,7 +293,7 @@ suite("Initialization Detection Service Test Suite", () => {
       );
       assert.strictEqual(
         result.missingComponents.length,
-        7,
+        10,
         "Should have 7 missing components",
       );
 
@@ -763,7 +763,7 @@ suite("Initialization Detection Service Test Suite", () => {
         "Should have not_initialized status",
       );
       assert.ok(
-        result.message.includes("Missing 2 of 7"),
+        result.message.includes("Missing 2 of 10"),
         "Should indicate missing count",
       );
       assert.ok(
@@ -905,7 +905,7 @@ suite("Initialization Detection Service Test Suite", () => {
       );
       assert.strictEqual(
         result.missingComponents.length,
-        7,
+        10,
         "Should have all components missing",
       );
     });
