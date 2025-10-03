@@ -6,6 +6,49 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.1] - 2025-10-03
+
+### Added
+
+- **GDB Server Debugging**: Remote debugging support for crash files using GDB server
+- **GDB Backtrace Integration**: Automated backtrace generation in crash reports with clickable file links for quick navigation
+- **Corpus Viewer**: New interface for viewing and managing fuzzer test case corpus files
+- **Test Case Count Tracking**: Real-time tracking and display of test case counts for active fuzzers
+- **Individual Fuzzer Control**: Ability to run individual fuzzers directly from the activity panel
+- **Clear Crashes Integration**: Integrated crash cleanup functionality with fuzzer activity panel
+- **User-Controlled Initialization**: Comprehensive UI states for explicit user control over extension initialization
+- **Script Copying Functionality**: Automated copying of fuzzing scripts during extension initialization
+- **Centralized Resource Manager**: Template management system for better resource organization
+- **Comprehensive Fuzzing Configuration**: New fuzzing configuration system with granular control over LibFuzzer parameters
+
+### Enhanced
+
+- **Fuzzing Build Command**: Added build functionality with proper error handling and status reporting
+- **Fuzzer-Centric Display**: Transformed UI from crash-centric to fuzzer-centric for better workflow
+- **Fuzzer Display Names**: Improved formatting and display of fuzzer names in activity panel
+- **Script-Based Fuzzing**: Refactored fuzzing operations to use shell scripts for better maintainability
+- **Resource Management**: Improved template and resource handling with centralized manager
+
+### Fixed
+
+- **Windows Path Handling**: Enhanced cross-platform path handling with support for Windows backslash separators
+- **Backtrace Service Tests**: Made backtrace generation tests cross-platform compatible
+- **CI Timing Issues**: Resolved timing-related test failures using fake timers
+- **File Path Verification**: Corrected file paths in registration verification test utilities
+- **Fuzzer Output Directory Handling**: Continue to next fuzzer when output directory is missing instead of failing
+
+### Refactored
+
+- **Crash Discovery Service**: Replaced with script-based approach for improved reliability and maintainability
+- **Fuzzer Discovery**: Enhanced fuzzer discovery with proper timer handling and cross-platform support
+- **Initialization Process**: Removed automatic initialization on activation in favor of user-controlled process
+- **Code Cleanup**: Removed deprecated functions and unnecessary status messages
+
+### Removed
+
+- **Automatic Initialization**: Removed automatic initialization on extension activation
+- **Deprecated Functions**: Cleaned up unused fuzzing target builder functions
+
 ## [0.1.0] - 2025-09-23
 
 ### Added
