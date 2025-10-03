@@ -34,6 +34,17 @@ class InitializationDetectionService {
       buildScript: path.join(codeforgeDir, "scripts", "build-fuzz-tests.sh"),
       findScript: path.join(codeforgeDir, "scripts", "find-fuzz-tests.sh"),
       runScript: path.join(codeforgeDir, "scripts", "run-fuzz-tests.sh"),
+      findCrashesScript: path.join(codeforgeDir, "scripts", "find-crashes.sh"),
+      generateBacktraceScript: path.join(
+        codeforgeDir,
+        "scripts",
+        "generate-backtrace.sh",
+      ),
+      clearCrashesScript: path.join(
+        codeforgeDir,
+        "scripts",
+        "clear-crashes.sh",
+      ),
     };
 
     const missingComponents = [];
@@ -150,6 +161,9 @@ class InitializationDetectionService {
           { key: "buildScript", method: "dumpScripts" },
           { key: "findScript", method: "dumpScripts" },
           { key: "runScript", method: "dumpScripts" },
+          { key: "findCrashesScript", method: "dumpScripts" },
+          { key: "generateBacktraceScript", method: "dumpScripts" },
+          { key: "clearCrashesScript", method: "dumpScripts" },
         ];
 
         const missingScripts = scriptChecks.filter(

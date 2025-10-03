@@ -78,6 +78,19 @@ suite("ResourceManager Test Suite", () => {
       "#!/usr/bin/env bash\necho 'Running fuzz tests'\n",
     );
     await fs.writeFile(
+      path.join(mockExtensionPath, "resources", "scripts", "find-crashes.sh"),
+      "#!/usr/bin/env bash\necho 'Finding crashes'\n",
+    );
+    await fs.writeFile(
+      path.join(
+        mockExtensionPath,
+        "resources",
+        "scripts",
+        "generate-backtrace.sh",
+      ),
+      "#!/usr/bin/env bash\necho 'Generating backtrace'\n",
+    );
+    await fs.writeFile(
       path.join(mockExtensionPath, "resources", "scripts", "clear-crashes.sh"),
       "#!/usr/bin/env bash\necho 'Clearing crashes'\n",
     );
@@ -812,18 +825,20 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
         await fs.mkdir(targetDir, { recursive: true });
       });
 
-      test("Should dump all four script files with executable permissions", async () => {
+      test("Should dump all six script files with executable permissions", async () => {
         const dumpedPaths = await resourceManager.dumpScripts(targetDir);
 
         // Verify return value is an array with correct length
         assert.strictEqual(Array.isArray(dumpedPaths), true);
-        assert.strictEqual(dumpedPaths.length, 4);
+        assert.strictEqual(dumpedPaths.length, 6);
 
         // Expected script files
         const expectedScripts = [
           "build-fuzz-tests.sh",
           "find-fuzz-tests.sh",
           "run-fuzz-tests.sh",
+          "find-crashes.sh",
+          "generate-backtrace.sh",
           "clear-crashes.sh",
         ];
 
@@ -871,8 +886,22 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
           "#!/usr/bin/env bash\necho 'Running fuzz tests'\n",
         );
 
+        // Verify find-crashes.sh content
+        const findCrashesContent = await fs.readFile(dumpedPaths[3], "utf8");
+        assert.strictEqual(
+          findCrashesContent,
+          "#!/usr/bin/env bash\necho 'Finding crashes'\n",
+        );
+
+        // Verify generate-backtrace.sh content
+        const backtraceContent = await fs.readFile(dumpedPaths[4], "utf8");
+        assert.strictEqual(
+          backtraceContent,
+          "#!/usr/bin/env bash\necho 'Generating backtrace'\n",
+        );
+
         // Verify clear-crashes.sh content
-        const clearContent = await fs.readFile(dumpedPaths[3], "utf8");
+        const clearContent = await fs.readFile(dumpedPaths[5], "utf8");
         assert.strictEqual(
           clearContent,
           "#!/usr/bin/env bash\necho 'Clearing crashes'\n",
@@ -884,7 +913,7 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
 
         const dumpedPaths = await resourceManager.dumpScripts(newTargetDir);
 
-        assert.strictEqual(dumpedPaths.length, 4);
+        assert.strictEqual(dumpedPaths.length, 6);
 
         // Verify all files were created in the new directory
         for (const dumpedPath of dumpedPaths) {
