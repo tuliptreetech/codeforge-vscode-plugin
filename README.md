@@ -368,6 +368,35 @@ For complete configuration documentation, parameter reference, validation rules,
 
 ## Release Notes
 
+### 0.1.1
+
+Incremental feature release with enhanced debugging, corpus management, and improved user control:
+
+#### New Features
+
+- **GDB Server Debugging**: Remote debugging support for analyzing crash files with GDB server integration
+- **GDB Backtrace in Crash Reports**: Automated backtrace generation with clickable file links for quick navigation to source code
+- **Corpus Viewer**: Interface for viewing and managing fuzzer test case corpus
+- **Test Case Tracking**: Real-time display of test case counts for active fuzzers
+- **Individual Fuzzer Control**: Run specific fuzzers directly from the activity panel
+- **User-Controlled Initialization**: Explicit initialization control with comprehensive UI state management
+- **Comprehensive Fuzzing Configuration**: Granular configuration system for LibFuzzer parameters
+
+#### Improvements
+
+- **Fuzzer-Centric UI**: Transformed interface from crash-focused to fuzzer-focused for better workflow
+- **Enhanced Cross-Platform Support**: Improved Windows path handling with backslash separator support
+- **Script-Based Fuzzing**: Refactored to use shell scripts for better maintainability
+- **Resource Management**: Centralized template and resource management system
+- **Better Error Handling**: Continue processing when fuzzer output directories are missing
+
+#### Bug Fixes
+
+- Fixed cross-platform compatibility issues in backtrace service tests
+- Resolved CI timing issues in fuzzer discovery tests
+- Corrected file paths in verification test utilities
+- Enhanced Windows path separator handling throughout the codebase
+
 ### 0.1.0
 
 Major release transforming CodeForge into a comprehensive fuzzing and crash analysis platform:
