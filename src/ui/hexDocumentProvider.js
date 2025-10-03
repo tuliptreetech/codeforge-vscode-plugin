@@ -80,10 +80,19 @@ class HexDocumentProvider {
       // Check if file exists and get stats
       const stats = await fs.stat(filePath);
       const crashTime = stats.birthtime || stats.mtime; // birthtime = creation, mtime = modification
+      const fileSize = stats.size;
 
-      const buffer = await fs.readFile(filePath);
-      const truncated = buffer.length > maxSize;
-      const data = truncated ? buffer.slice(0, maxSize) : buffer;
+      // Only read up to maxSize to avoid VSCode's 50MB limit
+      const bytesToRead = Math.min(fileSize, maxSize);
+      const truncated = fileSize > maxSize;
+
+      // Read only the bytes we need
+      const fileHandle = await fs.open(filePath, "r");
+      const buffer = Buffer.allocUnsafe(bytesToRead);
+      await fileHandle.read(buffer, 0, bytesToRead, 0);
+      await fileHandle.close();
+
+      const data = buffer;
 
       // Header without ANSI codes - plain text
       let hexDump = `\n${"=".repeat(80)}\n`;
@@ -94,7 +103,7 @@ class HexDocumentProvider {
       hexDump += `Crash ID:    ${crashId}\n`;
       hexDump += `File:        ${path.basename(filePath)}\n`;
       hexDump += `Path:        ${filePath}\n`;
-      hexDump += `File Size:   ${buffer.length} bytes${truncated ? " (showing first 64KB)" : ""}\n`;
+      hexDump += `File Size:   ${fileSize} bytes${truncated ? " (showing first 64KB)" : ""}\n`;
       hexDump += `Crash Time:  ${this.formatDateTime(crashTime)}\n`;
       hexDump += `Generated:   ${this.formatDateTime(new Date())}\n\n`;
 
@@ -151,7 +160,7 @@ class HexDocumentProvider {
       hexDump += `\n`;
 
       if (truncated) {
-        hexDump += `File truncated at ${maxSize} bytes for display. Total file size: ${buffer.length} bytes.\n\n`;
+        hexDump += `File truncated at ${maxSize} bytes for display. Total file size: ${fileSize} bytes.\n\n`;
       }
 
       // Append backtrace if fuzzer name and workspace path are provided

@@ -861,9 +861,9 @@ class CodeForgeCommandHandlers {
         this.webviewProvider._setFuzzerLoading(true);
       }
 
-      // Discover fuzzers with associated crashes
+      // Refresh fuzzers with associated crashes (bypasses cache)
       const imageName = dockerOperations.generateContainerName(workspacePath);
-      const fuzzerData = await this.fuzzerDiscoveryService.discoverFuzzers(
+      const fuzzerData = await this.fuzzerDiscoveryService.refreshFuzzerData(
         workspacePath,
         imageName,
       );
