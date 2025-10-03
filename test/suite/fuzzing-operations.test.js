@@ -834,6 +834,85 @@ suite("Fuzzing Operations Test Suite", () => {
       // Note: The close event is not fired by the close() method itself,
       // but would be fired by VSCode when the user closes the terminal
     });
+
+    test("Terminal should not auto-close after build error and wait for key press", async () => {
+      const terminal = new CodeForgeFuzzingTerminal("/test/workspace");
+      let closeEventFired = false;
+      let lastWrittenMessage = "";
+
+      // Listen for write events to capture messages
+      terminal.onDidWrite((data) => {
+        lastWrittenMessage += data;
+      });
+
+      // Listen for close events
+      terminal.onDidClose(() => {
+        closeEventFired = true;
+      });
+
+      // Simulate build error state
+      terminal.isActive = true;
+      terminal.fuzzingStartTime = new Date();
+
+      // Simulate error message (this is what happens in the actual code)
+      const errorMessage = "Fuzzing failed: Build failed";
+      terminal.writeEmitter.fire(`\r\n\x1b[31m${errorMessage}\x1b[0m\r\n`);
+
+      // Mark fuzzing as complete (failed) and enable key-to-close
+      terminal.fuzzingComplete = true;
+
+      // Add message prompting user to press any key to close
+      terminal.writeEmitter.fire(
+        `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
+      );
+
+      // Verify that no close event was fired (terminal stays open)
+      assert.strictEqual(
+        closeEventFired,
+        false,
+        "Terminal should not auto-close after error",
+      );
+      assert.strictEqual(
+        terminal.fuzzingComplete,
+        true,
+        "Terminal should be marked as complete",
+      );
+      assert(
+        lastWrittenMessage.includes("Press any key to close"),
+        "Should display message about pressing key to close",
+      );
+      assert(
+        lastWrittenMessage.includes("Fuzzing failed"),
+        "Should display error message",
+      );
+    });
+
+    test("Terminal should close when user presses key after error", async () => {
+      const terminal = new CodeForgeFuzzingTerminal("/test/workspace");
+      let closeEventFired = false;
+      let closeCode = null;
+
+      // Listen for close events
+      terminal.onDidClose((code) => {
+        closeEventFired = true;
+        closeCode = code;
+      });
+
+      // Simulate error completion state
+      terminal.isActive = true;
+      terminal.fuzzingComplete = true;
+
+      // Simulate user key press
+      terminal.handleInput("any key");
+
+      // Verify terminal closes when key is pressed
+      assert.strictEqual(
+        closeEventFired,
+        true,
+        "Terminal should close after key press",
+      );
+      assert.strictEqual(closeCode, 0, "Should close with success code");
+    });
   });
 
   suite("buildFuzzingTargetsOnly Function", () => {

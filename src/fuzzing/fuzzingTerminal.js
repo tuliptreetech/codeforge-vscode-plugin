@@ -57,7 +57,14 @@ class CodeForgeFuzzingTerminal {
         const message =
           'CodeForge: Dockerfile not found. Please run "CodeForge: Initialize CodeForge" first.';
         this.writeEmitter.fire(`\r\n\x1b[33m${message}\x1b[0m\r\n`);
-        this.closeEmitter.fire(1);
+
+        // Mark fuzzing as complete (failed) and enable key-to-close
+        this.fuzzingComplete = true;
+
+        // Add message prompting user to press any key to close
+        this.writeEmitter.fire(
+          `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
+        );
         return;
       }
 
@@ -79,7 +86,14 @@ class CodeForgeFuzzingTerminal {
         } catch (error) {
           const errorMessage = `Failed to build Docker image: ${error.message}`;
           this.writeEmitter.fire(`\r\n\x1b[31m${errorMessage}\x1b[0m\r\n`);
-          this.closeEmitter.fire(1);
+
+          // Mark fuzzing as complete (failed) and enable key-to-close
+          this.fuzzingComplete = true;
+
+          // Add message prompting user to press any key to close
+          this.writeEmitter.fire(
+            `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
+          );
           return;
         }
       }
@@ -143,12 +157,26 @@ class CodeForgeFuzzingTerminal {
       } catch (error) {
         const errorMessage = `Fuzzing failed: ${error.message}`;
         this.writeEmitter.fire(`\r\n\x1b[31m${errorMessage}\x1b[0m\r\n`);
-        this.closeEmitter.fire(1);
+
+        // Mark fuzzing as complete (failed) and enable key-to-close
+        this.fuzzingComplete = true;
+
+        // Add message prompting user to press any key to close
+        this.writeEmitter.fire(
+          `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
+        );
       }
     } catch (error) {
       const errorMessage = `Error: ${error.message}`;
       this.writeEmitter.fire(`\r\n\x1b[31m${errorMessage}\x1b[0m\r\n`);
-      this.closeEmitter.fire(1);
+
+      // Mark fuzzing as complete (failed) and enable key-to-close
+      this.fuzzingComplete = true;
+
+      // Add message prompting user to press any key to close
+      this.writeEmitter.fire(
+        `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
+      );
     }
   }
 
@@ -341,7 +369,14 @@ class CodeForgeBuildTerminal {
         const message =
           'CodeForge: Dockerfile not found. Please run "CodeForge: Initialize CodeForge" first.';
         this.writeEmitter.fire(`\r\n\x1b[33m${message}\x1b[0m\r\n`);
-        this.closeEmitter.fire(1);
+
+        // Mark build as complete (failed) and enable key-to-close
+        this.buildComplete = true;
+
+        // Add message prompting user to press any key to close
+        this.writeEmitter.fire(
+          `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
+        );
         return;
       }
 
@@ -363,7 +398,14 @@ class CodeForgeBuildTerminal {
         } catch (error) {
           const errorMessage = `Failed to build Docker image: ${error.message}`;
           this.writeEmitter.fire(`\r\n\x1b[31m${errorMessage}\x1b[0m\r\n`);
-          this.closeEmitter.fire(1);
+
+          // Mark build as complete (failed) and enable key-to-close
+          this.buildComplete = true;
+
+          // Add message prompting user to press any key to close
+          this.writeEmitter.fire(
+            `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
+          );
           return;
         }
       }
@@ -418,12 +460,26 @@ class CodeForgeBuildTerminal {
         };
 
         this.displayBuildFailure(error);
-        this.closeEmitter.fire(1);
+
+        // Mark build as complete (failed) and enable key-to-close
+        this.buildComplete = true;
+
+        // Add message prompting user to press any key to close
+        this.writeEmitter.fire(
+          `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
+        );
       }
     } catch (error) {
       const errorMessage = `Error: ${error.message}`;
       this.writeEmitter.fire(`\r\n\x1b[31m${errorMessage}\x1b[0m\r\n`);
-      this.closeEmitter.fire(1);
+
+      // Mark build as complete (failed) and enable key-to-close
+      this.buildComplete = true;
+
+      // Add message prompting user to press any key to close
+      this.writeEmitter.fire(
+        `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
+      );
     }
   }
 

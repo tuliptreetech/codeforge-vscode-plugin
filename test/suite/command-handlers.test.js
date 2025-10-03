@@ -561,13 +561,13 @@ suite("Command Handlers Test Suite", () => {
     test("handleRefreshFuzzers should discover and update fuzzer data", async () => {
       // Mock successful fuzzer discovery
       const mockFuzzerData = createMockFuzzerData();
-      testEnvironment.fuzzerMocks.discoverFuzzers.resolves(mockFuzzerData);
+      testEnvironment.fuzzerMocks.refreshFuzzerData.resolves(mockFuzzerData);
 
       await commandHandlers.handleRefreshFuzzers();
 
       assert.ok(
-        testEnvironment.fuzzerMocks.discoverFuzzers.called,
-        "Should call discoverFuzzers",
+        testEnvironment.fuzzerMocks.refreshFuzzerData.called,
+        "Should call refreshFuzzerData to bypass cache",
       );
       assert.ok(
         mockWebviewProvider._updateFuzzerState.called,
@@ -581,13 +581,13 @@ suite("Command Handlers Test Suite", () => {
 
     test("handleRefreshFuzzers should handle no fuzzers found", async () => {
       // Mock empty fuzzer discovery
-      testEnvironment.fuzzerMocks.discoverFuzzers.resolves([]);
+      testEnvironment.fuzzerMocks.refreshFuzzerData.resolves([]);
 
       await commandHandlers.handleRefreshFuzzers();
 
       assert.ok(
-        testEnvironment.fuzzerMocks.discoverFuzzers.called,
-        "Should call discoverFuzzers",
+        testEnvironment.fuzzerMocks.refreshFuzzerData.called,
+        "Should call refreshFuzzerData to bypass cache",
       );
       assert.ok(
         mockWebviewProvider._updateFuzzerState.called,
@@ -613,7 +613,7 @@ suite("Command Handlers Test Suite", () => {
     test("handleRefreshFuzzers should handle errors", async () => {
       // Mock fuzzer discovery error
       const errorMessage = "Permission denied";
-      testEnvironment.fuzzerMocks.discoverFuzzers.rejects(
+      testEnvironment.fuzzerMocks.refreshFuzzerData.rejects(
         new Error(errorMessage),
       );
 
@@ -1608,7 +1608,7 @@ suite("Command Handlers Test Suite", () => {
     test("Should handle complete fuzzer workflow", async () => {
       // 1. Refresh fuzzers
       const mockFuzzerData = createMockFuzzerData();
-      testEnvironment.fuzzerMocks.discoverFuzzers.resolves(mockFuzzerData);
+      testEnvironment.fuzzerMocks.refreshFuzzerData.resolves(mockFuzzerData);
 
       await commandHandlers.handleRefreshFuzzers();
 
@@ -1686,7 +1686,7 @@ suite("Command Handlers Test Suite", () => {
 
     test("Should handle concurrent fuzzer operations", async () => {
       const mockFuzzerData = createMockFuzzerData();
-      testEnvironment.fuzzerMocks.discoverFuzzers.resolves(mockFuzzerData);
+      testEnvironment.fuzzerMocks.refreshFuzzerData.resolves(mockFuzzerData);
 
       // Execute multiple operations concurrently
       const promises = [
@@ -1701,7 +1701,7 @@ suite("Command Handlers Test Suite", () => {
       await Promise.all(promises);
 
       assert.ok(
-        testEnvironment.fuzzerMocks.discoverFuzzers.called,
+        testEnvironment.fuzzerMocks.refreshFuzzerData.called,
         "Should handle refresh operation",
       );
     });
@@ -1720,17 +1720,17 @@ suite("Command Handlers Test Suite", () => {
         },
       ];
 
-      // The fuzzerDiscoveryService.discoverFuzzers is already stubbed by setupTestEnvironment
+      // The fuzzerDiscoveryService.refreshFuzzerData is already stubbed by setupTestEnvironment
       // Just configure it to return our mock data
-      commandHandlers.fuzzerDiscoveryService.discoverFuzzers.resolves(
+      commandHandlers.fuzzerDiscoveryService.refreshFuzzerData.resolves(
         mockFuzzerData,
       );
 
       await commandHandlers.handleRefreshFuzzers();
 
       assert.ok(
-        commandHandlers.fuzzerDiscoveryService.discoverFuzzers.called,
-        "Should call discoverFuzzers",
+        commandHandlers.fuzzerDiscoveryService.refreshFuzzerData.called,
+        "Should call refreshFuzzerData to bypass cache",
       );
     });
   });

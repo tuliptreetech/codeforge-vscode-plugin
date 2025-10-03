@@ -108,7 +108,25 @@
   // Update UI state
   function updateState(newState) {
     console.log("Updating state:", newState);
-    currentState = { ...currentState, ...newState };
+    // Deep merge for nested objects to prevent state accumulation issues
+    if (newState.fuzzers) {
+      currentState.fuzzers = {
+        isLoading: newState.fuzzers.isLoading ?? currentState.fuzzers.isLoading,
+        lastUpdated:
+          newState.fuzzers.lastUpdated ?? currentState.fuzzers.lastUpdated,
+        data: newState.fuzzers.data ?? currentState.fuzzers.data,
+        error: newState.fuzzers.error ?? currentState.fuzzers.error,
+      };
+    }
+    if (newState.initialization) {
+      currentState.initialization = {
+        ...currentState.initialization,
+        ...newState.initialization,
+      };
+    }
+    if (newState.isLoading !== undefined) {
+      currentState.isLoading = newState.isLoading;
+    }
     updateUI();
   }
 
@@ -378,6 +396,9 @@
 
     const { fuzzers } = currentState;
 
+    // Clear content first to prevent duplication
+    elements.fuzzersContent.innerHTML = "";
+
     if (fuzzers.isLoading) {
       elements.fuzzersContent.innerHTML = `
         <div class="fuzzers-loading">
@@ -410,11 +431,13 @@
       return;
     }
 
-    // Render fuzzer data
+    // Render fuzzer data - build complete HTML string first
     let html = "";
     fuzzers.data.forEach((fuzzer) => {
       html += renderFuzzerItem(fuzzer);
     });
+
+    // Set innerHTML once with complete HTML
     elements.fuzzersContent.innerHTML = html;
 
     // Add event listeners for fuzzer and crash actions
