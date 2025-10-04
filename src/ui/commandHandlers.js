@@ -12,6 +12,7 @@ const { CorpusDocumentProvider } = require("./corpusDocumentProvider");
 const {
   InitializationDetectionService,
 } = require("../core/initializationDetectionService");
+const { LaunchConfigManager } = require("../utils/launchConfig");
 const fs = require("fs").promises;
 const path = require("path");
 
@@ -37,6 +38,7 @@ class CodeForgeCommandHandlers {
     this.initializationService = new InitializationDetectionService(
       resourceManager,
     );
+    this.launchConfigManager = new LaunchConfigManager();
   }
 
   /**
@@ -1517,6 +1519,41 @@ class CodeForgeCommandHandlers {
       // Store the listener in context subscriptions for cleanup on extension deactivation
       this.context.subscriptions.push(closeListener);
 
+      // Create or update launch configuration for GDB attach
+      const launchConfigName = `CodeForge GDB: ${fuzzerName}`;
+      const launchConfigResult =
+        await this.launchConfigManager.createOrUpdateGdbAttachConfig(
+          workspacePath,
+          launchConfigName,
+          hostPort,
+          fuzzerExecutable,
+          {
+            autorun: [
+              // Configure GDB for remote debugging
+              "set confirm off",
+              "set breakpoint pending on",
+              // Set temporary breakpoint at main and continue to it
+              "tbreak main",
+              "continue",
+            ],
+            valuesFormatting: "parseText",
+            printCalls: false,
+            stopAtConnect: false,
+          },
+        );
+
+      if (launchConfigResult.success) {
+        this.safeOutputLog(
+          `Launch configuration ${launchConfigResult.action}: ${launchConfigName}`,
+          false,
+        );
+      } else {
+        this.safeOutputLog(
+          `Warning: Failed to create launch configuration: ${launchConfigResult.error}`,
+          false,
+        );
+      }
+
       // Show connection info immediately
       const connectionString = `localhost:${hostPort}`;
       const copyCommand = `target remote ${connectionString}`;
@@ -1529,23 +1566,77 @@ class CodeForgeCommandHandlers {
       this.safeOutputLog(`Container: ${gdbserverContainerName}`, false);
       this.safeOutputLog(`Command: ${copyCommand}`, false);
 
-      // Wait a moment, then show info message
+      // Wait a moment for gdbserver to start, then automatically connect debugger
       setTimeout(async () => {
-        const action = await vscode.window.showInformationMessage(
-          `GDB server running on ${connectionString}\n\nConnect with: ${copyCommand}`,
-          "Copy Command",
-          "Show Output",
-        );
+        try {
+          if (launchConfigResult.success) {
+            this.safeOutputLog(
+              `Automatically connecting debugger to ${connectionString}...`,
+              false,
+            );
 
-        if (action === "Copy Command") {
-          await vscode.env.clipboard.writeText(copyCommand);
-          vscode.window.showInformationMessage(
-            "GDB connection command copied to clipboard",
+            // Launch the debugger with the created configuration
+            const debugStarted = await vscode.debug.startDebugging(
+              vscode.workspace.workspaceFolders[0],
+              launchConfigName,
+            );
+
+            if (debugStarted) {
+              this.safeOutputLog(
+                `Debugger connected successfully to ${fuzzerName}`,
+                false,
+              );
+              vscode.window.showInformationMessage(
+                `CodeForge: Debugger connected to ${fuzzerName}`,
+              );
+            } else {
+              this.safeOutputLog(
+                `Failed to start debugger for ${fuzzerName}`,
+                false,
+              );
+              vscode.window
+                .showWarningMessage(
+                  `CodeForge: Failed to start debugger. You can manually connect using: ${copyCommand}`,
+                  "Copy Command",
+                )
+                .then((action) => {
+                  if (action === "Copy Command") {
+                    vscode.env.clipboard.writeText(copyCommand);
+                  }
+                });
+            }
+          } else {
+            vscode.window
+              .showWarningMessage(
+                `CodeForge: GDB server running but launch configuration failed. Connect manually using: ${copyCommand}`,
+                "Copy Command",
+                "Show Output",
+              )
+              .then((action) => {
+                if (action === "Copy Command") {
+                  vscode.env.clipboard.writeText(copyCommand);
+                } else if (action === "Show Output") {
+                  this.outputChannel.show();
+                }
+              });
+          }
+        } catch (error) {
+          this.safeOutputLog(
+            `Error auto-connecting debugger: ${error.message}`,
+            false,
           );
-        } else if (action === "Show Output") {
-          this.outputChannel.show();
+          vscode.window
+            .showErrorMessage(
+              `CodeForge: Failed to auto-connect debugger - ${error.message}`,
+              "Copy Command",
+            )
+            .then((action) => {
+              if (action === "Copy Command") {
+                vscode.env.clipboard.writeText(copyCommand);
+              }
+            });
         }
-      }, 1000);
+      }, 2000); // Wait 2 seconds for gdbserver to be ready
     } catch (error) {
       this.safeOutputLog(`Error launching GDB server: ${error.message}`, true);
       vscode.window.showErrorMessage(
