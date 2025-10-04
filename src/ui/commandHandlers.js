@@ -897,6 +897,133 @@ class CodeForgeCommandHandlers {
   }
 
   /**
+   * Regenerate fuzzer list by running find-fuzzers script with -c parameter
+   * This forces a clean regeneration of the fuzzer cache
+   */
+  async handleRegenerateFuzzerList() {
+    try {
+      const { path: workspacePath } = this.getWorkspaceInfo();
+
+      // Check initialization and build status
+      const containerName =
+        dockerOperations.generateContainerName(workspacePath);
+      const initialized = await this.ensureInitializedAndBuilt(
+        workspacePath,
+        containerName,
+      );
+      if (!initialized) {
+        vscode.window.showInformationMessage(
+          "CodeForge: Fuzzer list regeneration cancelled - project initialization and Docker build required",
+        );
+        return;
+      }
+
+      this.safeOutputLog("Regenerating fuzzer list with clean cache...", false);
+
+      // Show progress notification
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "CodeForge: Regenerating fuzzer list...",
+          cancellable: false,
+        },
+        async (progress) => {
+          try {
+            // Execute find-fuzz-tests.sh script with -c parameter to clean cache
+            const regenerateCommand =
+              ".codeforge/scripts/find-fuzz-tests.sh -c -q";
+
+            const options = {
+              removeAfterRun: true,
+              mountWorkspace: true,
+              dockerCommand: "docker",
+              containerType: "fuzzer_regeneration",
+            };
+
+            const regenerateProcess =
+              dockerOperations.runDockerCommandWithOutput(
+                workspacePath,
+                containerName,
+                regenerateCommand,
+                "/bin/bash",
+                options,
+              );
+
+            let stdout = "";
+            let stderr = "";
+
+            regenerateProcess.stdout.on("data", (data) => {
+              stdout += data.toString();
+            });
+
+            regenerateProcess.stderr.on("data", (data) => {
+              stderr += data.toString();
+            });
+
+            await new Promise((resolve, reject) => {
+              regenerateProcess.on("close", (code) => {
+                if (code !== 0) {
+                  // Handle case where no fuzzers are found (not an error)
+                  if (
+                    stderr.includes("No fuzz targets found") ||
+                    stdout.includes("No fuzz targets found")
+                  ) {
+                    this.safeOutputLog(
+                      "No fuzz targets found in project",
+                      false,
+                    );
+                    resolve();
+                    return;
+                  }
+
+                  this.safeOutputLog(
+                    `Regenerate fuzzer list script failed with exit code ${code}: ${stderr}`,
+                    false,
+                  );
+                  reject(
+                    new Error(
+                      `Regenerate script failed with exit code ${code}: ${stderr}`,
+                    ),
+                  );
+                  return;
+                }
+
+                this.safeOutputLog("Successfully regenerated fuzzer list");
+                resolve();
+              });
+
+              regenerateProcess.on("error", (error) => {
+                reject(
+                  new Error(
+                    `Failed to execute regenerate script: ${error.message}`,
+                  ),
+                );
+              });
+            });
+
+            // After regenerating the list, refresh the fuzzer data in the UI
+            await this.handleRefreshFuzzers();
+
+            vscode.window.showInformationMessage(
+              "CodeForge: Fuzzer list regenerated successfully",
+            );
+          } catch (error) {
+            throw error;
+          }
+        },
+      );
+    } catch (error) {
+      this.safeOutputLog(
+        `Error regenerating fuzzer list: ${error.message}`,
+        false,
+      );
+      vscode.window.showErrorMessage(
+        `CodeForge: Failed to regenerate fuzzer list - ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * Run a specific fuzzer
    */
   async handleRunFuzzer(params) {
@@ -922,7 +1049,7 @@ class CodeForgeCommandHandlers {
         return;
       }
 
-      this.safeOutputLog(`Starting fuzzer: ${fuzzerName}`, true);
+      this.safeOutputLog(`Starting fuzzer: ${fuzzerName}`, false);
 
       // Create a unique terminal name with timestamp
       const timestamp = new Date().toLocaleTimeString();
@@ -1400,7 +1527,7 @@ class CodeForgeCommandHandlers {
       );
       this.safeOutputLog(`Connection: ${connectionString}`, false);
       this.safeOutputLog(`Container: ${gdbserverContainerName}`, false);
-      this.safeOutputLog(`Command: ${copyCommand}`, true);
+      this.safeOutputLog(`Command: ${copyCommand}`, false);
 
       // Wait a moment, then show info message
       setTimeout(async () => {
@@ -1460,7 +1587,7 @@ class CodeForgeCommandHandlers {
         return;
       }
 
-      this.safeOutputLog(`Clearing crashes for fuzzer: ${fuzzerName}`, true);
+      this.safeOutputLog(`Clearing crashes for fuzzer: ${fuzzerName}`, false);
 
       // Execute clear-crashes.sh script inside Docker container
       // The script expects fuzzer name in "preset:fuzzer_name" format
@@ -1702,6 +1829,8 @@ class CodeForgeCommandHandlers {
       "codeforge.buildFuzzingTests": this.handleBuildFuzzTargets.bind(this),
       "codeforge.refreshContainers": this.handleRefreshContainers.bind(this),
       "codeforge.refreshFuzzers": this.handleRefreshFuzzers.bind(this),
+      "codeforge.regenerateFuzzerList":
+        this.handleRegenerateFuzzerList.bind(this),
       "codeforge.runFuzzer": this.handleRunFuzzer.bind(this),
       "codeforge.viewCrash": this.handleViewCrash.bind(this),
       "codeforge.analyzeCrash": this.handleAnalyzeCrash.bind(this),

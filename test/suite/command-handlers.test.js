@@ -89,8 +89,8 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(handlers, "Should return handlers object");
       assert.strictEqual(
         Object.keys(handlers).length,
-        12,
-        "Should have 12 handlers",
+        13,
+        "Should have 13 handlers",
       );
       assert.ok(
         handlers["codeforge.launchTerminal"],
@@ -107,6 +107,10 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(
         handlers["codeforge.refreshFuzzers"],
         "Should have refreshFuzzers handler",
+      );
+      assert.ok(
+        handlers["codeforge.regenerateFuzzerList"],
+        "Should have regenerateFuzzerList handler",
       );
       assert.ok(
         handlers["codeforge.viewCrash"],
@@ -626,6 +630,177 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(
         testEnvironment.vscodeMocks.window.showErrorMessage.called,
         "Should show error message",
+      );
+    });
+
+    test("handleRegenerateFuzzerList should execute find-fuzz-tests.sh with -c flag", async () => {
+      // Mock successful initialization
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
+      // Mock Docker process for find-fuzz-tests.sh
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockProcess,
+      );
+
+      // Simulate process completion
+      mockProcess.on.withArgs("close").yields(0);
+      mockProcess.on.withArgs("error").returns();
+      mockProcess.stdout.on.withArgs("data").yields(Buffer.from(""));
+      mockProcess.stderr.on.withArgs("data").yields(Buffer.from(""));
+
+      // Mock refreshFuzzerData
+      testEnvironment.fuzzerMocks.refreshFuzzerData.resolves([]);
+
+      // Mock vscode.window.withProgress
+      testEnvironment.vscodeMocks.window.withProgress =
+        testEnvironment.vscodeMocks.window.withProgress ||
+        sandbox.stub().callsFake((options, callback) => callback());
+
+      await commandHandlers.handleRegenerateFuzzerList();
+
+      // Verify Docker command was called with the correct script and -c flag
+      assert.ok(
+        testEnvironment.dockerMocks.runDockerCommandWithOutput.calledWith(
+          sinon.match.string,
+          sinon.match.string,
+          ".codeforge/scripts/find-fuzz-tests.sh -c -q",
+          "/bin/bash",
+          sinon.match.object,
+        ),
+        "Should call find-fuzz-tests.sh with -c -q flags",
+      );
+
+      // Verify refresh was called after regeneration
+      assert.ok(
+        testEnvironment.fuzzerMocks.refreshFuzzerData.called,
+        "Should refresh fuzzer data after regeneration",
+      );
+
+      // Verify success message
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
+          sinon.match(/Fuzzer list regenerated successfully/),
+        ),
+        "Should show success message",
+      );
+    });
+
+    test("handleRegenerateFuzzerList should handle initialization failure", async () => {
+      // Mock initialization failure
+      sandbox
+        .stub(commandHandlers, "ensureInitializedAndBuilt")
+        .resolves(false);
+
+      await commandHandlers.handleRegenerateFuzzerList();
+
+      // Verify cancellation message
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
+          sinon.match(
+            /Fuzzer list regeneration cancelled.*initialization and Docker build required/,
+          ),
+        ),
+        "Should show cancellation message when initialization fails",
+      );
+
+      // Verify Docker command was not executed
+      assert.ok(
+        testEnvironment.dockerMocks.runDockerCommandWithOutput.notCalled,
+        "Should not execute Docker command when initialization cancelled",
+      );
+    });
+
+    test("handleRegenerateFuzzerList should handle script execution errors", async () => {
+      // Mock successful initialization
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
+      // Mock Docker process that fails
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockProcess,
+      );
+
+      // Simulate process failure
+      mockProcess.on.withArgs("close").yields(1);
+      mockProcess.stdout.on.withArgs("data").yields(Buffer.from(""));
+      mockProcess.stderr.on
+        .withArgs("data")
+        .yields(Buffer.from("Script execution failed"));
+
+      // Mock vscode.window.withProgress
+      testEnvironment.vscodeMocks.window.withProgress =
+        testEnvironment.vscodeMocks.window.withProgress ||
+        sandbox.stub().callsFake((options, callback) => callback());
+
+      await commandHandlers.handleRegenerateFuzzerList();
+
+      // Verify error message
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
+          sinon.match(/Failed to regenerate fuzzer list/),
+        ),
+        "Should show error message for script failure",
+      );
+    });
+
+    test("handleRegenerateFuzzerList should handle no fuzzers found", async () => {
+      // Mock successful initialization
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
+      // Mock Docker process
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockProcess,
+      );
+
+      // Simulate no fuzzers found
+      mockProcess.on.withArgs("close").yields(1);
+      mockProcess.stdout.on
+        .withArgs("data")
+        .yields(Buffer.from("No fuzz targets found"));
+      mockProcess.stderr.on
+        .withArgs("data")
+        .yields(Buffer.from("No fuzz targets found"));
+
+      // Mock refreshFuzzerData
+      testEnvironment.fuzzerMocks.refreshFuzzerData.resolves([]);
+
+      // Mock vscode.window.withProgress
+      testEnvironment.vscodeMocks.window.withProgress =
+        testEnvironment.vscodeMocks.window.withProgress ||
+        sandbox.stub().callsFake((options, callback) => callback());
+
+      await commandHandlers.handleRegenerateFuzzerList();
+
+      // Should not show error for "no fuzzers found" case - it's a valid result
+      // Verify refresh was still called
+      assert.ok(
+        testEnvironment.fuzzerMocks.refreshFuzzerData.called,
+        "Should refresh fuzzer data even when no fuzzers found",
+      );
+
+      // Verify success message is shown
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
+          sinon.match(/Fuzzer list regenerated successfully/),
+        ),
+        "Should show success message even when no fuzzers found",
       );
     });
 
