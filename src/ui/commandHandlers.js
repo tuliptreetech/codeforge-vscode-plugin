@@ -858,16 +858,29 @@ class CodeForgeCommandHandlers {
     try {
       const { path: workspacePath } = this.getWorkspaceInfo();
 
+      // Check initialization and build status
+      const containerName =
+        dockerOperations.generateContainerName(workspacePath);
+      const initialized = await this.ensureInitializedAndBuilt(
+        workspacePath,
+        containerName,
+      );
+      if (!initialized) {
+        vscode.window.showInformationMessage(
+          "CodeForge: Fuzzer refresh cancelled - project initialization and Docker build required",
+        );
+        return;
+      }
+
       // Set loading state
       if (this.webviewProvider) {
         this.webviewProvider._setFuzzerLoading(true);
       }
 
       // Refresh fuzzers with associated crashes (bypasses cache)
-      const imageName = dockerOperations.generateContainerName(workspacePath);
       const fuzzerData = await this.fuzzerDiscoveryService.refreshFuzzerData(
         workspacePath,
-        imageName,
+        containerName,
       );
 
       // Update state

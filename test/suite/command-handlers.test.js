@@ -562,13 +562,57 @@ suite("Command Handlers Test Suite", () => {
       );
     });
 
+    test("handleRefreshFuzzers should check initialization before discovering fuzzers", async () => {
+      // Mock initialization failure
+      sandbox
+        .stub(commandHandlers, "ensureInitializedAndBuilt")
+        .resolves(false);
+
+      await commandHandlers.handleRefreshFuzzers();
+
+      // Verify initialization check was called
+      assert.ok(
+        commandHandlers.ensureInitializedAndBuilt.called,
+        "Should check initialization and build status",
+      );
+
+      // Verify cancellation message
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
+          sinon.match(
+            /Fuzzer refresh cancelled.*initialization and Docker build required/,
+          ),
+        ),
+        "Should show cancellation message when initialization fails",
+      );
+
+      // Verify fuzzer discovery was NOT called
+      assert.ok(
+        testEnvironment.fuzzerMocks.refreshFuzzerData.notCalled,
+        "Should not call refreshFuzzerData when initialization cancelled",
+      );
+
+      // Verify webview state was NOT updated with fuzzer data
+      assert.ok(
+        mockWebviewProvider._updateFuzzerState.notCalled,
+        "Should not update webview fuzzer state when initialization cancelled",
+      );
+    });
+
     test("handleRefreshFuzzers should discover and update fuzzer data", async () => {
+      // Mock successful initialization
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
       // Mock successful fuzzer discovery
       const mockFuzzerData = createMockFuzzerData();
       testEnvironment.fuzzerMocks.refreshFuzzerData.resolves(mockFuzzerData);
 
       await commandHandlers.handleRefreshFuzzers();
 
+      assert.ok(
+        commandHandlers.ensureInitializedAndBuilt.called,
+        "Should check initialization and build status",
+      );
       assert.ok(
         testEnvironment.fuzzerMocks.refreshFuzzerData.called,
         "Should call refreshFuzzerData to bypass cache",
@@ -584,6 +628,9 @@ suite("Command Handlers Test Suite", () => {
     });
 
     test("handleRefreshFuzzers should handle no fuzzers found", async () => {
+      // Mock successful initialization
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
       // Mock empty fuzzer discovery
       testEnvironment.fuzzerMocks.refreshFuzzerData.resolves([]);
 
@@ -615,6 +662,9 @@ suite("Command Handlers Test Suite", () => {
     });
 
     test("handleRefreshFuzzers should handle errors", async () => {
+      // Mock successful initialization
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
       // Mock fuzzer discovery error
       const errorMessage = "Permission denied";
       testEnvironment.fuzzerMocks.refreshFuzzerData.rejects(
@@ -1781,6 +1831,9 @@ suite("Command Handlers Test Suite", () => {
 
   suite("Fuzzer Command Integration Tests", () => {
     test("Should handle complete fuzzer workflow", async () => {
+      // Mock successful initialization for all operations
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
       // 1. Refresh fuzzers
       const mockFuzzerData = createMockFuzzerData();
       testEnvironment.fuzzerMocks.refreshFuzzerData.resolves(mockFuzzerData);
@@ -1832,8 +1885,7 @@ suite("Command Handlers Test Suite", () => {
       // 3. Clear crashes
       const clearParams = { fuzzerName: "libfuzzer" };
 
-      // Mock ensureInitializedAndBuilt
-      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+      // Note: ensureInitializedAndBuilt is already stubbed at the start of this test
 
       // Create mock child process for clear crashes
       const mockClearProcess = new EventEmitter();
@@ -1860,6 +1912,9 @@ suite("Command Handlers Test Suite", () => {
     });
 
     test("Should handle concurrent fuzzer operations", async () => {
+      // Mock successful initialization for all operations
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
       const mockFuzzerData = createMockFuzzerData();
       testEnvironment.fuzzerMocks.refreshFuzzerData.resolves(mockFuzzerData);
 
@@ -1882,6 +1937,9 @@ suite("Command Handlers Test Suite", () => {
     });
 
     test("Should validate fuzzer data structure in refresh", async () => {
+      // Mock successful initialization
+      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
       const mockFuzzerData = [
         {
           name: "test-fuzzer",
