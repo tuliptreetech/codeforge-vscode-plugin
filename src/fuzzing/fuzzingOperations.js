@@ -45,7 +45,7 @@ async function buildFuzzTestsWithScript(
     );
     terminal.writeRaw(`\x1b[36m│ Script: build-fuzz-tests.sh\x1b[0m\r\n`, null);
     terminal.writeRaw(
-      `\x1b[36m╰─────────────────────────────╯\x1b[0m\r\n\r\n`,
+      `\x1b[36m╰────────────────────────╯\x1b[0m\r\n\r\n`,
       null,
     );
   }
@@ -103,10 +103,7 @@ async function buildFuzzTestsWithScript(
             `\x1b[31m│ Command: ${buildCommand}\x1b[0m\r\n`,
             null,
           );
-          terminal.writeRaw(
-            `\x1b[31m╰─────────────────────────────╯\x1b[0m\r\n`,
-            null,
-          );
+          terminal.writeRaw(`\x1b[31m╰────────────────╯\x1b[0m\r\n`, null);
 
           if (stderr.trim()) {
             terminal.writeRaw(`\r\n\x1b[33m📋 Error Output:\x1b[0m\r\n`, null);
@@ -158,10 +155,7 @@ async function buildFuzzTestsWithScript(
           `\x1b[32m│ Built: ${successfulBuilds.length}/${fuzzTests.length} targets\x1b[0m\r\n`,
           null,
         );
-        terminal.writeRaw(
-          `\x1b[32m╰─────────────────────────────╯\x1b[0m\r\n`,
-          null,
-        );
+        terminal.writeRaw(`\x1b[32m╰────────────────────╯\x1b[0m\r\n`, null);
       }
 
       safeFuzzingLog(
@@ -411,6 +405,52 @@ function categorizeError(errorText) {
 }
 
 /**
+ * Counts crash files for a specific fuzzer
+ * @param {string} workspacePath - Path to the workspace
+ * @param {string} fuzzerName - Name of the fuzzer
+ * @returns {Promise<number>} Number of crash files found
+ */
+async function countCrashFiles(workspacePath, fuzzerName) {
+  try {
+    let outputDir;
+    try {
+      outputDir = getOutputDirectory();
+    } catch (error) {
+      outputDir = ".codeforge/fuzzing";
+    }
+
+    const crashDir = path.join(
+      workspacePath,
+      outputDir,
+      `${fuzzerName}-output`,
+      "corpus",
+    );
+
+    // Check if crash directory exists
+    try {
+      await fs.access(crashDir);
+    } catch (error) {
+      // Directory doesn't exist, no crashes
+      return 0;
+    }
+
+    // Read directory contents
+    const files = await fs.readdir(crashDir);
+
+    // Count files that match the crash pattern (crash-*)
+    const crashFiles = files.filter((file) => file.startsWith("crash-"));
+
+    return crashFiles.length;
+  } catch (error) {
+    console.error(
+      `Error counting crash files for ${fuzzerName}:`,
+      error.message,
+    );
+    return 0;
+  }
+}
+
+/**
  * Runs fuzz tests using the run-fuzz-tests.sh script
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
@@ -435,6 +475,13 @@ async function runFuzzTestsWithScript(
     return results;
   }
 
+  // Count crashes before running fuzzers
+  const crashCountsBefore = new Map();
+  for (const ft of fuzzTests) {
+    const count = await countCrashFiles(workspacePath, ft.fuzzer);
+    crashCountsBefore.set(ft.fuzzer, count);
+  }
+
   // Convert fuzz tests to script format: "preset:fuzzer_name preset:fuzzer_name ..."
   const fuzzerList = fuzzTests
     .map((ft) => `${ft.preset}:${ft.fuzzer}`)
@@ -450,10 +497,7 @@ async function runFuzzTestsWithScript(
       null,
     );
     terminal.writeRaw(`\x1b[35m│ Script: run-fuzz-tests.sh\x1b[0m\r\n`, null);
-    terminal.writeRaw(
-      `\x1b[35m╰─────────────────────────────╯\x1b[0m\r\n\r\n`,
-      null,
-    );
+    terminal.writeRaw(`\x1b[35m╰───────────────────────╯\x1b[0m\r\n\r\n`, null);
   }
 
   return new Promise((resolve, reject) => {
@@ -495,7 +539,7 @@ async function runFuzzTestsWithScript(
       }
     });
 
-    runProcess.on("close", (code) => {
+    runProcess.on("close", async (code) => {
       // Parse script output for execution results
       const executionResults = parseScriptExecutionResults(
         stdout,
@@ -503,8 +547,30 @@ async function runFuzzTestsWithScript(
         fuzzTests,
       );
       results.executed = executionResults.executed;
-      results.crashes = executionResults.crashes;
       results.errors = executionResults.errors;
+
+      // Count crashes after running fuzzers
+      let totalNewCrashes = 0;
+      const newCrashesPerFuzzer = [];
+
+      for (const ft of fuzzTests) {
+        const countAfter = await countCrashFiles(workspacePath, ft.fuzzer);
+        const countBefore = crashCountsBefore.get(ft.fuzzer) || 0;
+        const newCrashes = Math.max(0, countAfter - countBefore);
+
+        if (newCrashes > 0) {
+          newCrashesPerFuzzer.push({
+            fuzzer: ft.fuzzer,
+            newCrashes: newCrashes,
+            totalCrashes: countAfter,
+          });
+          totalNewCrashes += newCrashes;
+        }
+      }
+
+      // Update results with actual crash counts
+      results.crashes = newCrashesPerFuzzer;
+      results.totalNewCrashes = totalNewCrashes;
 
       // Display execution summary
       if (terminal && typeof terminal.writeRaw === "function") {
@@ -518,13 +584,20 @@ async function runFuzzTestsWithScript(
             null,
           );
           terminal.writeRaw(
-            `\x1b[32m│ Crashes: ${results.crashes.length}\x1b[0m\r\n`,
+            `\x1b[32m╰───────────────────────╯\x1b[0m\r\n`,
             null,
           );
-          terminal.writeRaw(
-            `\x1b[32m╰─────────────────────────────────╯\x1b[0m\r\n`,
-            null,
-          );
+
+          // Display per-fuzzer crash details if any crashes were found
+          if (newCrashesPerFuzzer.length > 0) {
+            terminal.writeRaw(`\r\n\x1b[33m📋 New Crashes:\x1b[0m\r\n`, null);
+            newCrashesPerFuzzer.forEach((crashInfo) => {
+              terminal.writeRaw(
+                `\x1b[33m  • ${crashInfo.fuzzer}: ${crashInfo.newCrashes} new (${crashInfo.totalCrashes} total)\x1b[0m\r\n`,
+                null,
+              );
+            });
+          }
         } else {
           terminal.writeRaw(
             `\r\n\x1b[31m╭─ EXECUTION FAILED ─╮\x1b[0m\r\n`,
@@ -535,10 +608,7 @@ async function runFuzzTestsWithScript(
             `\x1b[31m│ Command: ${runCommand}\x1b[0m\r\n`,
             null,
           );
-          terminal.writeRaw(
-            `\x1b[31m╰─────────────────────────────╯\x1b[0m\r\n`,
-            null,
-          );
+          terminal.writeRaw(`\x1b[31m╰───────────────────╯\x1b[0m\r\n`, null);
 
           if (stderr.trim()) {
             terminal.writeRaw(`\r\n\x1b[33m📋 Error Output:\x1b[0m\r\n`, null);
@@ -565,7 +635,7 @@ async function runFuzzTestsWithScript(
 
       safeFuzzingLog(
         terminal,
-        `Execution completed: ${results.executed} fuzzer(s) executed, ${results.crashes.length} crash(es) found`,
+        `Execution completed: ${results.executed} fuzzer(s) executed, ${totalNewCrashes} new crash(es) found`,
       );
       resolve(results);
     });
@@ -937,19 +1007,29 @@ async function orchestrateFuzzingWorkflow(
  * @returns {string} Formatted summary
  */
 function generateFuzzingSummary(results) {
+  const totalCrashes = results.crashes.length > 0 ? results.crashes.length : 0;
+
   const lines = [
     "=== Fuzzing Results Summary ===",
     `Presets processed: ${results.processedPresets}/${results.totalPresets}`,
     `Targets built: ${results.builtTargets}/${results.totalTargets}`,
     `Fuzzers executed: ${results.executedFuzzers}`,
-    `Crashes found: ${results.crashes.length}`,
+    `New crashes found: ${totalCrashes}`,
     `Errors encountered: ${results.errors.length}`,
   ];
 
   if (results.crashes.length > 0) {
-    lines.push("", "Crashes found:");
+    lines.push("", "New crashes by fuzzer:");
     results.crashes.forEach((crash) => {
-      lines.push(`  - ${crash.fuzzer}: ${crash.file}`);
+      if (crash.newCrashes !== undefined) {
+        lines.push(
+          `  - ${crash.fuzzer}: ${crash.newCrashes} new (${crash.totalCrashes} total)`,
+        );
+      } else if (crash.file) {
+        lines.push(`  - ${crash.fuzzer}: ${crash.file}`);
+      } else {
+        lines.push(`  - ${crash.fuzzer}`);
+      }
     });
   }
 
@@ -994,9 +1074,10 @@ async function runFuzzingTests(
     );
 
     // Show completion message
+    const crashCount = results.crashes.length > 0 ? results.crashes.length : 0;
     const message =
-      results.crashes.length > 0
-        ? `Fuzzing completed with ${results.crashes.length} crash(es) found!`
+      crashCount > 0
+        ? `Fuzzing completed with ${crashCount} new crash(es) found!`
         : `Fuzzing completed successfully. ${results.executedFuzzers} fuzzer(s) executed.`;
 
     vscode.window.showInformationMessage(`CodeForge: ${message}`, {
@@ -1945,6 +2026,7 @@ module.exports = {
   parseScriptExecutionResults,
   parseSuccessfulBuilds,
   parseScriptBuildErrors,
+  countCrashFiles,
   // Individual fuzzer operations (new functions)
   buildFuzzTarget,
   runFuzzTarget,

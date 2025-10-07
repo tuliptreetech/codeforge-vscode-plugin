@@ -90,7 +90,7 @@ suite("Fuzzing Operations Test Suite", () => {
       assert(summary.includes("Presets processed: 2/3"));
       assert(summary.includes("Targets built: 4/5"));
       assert(summary.includes("Fuzzers executed: 3"));
-      assert(summary.includes("Crashes found: 1"));
+      assert(summary.includes("New crashes found: 1"));
       assert(summary.includes("Errors encountered: 1"));
       assert(summary.includes("test-fuzz: /path/to/crash"));
       assert(summary.includes("build: Build failed"));
@@ -534,6 +534,18 @@ suite("Fuzzing Operations Test Suite", () => {
         .stub(dockerOperations, "runDockerCommandWithOutput")
         .returns(mockProcess);
 
+      // Mock file system for crash counting
+      const fs = require("fs").promises;
+      const fsAccessStub = sandbox.stub(fs, "access");
+      const fsReaddirStub = sandbox.stub(fs, "readdir");
+
+      // Before fuzzing: no crash directory
+      fsAccessStub.onFirstCall().rejects(new Error("Directory does not exist"));
+
+      // After fuzzing: crash directory exists with 1 crash file
+      fsAccessStub.onSecondCall().resolves();
+      fsReaddirStub.resolves(["crash-abc123"]);
+
       // Set up execution with crash
       mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
       mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
@@ -549,12 +561,18 @@ suite("Fuzzing Operations Test Suite", () => {
       // Verify the execution results include crashes
       assert.strictEqual(result.executed, 1, "Should report 1 executed fuzzer");
       assert.strictEqual(result.crashes.length, 1, "Should have 1 crash");
+      assert.strictEqual(
+        result.totalNewCrashes,
+        1,
+        "Should report 1 new crash",
+      );
       assert.strictEqual(result.errors.length, 0, "Should have no errors");
 
       // Verify crash details
       const crash = result.crashes[0];
       assert.strictEqual(crash.fuzzer, "test-fuzzer");
-      assert(crash.file.includes("crash-abc123"));
+      assert.strictEqual(crash.newCrashes, 1);
+      assert.strictEqual(crash.totalCrashes, 1);
     });
 
     test("parseSuccessfulBuilds should parse build output correctly", () => {
@@ -1932,6 +1950,239 @@ compilation terminated.
       const error = errors[0];
       assert.strictEqual(error.type, "docker_error");
       assert(error.error.includes("Script execution failed"));
+    });
+  });
+
+  suite("Crash Counting", () => {
+    test("countCrashFiles should return 0 when crash directory does not exist", async () => {
+      const fs = require("fs").promises;
+      sandbox.stub(fs, "access").rejects(new Error("Directory does not exist"));
+
+      const count = await fuzzingOperations.countCrashFiles(
+        "/test/workspace",
+        "test-fuzzer",
+      );
+      assert.strictEqual(count, 0);
+    });
+
+    test("countCrashFiles should count crash files correctly", async () => {
+      const fs = require("fs").promises;
+      sandbox.stub(fs, "access").resolves();
+      sandbox
+        .stub(fs, "readdir")
+        .resolves([
+          "crash-abc123",
+          "crash-def456",
+          "crash-ghi789",
+          "regular-file.txt",
+          "corpus-file",
+        ]);
+
+      const count = await fuzzingOperations.countCrashFiles(
+        "/test/workspace",
+        "test-fuzzer",
+      );
+      assert.strictEqual(
+        count,
+        3,
+        "Should count only files starting with crash-",
+      );
+    });
+
+    test("countCrashFiles should handle empty crash directory", async () => {
+      const fs = require("fs").promises;
+      sandbox.stub(fs, "access").resolves();
+      sandbox.stub(fs, "readdir").resolves([]);
+
+      const count = await fuzzingOperations.countCrashFiles(
+        "/test/workspace",
+        "test-fuzzer",
+      );
+      assert.strictEqual(count, 0);
+    });
+
+    test("countCrashFiles should handle directory read errors", async () => {
+      const fs = require("fs").promises;
+      sandbox.stub(fs, "access").resolves();
+      sandbox.stub(fs, "readdir").rejects(new Error("Permission denied"));
+
+      const count = await fuzzingOperations.countCrashFiles(
+        "/test/workspace",
+        "test-fuzzer",
+      );
+      assert.strictEqual(count, 0, "Should return 0 on error");
+    });
+
+    test("runFuzzTestsWithScript should track new crashes correctly", async () => {
+      const mockScriptOutput =
+        "[+] running fuzzer: /workspace/.codeforge/fuzzing/test-fuzzer\n";
+      const fuzzTests = [{ preset: "debug", fuzzer: "test-fuzzer" }];
+
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      // Mock file system for crash counting
+      const fs = require("fs").promises;
+      const fsAccessStub = sandbox.stub(fs, "access");
+      const fsReaddirStub = sandbox.stub(fs, "readdir");
+
+      // Before fuzzing: 2 existing crashes
+      fsAccessStub.onFirstCall().resolves();
+      fsReaddirStub.onFirstCall().resolves(["crash-old1", "crash-old2"]);
+
+      // After fuzzing: 5 total crashes (3 new)
+      fsAccessStub.onSecondCall().resolves();
+      fsReaddirStub
+        .onSecondCall()
+        .resolves([
+          "crash-old1",
+          "crash-old2",
+          "crash-new1",
+          "crash-new2",
+          "crash-new3",
+        ]);
+
+      // Set up execution
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0);
+
+      const result = await fuzzingOperations.runFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        fuzzTests,
+        mockOutputChannel,
+      );
+
+      assert.strictEqual(
+        result.totalNewCrashes,
+        3,
+        "Should report 3 new crashes",
+      );
+      assert.strictEqual(
+        result.crashes.length,
+        1,
+        "Should have 1 fuzzer entry",
+      );
+      const crash = result.crashes[0];
+      assert.strictEqual(crash.fuzzer, "test-fuzzer");
+      assert.strictEqual(crash.newCrashes, 3);
+      assert.strictEqual(crash.totalCrashes, 5);
+    });
+
+    test("runFuzzTestsWithScript should handle multiple fuzzers with different crash counts", async () => {
+      const mockScriptOutput =
+        "[+] running fuzzer: /workspace/.codeforge/fuzzing/fuzzer1\n[+] running fuzzer: /workspace/.codeforge/fuzzing/fuzzer2\n[+] running fuzzer: /workspace/.codeforge/fuzzing/fuzzer3\n";
+      const fuzzTests = [
+        { preset: "debug", fuzzer: "fuzzer1" },
+        { preset: "debug", fuzzer: "fuzzer2" },
+        { preset: "debug", fuzzer: "fuzzer3" },
+      ];
+
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      sandbox
+        .stub(dockerOperations, "runDockerCommandWithOutput")
+        .returns(mockProcess);
+
+      // Mock file system for crash counting
+      const fs = require("fs").promises;
+      const fsAccessStub = sandbox.stub(fs, "access");
+      const fsReaddirStub = sandbox.stub(fs, "readdir");
+
+      // Before fuzzing - 3 access calls
+      // fuzzer1: 0 before (no directory)
+      fsAccessStub.onCall(0).rejects(); // Before - fuzzer1
+
+      // fuzzer2: 1 before
+      fsAccessStub.onCall(1).resolves(); // Before - fuzzer2
+      fsReaddirStub.onCall(0).resolves(["crash-old"]);
+
+      // fuzzer3: 0 before (no directory)
+      fsAccessStub.onCall(2).rejects(); // Before - fuzzer3
+
+      // After fuzzing - 3 access + readdir calls
+      // fuzzer1: 2 after (2 new)
+      fsAccessStub.onCall(3).resolves(); // After - fuzzer1
+      fsReaddirStub.onCall(1).resolves(["crash-1", "crash-2"]);
+
+      // fuzzer2: 1 after (0 new)
+      fsAccessStub.onCall(4).resolves(); // After - fuzzer2
+      fsReaddirStub.onCall(2).resolves(["crash-old"]);
+
+      // fuzzer3: 3 after (3 new)
+      fsAccessStub.onCall(5).resolves(); // After - fuzzer3
+      fsReaddirStub.onCall(3).resolves(["crash-a", "crash-b", "crash-c"]);
+
+      // Set up execution
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0);
+
+      const result = await fuzzingOperations.runFuzzTestsWithScript(
+        "/test/workspace",
+        "test-container",
+        fuzzTests,
+        mockOutputChannel,
+      );
+
+      assert.strictEqual(
+        result.totalNewCrashes,
+        5,
+        "Should report 5 new crashes total",
+      );
+      assert.strictEqual(
+        result.crashes.length,
+        2,
+        "Should only report fuzzers with new crashes",
+      );
+
+      // Verify fuzzer1
+      const fuzzer1 = result.crashes.find((c) => c.fuzzer === "fuzzer1");
+      assert.strictEqual(fuzzer1.newCrashes, 2);
+      assert.strictEqual(fuzzer1.totalCrashes, 2);
+
+      // fuzzer2 should not be in results (0 new crashes)
+      const fuzzer2 = result.crashes.find((c) => c.fuzzer === "fuzzer2");
+      assert.strictEqual(fuzzer2, undefined);
+
+      // Verify fuzzer3
+      const fuzzer3 = result.crashes.find((c) => c.fuzzer === "fuzzer3");
+      assert.strictEqual(fuzzer3.newCrashes, 3);
+      assert.strictEqual(fuzzer3.totalCrashes, 3);
+    });
+
+    test("generateFuzzingSummary should display new crash counts correctly", () => {
+      const results = {
+        processedPresets: 2,
+        totalPresets: 2,
+        builtTargets: 3,
+        totalTargets: 3,
+        executedFuzzers: 3,
+        crashes: [
+          { fuzzer: "fuzzer1", newCrashes: 2, totalCrashes: 5 },
+          { fuzzer: "fuzzer2", newCrashes: 1, totalCrashes: 1 },
+        ],
+        errors: [],
+      };
+
+      const summary = fuzzingOperations.generateFuzzingSummary(results);
+
+      assert(summary.includes("New crashes found: 2"));
+      assert(summary.includes("New crashes by fuzzer:"));
+      assert(summary.includes("fuzzer1: 2 new (5 total)"));
+      assert(summary.includes("fuzzer2: 1 new (1 total)"));
     });
   });
 });
