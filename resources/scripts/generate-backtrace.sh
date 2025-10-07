@@ -14,9 +14,9 @@ cd "$root_directory"
 if [ $# -lt 1 ]; then
     exit 1
 fi
-crash="$1"
+fuzzer_and_crash_hash="$1"
 
-IFS="/" read -r fuzzer_name crash_hash <<< "$crash"
+IFS="/" read -r fuzzer_name crash_hash <<< "$fuzzer_and_crash_hash"
 
 output_dir="$fuzzing_directory/$fuzzer_name-output"
 backtrace_output_file=$output_dir/backtrace-$crash_hash.txt

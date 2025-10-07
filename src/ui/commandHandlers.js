@@ -1339,7 +1339,9 @@ class CodeForgeCommandHandlers {
       const containerPort = 2000;
 
       // Build gdbserver command
-      const gdbserverCommand = `gdbserver 0.0.0.0:${containerPort} ${containerFuzzerPath} ${containerCrashPath}`;
+      // Use --once to exit after first connection, and --attach would require PID
+      // Instead, we'll use the standard mode but the program will wait for continue
+      const gdbserverCommand = `gdbserver --once 0.0.0.0:${containerPort} ${containerFuzzerPath} ${containerCrashPath}`;
 
       // Get configuration
       const config = vscode.workspace.getConfiguration("codeforge");
@@ -1449,13 +1451,12 @@ class CodeForgeCommandHandlers {
               // Configure GDB for remote debugging
               "set confirm off",
               "set breakpoint pending on",
-              // Set temporary breakpoint at main and continue to it
-              "tbreak main",
-              "continue",
+              // Note: reverse debugging (target record-full) is not enabled
+              // as it significantly degrades performance
             ],
             valuesFormatting: "parseText",
             printCalls: false,
-            stopAtConnect: false,
+            stopAtConnect: true,
           },
         );
 

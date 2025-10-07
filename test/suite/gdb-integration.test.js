@@ -1311,7 +1311,7 @@ suite("GDB Integration Test Suite", () => {
 
       assert.strictEqual(
         result.gdbserverCommand,
-        `gdbserver 0.0.0.0:2000 ${containerFuzzerPath} ${containerCrashPath}`,
+        `gdbserver --once 0.0.0.0:2000 ${containerFuzzerPath} ${containerCrashPath}`,
       );
     });
   });
