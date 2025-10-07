@@ -21,16 +21,9 @@ const path = require("path");
  * Provides centralized command handling with proper error handling and user feedback
  */
 class CodeForgeCommandHandlers {
-  constructor(
-    context,
-    outputChannel,
-    containerTreeProvider,
-    webviewProvider,
-    resourceManager,
-  ) {
+  constructor(context, outputChannel, webviewProvider, resourceManager) {
     this.context = context;
     this.outputChannel = outputChannel;
-    this.containerTreeProvider = containerTreeProvider;
     this.webviewProvider = webviewProvider;
     this.resourceManager = resourceManager;
     this.fuzzerDiscoveryService = new FuzzerDiscoveryService();
@@ -760,95 +753,6 @@ class CodeForgeCommandHandlers {
     }
 
     return message;
-  }
-
-  /**
-   * Refresh container list
-   */
-  async handleRefreshContainers() {
-    try {
-      console.log("CodeForge: handleRefreshContainers called");
-      this.safeOutputLog("CodeForge: Refresh containers command triggered");
-
-      // Debug provider state
-      this.safeOutputLog(
-        `CodeForge: containerTreeProvider exists: ${!!this.containerTreeProvider}`,
-      );
-      this.safeOutputLog(
-        `CodeForge: containerTreeProvider type: ${typeof this.containerTreeProvider}`,
-      );
-
-      if (this.containerTreeProvider) {
-        this.safeOutputLog(
-          `CodeForge: containerTreeProvider methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(this.containerTreeProvider)).join(", ")}`,
-        );
-      }
-
-      // Check if container tree provider is available
-      if (!this.containerTreeProvider) {
-        console.error("CodeForge: Container tree provider not found!");
-        this.safeOutputLog(
-          "CRITICAL: Container tree provider not found - extension may not have initialized properly",
-          true,
-        );
-        this.safeOutputLog(
-          "This indicates that the extension activation failed or the provider registration failed",
-          true,
-        );
-
-        // Try to provide helpful guidance
-        const action = await vscode.window.showErrorMessage(
-          "CodeForge: Container tree provider not initialized. This may be due to an extension startup issue.",
-          "Reload Window",
-          "Check Output",
-          "Show Logs",
-        );
-
-        if (action === "Reload Window") {
-          this.safeOutputLog("User chose to reload window");
-          vscode.commands.executeCommand("workbench.action.reloadWindow");
-        } else if (action === "Check Output") {
-          this.safeOutputLog("User chose to check output");
-          this.safeOutputLog("", true); // Show output channel
-        } else if (action === "Show Logs") {
-          this.safeOutputLog("User chose to show logs");
-          vscode.commands.executeCommand("workbench.action.showLogs");
-        }
-        return;
-      }
-
-      console.log(
-        "CodeForge: Container tree provider found, calling refresh...",
-      );
-      this.safeOutputLog(
-        "CodeForge: ✓ Container tree provider found, proceeding with refresh...",
-      );
-
-      // Refresh the container tree provider
-      await this.containerTreeProvider.refresh();
-      this.safeOutputLog(
-        "CodeForge: ✓ Container tree provider refresh completed",
-      );
-
-      // Update webview state
-      this.updateWebviewState();
-      this.safeOutputLog("CodeForge: ✓ Webview state updated");
-
-      console.log("CodeForge: Container refresh completed successfully");
-      this.safeOutputLog(
-        "CodeForge: ✓ Container refresh operation completed successfully",
-      );
-    } catch (error) {
-      console.error("CodeForge: Error in handleRefreshContainers:", error);
-      this.safeOutputLog(
-        `CRITICAL: Error refreshing containers: ${error.message}`,
-        true,
-      );
-      this.safeOutputLog(`Error stack: ${error.stack}`, false);
-      vscode.window.showErrorMessage(
-        `CodeForge: Failed to refresh containers - ${error.message}`,
-      );
-    }
   }
 
   /**
@@ -1931,7 +1835,6 @@ class CodeForgeCommandHandlers {
       "codeforge.launchTerminal": this.handleLaunchTerminal.bind(this),
       "codeforge.runFuzzingTests": this.handleRunFuzzing.bind(this),
       "codeforge.buildFuzzingTests": this.handleBuildFuzzTargets.bind(this),
-      "codeforge.refreshContainers": this.handleRefreshContainers.bind(this),
       "codeforge.refreshFuzzers": this.handleRefreshFuzzers.bind(this),
       "codeforge.regenerateFuzzerList":
         this.handleRegenerateFuzzerList.bind(this),

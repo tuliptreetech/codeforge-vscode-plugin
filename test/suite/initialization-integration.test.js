@@ -70,7 +70,6 @@ suite("Initialization Integration Test Suite", () => {
     commandHandlers = new CodeForgeCommandHandlers(
       mockContext,
       mockOutputChannel,
-      null, // containerTreeProvider
       webviewProvider,
       mockResourceManager,
     );
