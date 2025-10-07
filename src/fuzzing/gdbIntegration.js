@@ -409,7 +409,8 @@ class GdbServerLauncher {
 
     // Build gdbserver command
     // gdbserver listens on all interfaces (0.0.0.0) inside the container
-    const gdbserverCommand = `gdbserver 0.0.0.0:${containerPort} ${containerFuzzerPath} ${containerCrashPath}`;
+    // Use --once to exit after one debugging session
+    const gdbserverCommand = `gdbserver --once 0.0.0.0:${containerPort} ${containerFuzzerPath} ${containerCrashPath}`;
 
     // Prepare Docker run options with port forwarding
     const dockerArgs = [
