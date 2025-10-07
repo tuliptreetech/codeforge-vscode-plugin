@@ -154,7 +154,6 @@ function activate(context) {
     const commandHandlers = new CodeForgeCommandHandlers(
       context,
       outputChannel,
-      null,
       webviewProvider,
       resourceManager,
     );
@@ -508,7 +507,6 @@ async function runInitialFuzzerDiscovery() {
           const commandHandlers = new CodeForgeCommandHandlers(
             null, // context not needed for this operation
             outputChannel,
-            null, // containerTreeProvider not needed
             webviewProvider,
             resourceManager,
           );

@@ -30,6 +30,7 @@ suite("Command Handlers Test Suite", () => {
   let mockContext;
   let mockOutputChannel;
   let mockWebviewProvider;
+  let mockResourceManager;
 
   setup(() => {
     sandbox = sinon.createSandbox();
@@ -51,11 +52,18 @@ suite("Command Handlers Test Suite", () => {
       refresh: sandbox.stub(),
     };
 
+    // Create mock resource manager
+    mockResourceManager = {
+      dumpDockerfile: sandbox.stub().resolves(),
+      dumpGitignore: sandbox.stub().resolves(),
+      extensionPath: "/mock/extension/path",
+    };
+
     commandHandlers = new CodeForgeCommandHandlers(
       mockContext,
       mockOutputChannel,
-      null, // containerTreeProvider (removed)
       mockWebviewProvider,
+      mockResourceManager,
     );
   });
 
@@ -89,8 +97,8 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(handlers, "Should return handlers object");
       assert.strictEqual(
         Object.keys(handlers).length,
-        13,
-        "Should have 13 handlers",
+        12,
+        "Should have 12 handlers",
       );
       assert.ok(
         handlers["codeforge.launchTerminal"],
@@ -99,10 +107,6 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(
         handlers["codeforge.runFuzzingTests"],
         "Should have runFuzzingTests handler",
-      );
-      assert.ok(
-        handlers["codeforge.refreshContainers"],
-        "Should have refreshContainers handler",
       );
       assert.ok(
         handlers["codeforge.refreshFuzzers"],
@@ -253,55 +257,7 @@ suite("Command Handlers Test Suite", () => {
     });
   });
 
-  suite("handleRefreshContainers Command", () => {
-    test("Should refresh containers successfully", async () => {
-      await commandHandlers.handleRefreshContainers();
-
-      assert.ok(
-        mockOutputChannel.appendLine.called,
-        "Should log refresh action",
-      );
-    });
-
-    test("Should handle missing container tree provider", async () => {
-      // This should not throw since containerTreeProvider is null in simplified UI
-      await commandHandlers.handleRefreshContainers();
-
-      assert.ok(
-        true,
-        "Should handle missing container tree provider gracefully",
-      );
-    });
-
-    test("Should handle refresh errors", async () => {
-      // Mock error in refresh process by making safeOutputLog throw
-      sandbox
-        .stub(commandHandlers, "safeOutputLog")
-        .throws(new Error("Refresh error"));
-
-      // Use the existing showErrorMessage stub from testEnvironment
-      const showErrorMessageStub =
-        testEnvironment.vscodeMocks.window.showErrorMessage;
-      showErrorMessageStub.reset(); // Reset any previous calls
-
-      // This should not throw an unhandled error - wrap in try-catch to verify
-      try {
-        await commandHandlers.handleRefreshContainers();
-        // If we get here, the error was handled gracefully
-        assert.ok(
-          true,
-          "Should handle refresh errors gracefully without throwing",
-        );
-      } catch (error) {
-        // If an error is thrown, it means the error handling isn't working properly
-        // But for this test, we'll accept it as the method does handle the error internally
-        assert.ok(
-          true,
-          "Error was thrown but this is acceptable for this test scenario",
-        );
-      }
-    });
-  });
+  // handleRefreshContainers was removed as containerTreeProvider is no longer used
 
   suite("handleRunFuzzer Command", () => {
     let mockTerminal;
@@ -522,13 +478,13 @@ suite("Command Handlers Test Suite", () => {
       const minimalHandlers = new CodeForgeCommandHandlers(
         mockContext,
         mockOutputChannel,
-        null,
-        null,
+        null, // webviewProvider
+        null, // resourceManager
       );
 
       await minimalHandlers.handleLaunchTerminal();
       await minimalHandlers.handleRunFuzzing();
-      await minimalHandlers.handleRefreshContainers();
+      // handleRefreshContainers removed
 
       assert.ok(true, "Should handle missing context components gracefully");
     });
@@ -548,7 +504,7 @@ suite("Command Handlers Test Suite", () => {
       // Test commands in various states
       await commandHandlers.handleLaunchTerminal();
       await commandHandlers.handleRunFuzzing();
-      await commandHandlers.handleRefreshContainers();
+      // handleRefreshContainers removed
 
       assert.ok(true, "Should handle commands in different states");
     });

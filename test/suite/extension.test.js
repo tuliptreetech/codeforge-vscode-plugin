@@ -80,10 +80,10 @@ suite("CodeForge Extension Core Test Suite", () => {
       const commands = await vscode.commands.getCommands();
       assert.ok(commands.includes("codeforge.launchTerminal"));
       assert.ok(commands.includes("codeforge.runFuzzingTests"));
-      assert.ok(commands.includes("codeforge.refreshContainers"));
-
-      // Container tree provider commands were removed in the simplified UI
-      // Only the above 3 commands should be registered
+      assert.ok(commands.includes("codeforge.buildFuzzingTests"));
+      assert.ok(commands.includes("codeforge.regenerateFuzzerList"));
+      assert.ok(commands.includes("codeforge.initializeProject"));
+      assert.ok(commands.includes("codeforge.registerTask"));
     });
 
     test("Extension activation should create output channel", async () => {
@@ -379,7 +379,10 @@ suite("CodeForge Extension Core Test Suite", () => {
           const activityBarCommands = [
             "codeforge.launchTerminal",
             "codeforge.runFuzzingTests",
-            "codeforge.refreshContainers",
+            "codeforge.buildFuzzingTests",
+            "codeforge.regenerateFuzzerList",
+            "codeforge.initializeProject",
+            "codeforge.registerTask",
           ];
 
           activityBarCommands.forEach((command) => {
@@ -390,7 +393,7 @@ suite("CodeForge Extension Core Test Suite", () => {
           });
         });
 
-        test("Should not register container tree provider commands (removed in simplified UI)", async () => {
+        test("Should not register removed commands", async () => {
           const extension = vscode.extensions.getExtension(
             "TulipTreeTechnology.codeforge",
           );
@@ -398,12 +401,19 @@ suite("CodeForge Extension Core Test Suite", () => {
 
           const commands = await vscode.commands.getCommands();
 
-          // Container tree provider commands were removed in the simplified UI
+          // Commands that were removed
           const removedCommands = [
             "codeforge.terminateContainer",
             "codeforge.showContainerLogs",
             "codeforge.connectToContainer",
             "codeforge.inspectContainer",
+            "codeforge.terminateAll",
+            "codeforge.cleanup",
+            "codeforge.refreshContainers",
+            "codeforge.initialize",
+            "codeforge.buildEnvironment",
+            "codeforge.terminateAllContainers",
+            "codeforge.cleanupOrphaned",
           ];
 
           removedCommands.forEach((command) => {

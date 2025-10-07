@@ -102,9 +102,9 @@ suite("Activity Bar Integration Test Suite", () => {
       // Verify the command was executed
       assert.ok(
         testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
-          "codeforge.initialize",
+          "codeforge.initializeProject",
         ),
-        "Should execute initialize command",
+        "Should execute initializeProject command",
       );
 
       // Verify success message was sent to webview
@@ -153,7 +153,7 @@ suite("Activity Bar Integration Test Suite", () => {
       // Verify command execution
       assert.ok(
         testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
-          "codeforge.buildEnvironment",
+          "codeforge.buildFuzzingTests",
         ),
         "Should execute build command",
       );
@@ -375,8 +375,8 @@ suite("Activity Bar Integration Test Suite", () => {
       // Mock the command execution to call our handler
       testEnvironment.vscodeMocks.commands.executeCommand.callsFake(
         async (command) => {
-          if (command === "codeforge.initialize") {
-            return await commandHandlers.handleInitialize();
+          if (command === "codeforge.initializeProject") {
+            return await commandHandlers.handleInitializeProject();
           }
         },
       );
@@ -392,7 +392,7 @@ suite("Activity Bar Integration Test Suite", () => {
       // Verify integration
       assert.ok(
         testEnvironment.vscodeMocks.commands.executeCommand.calledWith(
-          "codeforge.initialize",
+          "codeforge.initializeProject",
         ),
         "Should execute VSCode command",
       );

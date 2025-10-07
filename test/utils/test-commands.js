@@ -30,14 +30,35 @@ function testCommandRegistration() {
 
     const expectedCommands = [
       {
-        command: "codeforge.showContainerStatus",
-        title: "Show Container Status",
-        description: "Display status of all tracked containers",
+        command: "codeforge.initializeProject",
+        title: "Initialize Project",
+        description: "Initialize CodeForge in the current project",
       },
       {
-        command: "codeforge.terminateAllContainers",
-        title: "Terminate All Containers",
-        description: "Stop and remove all tracked containers",
+        command: "codeforge.launchTerminal",
+        title: "Launch Terminal in Container",
+        description:
+          "Launch an interactive terminal in the CodeForge container",
+      },
+      {
+        command: "codeforge.runFuzzingTests",
+        title: "Run Fuzzing Tests",
+        description: "Run fuzzing tests in the CodeForge container",
+      },
+      {
+        command: "codeforge.buildFuzzingTests",
+        title: "Build Fuzzing Tests",
+        description: "Build fuzzing test targets",
+      },
+      {
+        command: "codeforge.regenerateFuzzerList",
+        title: "Regenerate Fuzzer List",
+        description: "Regenerate the list of available fuzzers",
+      },
+      {
+        command: "codeforge.registerTask",
+        title: "Register Task",
+        description: "Register a new CodeForge task",
       },
     ];
 
@@ -108,8 +129,12 @@ function testCommandRegistration() {
 
     // Check for command registration in activate function
     const commandRegistrations = [
-      "codeforge.showContainerStatus",
-      "codeforge.terminateAllContainers",
+      "codeforge.initializeProject",
+      "codeforge.launchTerminal",
+      "codeforge.runFuzzingTests",
+      "codeforge.buildFuzzingTests",
+      "codeforge.regenerateFuzzerList",
+      "codeforge.registerTask",
     ];
 
     for (const cmdName of commandRegistrations) {

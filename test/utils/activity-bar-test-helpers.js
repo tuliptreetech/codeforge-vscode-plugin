@@ -180,15 +180,12 @@ function createVSCodeMocks(sandbox) {
       getCommands: sandbox
         .stub()
         .returns([
-          "codeforge.initialize",
-          "codeforge.buildDocker",
+          "codeforge.initializeProject",
           "codeforge.launchTerminal",
-          "codeforge.runFuzzing",
-          "codeforge.listContainers",
-          "codeforge.runCommand",
-          "codeforge.terminateAll",
-          "codeforge.cleanup",
-          "codeforge.refreshContainers",
+          "codeforge.runFuzzingTests",
+          "codeforge.buildFuzzingTests",
+          "codeforge.regenerateFuzzerList",
+          "codeforge.registerTask",
         ]),
     },
 
