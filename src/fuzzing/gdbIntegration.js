@@ -311,7 +311,8 @@ class GdbTerminalLauncher {
 
     // Add the GDB command to the shell arguments
     // We need to modify the shell args to run GDB instead of the default shell
-    const gdbCommandString = gdbCommand.join(" ");
+    // Disable LLVM profiling to prevent default.profraw from being created
+    const gdbCommandString = `LLVM_PROFILE_FILE=/dev/null ${gdbCommand.join(" ")}`;
 
     // Replace the default shell with a command that starts GDB
     const lastShellIndex = shellArgs.lastIndexOf(defaultShell);

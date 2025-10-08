@@ -453,11 +453,26 @@ class CodeForgeWebviewProvider {
         return;
       }
 
+      // Check if project is properly initialized before attempting fuzzer discovery
+      const initStatus =
+        await this._initializationService.isCodeForgeInitialized(workspacePath);
+      if (!initStatus.isInitialized) {
+        // Project not initialized, skip fuzzer discovery
+        return;
+      }
+
+      // Check if Docker image exists before attempting fuzzer discovery
+      const imageName = dockerOperations.generateContainerName(workspacePath);
+      const imageExists = await dockerOperations.checkImageExists(imageName);
+      if (!imageExists) {
+        // Docker image not built yet, skip fuzzer discovery
+        return;
+      }
+
       // Set loading state
       this._setFuzzerLoading(true);
 
-      // Discover fuzzers - use a default container name for discovery
-      const imageName = dockerOperations.generateContainerName(workspacePath);
+      // Discover fuzzers
       const fuzzerData = await this._fuzzerDiscoveryService.discoverFuzzers(
         workspacePath,
         imageName,

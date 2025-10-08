@@ -33,4 +33,5 @@ fi
 crash_file="$output_dir/crash-$crash_hash"
 exe="$fuzzing_directory/$fuzzer_name"
 
-gdb -batch -ex "run" -ex "bt full" -ex "quit" "$exe" "$crash_file" 2>/dev/null | tee "$backtrace_output_file"
+# Disable LLVM profiling to prevent default.profraw from being created
+LLVM_PROFILE_FILE=/dev/null gdb -batch -ex "run" -ex "bt full" -ex "quit" "$exe" "$crash_file" 2>/dev/null | tee "$backtrace_output_file"
