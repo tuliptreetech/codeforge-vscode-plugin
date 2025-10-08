@@ -6,6 +6,39 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.2] - 2025-10-08
+
+### Added
+
+- **Automatic GDB Launch Configuration**: Auto-creates and manages VS Code launch.json configurations for crash debugging with gdbserver
+- **Regenerate Fuzzer List Command**: New command to clear cached fuzzer list and regenerate from CMake presets
+- **Filesystem-Based Crash Counting**: Accurate tracking of new crashes by counting crash files before and after fuzzing sessions
+- **Enhanced Script Installation**: All fuzzing scripts (build, find, run, crashes, backtrace, clear) are now packaged and installed during initialization
+
+### Enhanced
+
+- **Improved Terminal Output**: Enhanced fuzzing terminal with aligned status boxes and separate crash information display
+- **Better Crash File Handling**: Crash viewer now reads only needed bytes (64KB) instead of entire files, preventing VSCode 50MB limit issues
+- **Smarter Output Channel Behavior**: Output channel only auto-shows for errors or user-requested actions, reducing noise
+- **Refresh Button Behavior**: Refresh button now bypasses cache to always fetch fresh data and prevents UI duplication
+
+### Fixed
+
+- **GDB Remote Debugging**: Resolved threading and stack trace errors when connecting to gdbserver
+  - Fixed "Cannot execute this command while the target is running" error
+  - Fixed "Selected thread is running" error
+  - Added stopAtConnect configuration for proper target state on connection
+- **Terminal Error Handling**: Terminal now stays open on fuzzer build errors with key-to-close prompt for better error visibility
+- **Initialization Check**: Fuzzer refresh command now validates CodeForge initialization before attempting discovery
+- **Command Registration Cleanup**: Removed unsupported commands from package.json, resolving "command not found" errors
+
+### Technical
+
+- **Launch Configuration Management**: New LaunchConfigManager utility for managing launch.json with JSON comment support
+- **Crash Counting Logic**: Per-fuzzer statistics showing "X new (Y total)" crashes
+- **GDB Session Lifecycle**: Improved gdbserver session handling with --once flag and proper connection sequence
+- **Script Verification**: InitializationDetectionService now verifies all 6 scripts are present with executable permissions
+
 ## [0.1.1] - 2025-10-03
 
 ### Added

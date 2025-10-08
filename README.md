@@ -368,6 +368,31 @@ For complete configuration documentation, parameter reference, validation rules,
 
 ## Release Notes
 
+### 0.1.2
+
+Incremental release focused on crash debugging workflow improvements and terminal enhancements:
+
+#### New Features
+
+- **Automatic GDB Launch Configuration**: Seamless crash debugging with auto-generated VS Code launch configurations for gdbserver
+- **Regenerate Fuzzer List**: New command to refresh fuzzer cache and regenerate from CMake presets
+- **Accurate Crash Counting**: Filesystem-based crash tracking that counts new crashes per fuzzing session
+- **Complete Script Installation**: All 6 fuzzing scripts are now automatically packaged and verified during initialization
+
+#### Improvements
+
+- **Enhanced Terminal Output**: Improved fuzzing terminal with properly aligned status boxes and clear crash statistics
+- **Optimized Crash Viewing**: Crash viewer now reads only 64KB chunks, avoiding VSCode's 50MB file limit
+- **Refined Output Channel**: Output channel only appears for errors or user actions, reducing UI noise
+- **Better Refresh Behavior**: Refresh button bypasses cache for accurate data and prevents duplicate UI entries
+
+#### Bug Fixes
+
+- **GDB Remote Debugging**: Fixed threading and stack trace errors during gdbserver connections
+- **Terminal Error Display**: Terminals stay open on build errors with clear error messages
+- **Initialization Validation**: Fuzzer refresh now checks initialization state before attempting discovery
+- **Command Registration**: Cleaned up package.json to remove unsupported commands
+
 ### 0.1.1
 
 Incremental feature release with enhanced debugging, corpus management, and improved user control:
