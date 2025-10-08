@@ -762,16 +762,30 @@ class CodeForgeCommandHandlers {
     try {
       const { path: workspacePath } = this.getWorkspaceInfo();
 
-      // Check initialization and build status
+      // Check initialization status without prompting
+      const initializationResult =
+        await this.initializationService.isCodeForgeInitialized(workspacePath);
+
+      if (!initializationResult.isInitialized) {
+        // Project not initialized, silently skip refresh
+        this.safeOutputLog(
+          "Fuzzer refresh skipped - project not initialized",
+          false,
+        );
+        return;
+      }
+
+      // Check if Docker image exists without prompting
       const containerName =
         dockerOperations.generateContainerName(workspacePath);
-      const initialized = await this.ensureInitializedAndBuilt(
-        workspacePath,
-        containerName,
-      );
-      if (!initialized) {
-        vscode.window.showInformationMessage(
-          "CodeForge: Fuzzer refresh cancelled - project initialization and Docker build required",
+      const imageExists =
+        await dockerOperations.checkImageExists(containerName);
+
+      if (!imageExists) {
+        // Docker image not built, silently skip refresh
+        this.safeOutputLog(
+          "Fuzzer refresh skipped - Docker image not built",
+          false,
         );
         return;
       }
@@ -1341,7 +1355,8 @@ class CodeForgeCommandHandlers {
       // Build gdbserver command
       // Use --once to exit after first connection, and --attach would require PID
       // Instead, we'll use the standard mode but the program will wait for continue
-      const gdbserverCommand = `gdbserver --once 0.0.0.0:${containerPort} ${containerFuzzerPath} ${containerCrashPath}`;
+      // Disable LLVM profiling to prevent default.profraw from being created
+      const gdbserverCommand = `LLVM_PROFILE_FILE=/dev/null gdbserver --once 0.0.0.0:${containerPort} ${containerFuzzerPath} ${containerCrashPath}`;
 
       // Get configuration
       const config = vscode.workspace.getConfiguration("codeforge");

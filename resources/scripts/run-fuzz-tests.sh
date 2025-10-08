@@ -51,13 +51,36 @@ for f in $fuzzers; do
     exit_code=$?
 
     # Extract the number of runs from the fuzzer output
-    # LibFuzzer typically outputs lines like "#12345  DONE" or "stat::number_of_executed_units: 12345"
-    runs=$(echo "$output" | grep -oE '#[0-9]+' | tail -1 | tr -d '#')
-    if [ -z "$runs" ]; then
-        runs=$(echo "$output" | grep -oE 'stat::number_of_executed_units: [0-9]+' | grep -oE '[0-9]+')
-    fi
-    if [ -z "$runs" ]; then
+    # LibFuzzer with -jobs=N runs multiple workers, each outputting their own test count
+    # We need to sum up all the test cases from all jobs
+    # Look for lines like "INFO: fuzzed for 47120 iterations, wrapping up soon"
+    job_runs=$(echo "$output" | grep -oE 'fuzzed for [0-9]+ iterations' | grep -oE '[0-9]+')
+
+    if [ -n "$job_runs" ]; then
+        # Sum up all the runs from all jobs
         runs=0
+        for count in $job_runs; do
+            runs=$((runs + count))
+        done
+    else
+        # Fallback: try other patterns for different LibFuzzer output formats
+        # Look for "Done N runs in X second(s)"
+        job_runs=$(echo "$output" | grep -oE 'Done [0-9]+ runs' | grep -oE '[0-9]+')
+        if [ -n "$job_runs" ]; then
+            runs=0
+            for count in $job_runs; do
+                runs=$((runs + count))
+            done
+        else
+            # Fallback: try the old method for single-threaded runs
+            runs=$(echo "$output" | grep -oE '#[0-9]+' | tail -1 | tr -d '#')
+            if [ -z "$runs" ]; then
+                runs=$(echo "$output" | grep -oE 'stat::number_of_executed_units: [0-9]+' | grep -oE '[0-9]+')
+            fi
+            if [ -z "$runs" ]; then
+                runs=0
+            fi
+        fi
     fi
 
     echo "[+] Fuzzer executed $runs test cases"
