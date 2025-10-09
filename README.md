@@ -368,6 +368,37 @@ For complete configuration documentation, parameter reference, validation rules,
 
 ## Release Notes
 
+### 0.1.3
+
+Refinement release focused on terminal integration, Docker operations unification, and developer documentation:
+
+#### New Features
+
+- **Comprehensive Developer Guide**: Added CLAUDE.md with complete project architecture, development practices, testing guidelines, and git workflow documentation
+- **VSCode Terminal Integration**: Enhanced terminal support with --stdin mode for proper pseudo-TTY handling in VSCode environments
+- **Unified Docker Script**: Single launch-process-in-docker.sh script handles all Docker operations with automatic image detection and container tracking
+
+#### Improvements
+
+- **Container Operations**: All Docker operations now use consistent script-based approach, reducing code complexity by ~150 lines
+- **Terminal Reliability**: VSCode terminals exec docker directly for proper stdin/stdout connection
+- **Container Tracking**: File-based tracking system (.codeforge/tracked-containers) that survives extension restarts
+- **Test Case Counting**: Fixed to accurately sum iterations across all parallel fuzzer workers
+- **Script Features**: Automatic image detection, port forwarding, interactive mode, custom configurations, and optional tracking
+
+#### Bug Fixes
+
+- **Profiling Files**: Disabled LLVM profiling in GDB operations to prevent default.profraw generation in workspace root
+- **Initialization Flow**: Fuzzer discovery no longer prompts for initialization when extension loads
+- **Test Reliability**: Fixed 'already stubbed' errors in checkImageExists tests
+- **Quiet Mode**: Added --quiet flag to suppress diagnostic output in interactive sessions
+
+#### Technical
+
+- **Code Refactoring**: Cleaner separation of concerns with unified script approach
+- **Dual Tracking**: File-based and in-memory container tracking for backward compatibility
+- **Script Architecture**: Single source of truth for Docker operations with comprehensive option support
+
 ### 0.1.2
 
 Incremental release focused on crash debugging workflow improvements and terminal enhancements:

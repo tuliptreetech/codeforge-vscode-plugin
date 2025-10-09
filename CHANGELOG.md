@@ -6,6 +6,39 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.3] - 2025-10-09
+
+### Added
+
+- **Developer Guide**: Comprehensive CLAUDE.md documentation covering project architecture, development practices, testing strategy, and git workflow
+- **VSCode Terminal Support**: --stdin mode for launch-process-in-docker.sh enabling proper terminal integration with VSCode's pseudo-TTY environment
+- **Unified Docker Script**: Single launch-process-in-docker.sh script providing comprehensive Docker operations interface with automatic container tracking
+
+### Enhanced
+
+- **Container Operations**: All Docker operations now use unified script for consistency and maintainability
+- **Terminal Creation**: Refactored handleLaunchTerminal and createGdbTerminal to use unified script
+- **Docker Script Features**: Automatic image detection, port forwarding, interactive mode, custom configurations, and lifecycle tracking
+- **Container Tracking**: File-based tracking system (.codeforge/tracked-containers) that survives extension restarts
+
+### Fixed
+
+- **Terminal Integration**: VSCode terminals now properly connect stdin/stdout by exec'ing docker directly
+- **Test Case Counting**: Fixed to sum iterations from all parallel fuzzer workers instead of only last job
+- **Profiling Files**: Disabled LLVM profiling in GDB operations to prevent default.profraw generation in workspace
+- **Initialization Prompts**: Fuzzer discovery no longer prompts for initialization on extension load
+- **Test Stubs**: Resolved 'already stubbed' errors in checkImageExists tests
+
+### Refactored
+
+- **Docker Operations**: Removed ~150 lines of code by delegating to unified script
+- **Code Organization**: Cleaner separation of concerns with script-based approach
+- **Container Tracking**: Dual tracking (file-based + in-memory) for backward compatibility
+
+### Documentation
+
+- **CLAUDE.md**: Complete developer onboarding guide with architecture details, development practices, and quick reference
+
 ## [0.1.2] - 2025-10-08
 
 ### Added
