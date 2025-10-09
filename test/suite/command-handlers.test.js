@@ -519,27 +519,23 @@ suite("Command Handlers Test Suite", () => {
     });
 
     test("handleRefreshFuzzers should check initialization before discovering fuzzers", async () => {
-      // Mock initialization failure
+      // Mock initialization check to return not initialized
       sandbox
-        .stub(commandHandlers, "ensureInitializedAndBuilt")
-        .resolves(false);
+        .stub(commandHandlers.initializationService, "isCodeForgeInitialized")
+        .resolves({ isInitialized: false });
 
       await commandHandlers.handleRefreshFuzzers();
 
       // Verify initialization check was called
       assert.ok(
-        commandHandlers.ensureInitializedAndBuilt.called,
+        commandHandlers.initializationService.isCodeForgeInitialized.called,
         "Should check initialization and build status",
       );
 
-      // Verify cancellation message
+      // Verify no cancellation message is shown (silently skips)
       assert.ok(
-        testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
-          sinon.match(
-            /Fuzzer refresh cancelled.*initialization and Docker build required/,
-          ),
-        ),
-        "Should show cancellation message when initialization fails",
+        testEnvironment.vscodeMocks.window.showInformationMessage.notCalled,
+        "Should not show message when silently skipping",
       );
 
       // Verify fuzzer discovery was NOT called
@@ -556,8 +552,13 @@ suite("Command Handlers Test Suite", () => {
     });
 
     test("handleRefreshFuzzers should discover and update fuzzer data", async () => {
-      // Mock successful initialization
-      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+      // Mock successful initialization check
+      sandbox
+        .stub(commandHandlers.initializationService, "isCodeForgeInitialized")
+        .resolves({ isInitialized: true });
+
+      // Mock Docker image exists (already stubbed in testEnvironment)
+      testEnvironment.dockerMocks.checkImageExists.resolves(true);
 
       // Mock successful fuzzer discovery
       const mockFuzzerData = createMockFuzzerData();
@@ -566,7 +567,7 @@ suite("Command Handlers Test Suite", () => {
       await commandHandlers.handleRefreshFuzzers();
 
       assert.ok(
-        commandHandlers.ensureInitializedAndBuilt.called,
+        commandHandlers.initializationService.isCodeForgeInitialized.called,
         "Should check initialization and build status",
       );
       assert.ok(
@@ -584,8 +585,13 @@ suite("Command Handlers Test Suite", () => {
     });
 
     test("handleRefreshFuzzers should handle no fuzzers found", async () => {
-      // Mock successful initialization
-      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+      // Mock successful initialization check
+      sandbox
+        .stub(commandHandlers.initializationService, "isCodeForgeInitialized")
+        .resolves({ isInitialized: true });
+
+      // Mock Docker image exists (already stubbed in testEnvironment)
+      testEnvironment.dockerMocks.checkImageExists.resolves(true);
 
       // Mock empty fuzzer discovery
       testEnvironment.fuzzerMocks.refreshFuzzerData.resolves([]);
@@ -618,8 +624,13 @@ suite("Command Handlers Test Suite", () => {
     });
 
     test("handleRefreshFuzzers should handle errors", async () => {
-      // Mock successful initialization
-      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+      // Mock successful initialization check
+      sandbox
+        .stub(commandHandlers.initializationService, "isCodeForgeInitialized")
+        .resolves({ isInitialized: true });
+
+      // Mock Docker image exists (already stubbed in testEnvironment)
+      testEnvironment.dockerMocks.checkImageExists.resolves(true);
 
       // Mock fuzzer discovery error
       const errorMessage = "Permission denied";
@@ -642,6 +653,14 @@ suite("Command Handlers Test Suite", () => {
     test("handleRegenerateFuzzerList should execute find-fuzz-tests.sh with -c flag", async () => {
       // Mock successful initialization
       sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
+      // Mock initialization check for handleRefreshFuzzers call
+      sandbox
+        .stub(commandHandlers.initializationService, "isCodeForgeInitialized")
+        .resolves({ isInitialized: true });
+
+      // Mock Docker image exists for handleRefreshFuzzers call (already stubbed in testEnvironment)
+      testEnvironment.dockerMocks.checkImageExists.resolves(true);
 
       // Mock Docker process for find-fuzz-tests.sh
       const mockProcess = {
@@ -763,6 +782,14 @@ suite("Command Handlers Test Suite", () => {
     test("handleRegenerateFuzzerList should handle no fuzzers found", async () => {
       // Mock successful initialization
       sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
+      // Mock initialization check for handleRefreshFuzzers call
+      sandbox
+        .stub(commandHandlers.initializationService, "isCodeForgeInitialized")
+        .resolves({ isInitialized: true });
+
+      // Mock Docker image exists for handleRefreshFuzzers call (already stubbed in testEnvironment)
+      testEnvironment.dockerMocks.checkImageExists.resolves(true);
 
       // Mock Docker process
       const mockProcess = {
@@ -1790,6 +1817,14 @@ suite("Command Handlers Test Suite", () => {
       // Mock successful initialization for all operations
       sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
 
+      // Mock initialization check for handleRefreshFuzzers
+      sandbox
+        .stub(commandHandlers.initializationService, "isCodeForgeInitialized")
+        .resolves({ isInitialized: true });
+
+      // Mock Docker image exists (already stubbed in testEnvironment)
+      testEnvironment.dockerMocks.checkImageExists.resolves(true);
+
       // 1. Refresh fuzzers
       const mockFuzzerData = createMockFuzzerData();
       testEnvironment.fuzzerMocks.refreshFuzzerData.resolves(mockFuzzerData);
@@ -1871,6 +1906,14 @@ suite("Command Handlers Test Suite", () => {
       // Mock successful initialization for all operations
       sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
 
+      // Mock initialization check for handleRefreshFuzzers
+      sandbox
+        .stub(commandHandlers.initializationService, "isCodeForgeInitialized")
+        .resolves({ isInitialized: true });
+
+      // Mock Docker image exists (already stubbed in testEnvironment)
+      testEnvironment.dockerMocks.checkImageExists.resolves(true);
+
       const mockFuzzerData = createMockFuzzerData();
       testEnvironment.fuzzerMocks.refreshFuzzerData.resolves(mockFuzzerData);
 
@@ -1895,6 +1938,14 @@ suite("Command Handlers Test Suite", () => {
     test("Should validate fuzzer data structure in refresh", async () => {
       // Mock successful initialization
       sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
+
+      // Mock initialization check for handleRefreshFuzzers
+      sandbox
+        .stub(commandHandlers.initializationService, "isCodeForgeInitialized")
+        .resolves({ isInitialized: true });
+
+      // Mock Docker image exists (already stubbed in testEnvironment)
+      testEnvironment.dockerMocks.checkImageExists.resolves(true);
 
       const mockFuzzerData = [
         {
