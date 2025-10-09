@@ -301,11 +301,13 @@ class GdbTerminalLauncher {
     const gdbCommandString = `LLVM_PROFILE_FILE=/dev/null ${gdbCommand.join(" ")}`;
 
     const scriptArgs = [
-      "-i", // Interactive
+      // NOTE: Use --stdin instead of -i! VSCode provides stdin but not a TTY
+      // Using -i (which adds -it) causes "input device is not a TTY" error
+      "--stdin",
       "--image",
       baseContainerName,
       "--shell",
-      "/bin/bash",
+      defaultShell,
       "--type",
       "gdb-analysis",
     ];

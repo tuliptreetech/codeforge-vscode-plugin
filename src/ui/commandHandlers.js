@@ -232,7 +232,9 @@ class CodeForgeCommandHandlers {
       );
 
       const scriptArgs = [
-        "-i", // Interactive
+        // NOTE: Use --stdin instead of -i! VSCode provides stdin but not a TTY
+        // Using -i (which adds -it) causes "input device is not a TTY" error
+        "--stdin",
         "--image",
         containerName,
         "--shell",

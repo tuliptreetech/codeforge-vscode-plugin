@@ -557,10 +557,22 @@ suite("GDB Integration Test Suite", () => {
       assert.ok(result.shellPath);
       assert.ok(result.shellArgs);
       assert.ok(result.terminalName);
-      assert.strictEqual(result.shellPath, "docker");
-      assert.ok(result.shellArgs.includes("/bin/bash"));
-      assert.ok(result.shellArgs.includes("-c"));
-      assert.ok(result.shellArgs.some((arg) => arg.includes("gdb --args")));
+      assert.ok(
+        result.shellPath.endsWith("launch-process-in-docker.sh"),
+        "Should use launch-process-in-docker.sh script",
+      );
+      assert.ok(
+        result.shellArgs.includes("--stdin"),
+        "Should use --stdin flag for VSCode terminals",
+      );
+      assert.ok(
+        result.shellArgs.includes("--image"),
+        "Should include --image flag",
+      );
+      assert.ok(
+        result.shellArgs.some((arg) => arg.includes("gdb --args")),
+        "Should include gdb command",
+      );
     });
 
     test("Should use custom terminal name", async () => {
@@ -582,18 +594,16 @@ suite("GDB Integration Test Suite", () => {
       const gdbCommand = ["gdb", "--args", "/path/to/fuzzer", "/path/to/crash"];
       const options = { containerName: "custom-container" };
 
-      await terminalLauncher.createGdbTerminal(
+      const result = await terminalLauncher.createGdbTerminal(
         workspacePath,
         gdbCommand,
         options,
       );
 
+      // The custom container name should be passed to the script via --image
       assert.ok(
-        mockDockerOperations.generateDockerRunArgs.calledWith(
-          workspacePath,
-          "custom-container",
-          sinon.match.any,
-        ),
+        result.shellArgs.includes("custom-container"),
+        "Should include custom container name",
       );
     });
 
@@ -604,30 +614,46 @@ suite("GDB Integration Test Suite", () => {
         additionalArgs: ["--privileged", "--cap-add=SYS_PTRACE"],
       };
 
-      await terminalLauncher.createGdbTerminal(
+      const result = await terminalLauncher.createGdbTerminal(
         workspacePath,
         gdbCommand,
         options,
       );
 
-      const dockerOptions =
-        mockDockerOperations.generateDockerRunArgs.getCall(0).args[2];
-      assert.ok(dockerOptions.additionalArgs.includes("--privileged"));
-      assert.ok(dockerOptions.additionalArgs.includes("--cap-add=SYS_PTRACE"));
+      // Additional args should be passed via --docker-arg flags
+      const argsString = result.shellArgs.join(" ");
+      assert.ok(
+        argsString.includes("--docker-arg --privileged"),
+        "Should include --privileged",
+      );
+      assert.ok(
+        argsString.includes("--docker-arg --cap-add=SYS_PTRACE"),
+        "Should include --cap-add=SYS_PTRACE",
+      );
     });
 
     test("Should configure container for GDB analysis", async () => {
       const workspacePath = "/test/workspace";
       const gdbCommand = ["gdb", "--args", "/path/to/fuzzer", "/path/to/crash"];
 
-      await terminalLauncher.createGdbTerminal(workspacePath, gdbCommand);
+      const result = await terminalLauncher.createGdbTerminal(
+        workspacePath,
+        gdbCommand,
+      );
 
-      const dockerOptions =
-        mockDockerOperations.generateDockerRunArgs.getCall(0).args[2];
-      assert.strictEqual(dockerOptions.containerType, "gdb-analysis");
-      assert.strictEqual(dockerOptions.interactive, true);
-      assert.strictEqual(dockerOptions.tty, true);
-      assert.strictEqual(dockerOptions.enableTracking, true);
+      // Check that the script args include correct configuration
+      assert.ok(
+        result.shellArgs.includes("--type"),
+        "Should include --type flag",
+      );
+      assert.ok(
+        result.shellArgs.includes("gdb-analysis"),
+        "Should specify gdb-analysis type",
+      );
+      assert.ok(
+        result.shellArgs.includes("--stdin"),
+        "Should use --stdin flag for VSCode terminals",
+      );
     });
   });
 
@@ -1080,12 +1106,25 @@ suite("GDB Integration Test Suite", () => {
         "crash",
       ]);
 
-      assert.strictEqual(result.shellPath, "podman");
-      // Verify that the Docker options were configured correctly
-      const dockerOptions =
-        mockDockerOps.generateDockerRunArgs.getCall(0).args[2];
-      assert.strictEqual(dockerOptions.shell, "/bin/zsh");
-      assert.ok(dockerOptions.additionalArgs.includes("--security-opt"));
+      // Now the launcher uses the script, not the docker command directly
+      assert.ok(
+        result.shellPath.endsWith("launch-process-in-docker.sh"),
+        "Should use launch-process-in-docker.sh script",
+      );
+      // Verify that the configuration was passed to the script
+      assert.ok(
+        result.shellArgs.includes("--shell"),
+        "Should include --shell flag",
+      );
+      assert.ok(
+        result.shellArgs.includes("/bin/zsh"),
+        "Should use custom shell",
+      );
+      const argsString = result.shellArgs.join(" ");
+      assert.ok(
+        argsString.includes("--docker-arg --security-opt"),
+        "Should include security-opt arg",
+      );
     });
   });
 
