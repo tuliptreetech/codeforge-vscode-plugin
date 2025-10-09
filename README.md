@@ -4,11 +4,11 @@ A comprehensive fuzzing and crash analysis platform for VSCode by Tulip Tree Tec
 
 ## Overview
 
-CodeForge is a powerful VSCode extension that combines Docker container management with advanced fuzzing capabilities and crash analysis tools. Originally designed for Docker-based development environments, CodeForge has evolved into a complete security testing platform that helps developers discover vulnerabilities through automated fuzzing and provides sophisticated crash analysis capabilities.
+CodeForge is a powerful VSCode extension that combines Docker container management with advanced fuzzing capabilities and crash analysis tools. Originally designed for Docker-based development environments, CodeForge has evolved into a comprehensive testing platform that helps developers find bugs early through automated fuzzing and provides sophisticated crash analysis capabilities to create more robust products.
 
 ## Features
 
-CodeForge provides a comprehensive suite of tools for security testing and development:
+CodeForge provides a comprehensive suite of tools for quality assurance and development:
 
 ### Core Docker Management
 
