@@ -314,10 +314,6 @@ another-invalid-line
       sandbox
         .stub(dockerOperations, "runDockerCommandWithOutput")
         .returns(mockProcess);
-      sandbox.stub(dockerOperations, "runDockerCommand").resolves({
-        stdout: "debug:codeforge-example-fuzz\n",
-        stderr: "",
-      });
 
       // Mock file system operations
       const fs = require("fs").promises;

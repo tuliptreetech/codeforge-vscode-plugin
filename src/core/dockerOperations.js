@@ -1,3 +1,34 @@
+/**
+ * Docker Operations Module
+ *
+ * This module provides two approaches for running commands in Docker containers:
+ *
+ * 1. runDockerCommandWithOutput() - Low-level, internal use
+ *    - Direct Docker API control with full customization
+ *    - Container lifecycle tracking and management
+ *    - Used by extension internals for fuzzing, building, testing, etc.
+ *    - Requires explicit image name and detailed configuration
+ *
+ * 2. runCommandInNewContainer() - High-level, user-facing
+ *    - Simple script-based interface via launch-process-in-docker.sh
+ *    - Automatic image detection from workspace
+ *    - Built-in port forwarding and interactive mode support
+ *    - Ideal for user-facing features and simple command execution
+ *    - Requires .codeforge scripts to be initialized
+ *
+ * Choose runDockerCommandWithOutput() when you need:
+ * - Container tracking integration
+ * - Custom Docker run arguments
+ * - Internal extension operations
+ * - Fine-grained control
+ *
+ * Choose runCommandInNewContainer() when you need:
+ * - Simple command execution
+ * - Port forwarding
+ * - Interactive sessions
+ * - User-facing CLI-like features
+ */
+
 const { exec, spawn } = require("child_process");
 const path = require("path");
 const { promisify } = require("util");
@@ -445,150 +476,26 @@ function buildDockerImage(workspaceFolder, imageName) {
 }
 
 /**
- * Runs a command in a Docker container
- * @param {string} workspaceFolder - The path to the workspace folder to mount
- * @param {string} imageName - The name of the Docker image to use
- * @param {string} command - The command to run in the container
- * @param {Object} options - Options for running the container
- * @param {boolean} options.interactive - Whether to run in interactive mode (default: false)
- * @param {boolean} options.tty - Whether to allocate a pseudo-TTY (default: false)
- * @param {boolean} options.removeAfterRun - Whether to remove the container after it exits (default: true)
- * @param {string} options.workingDir - Working directory inside the container (default: same as host workspaceFolder path)
- * @param {Array<string>} options.additionalArgs - Additional arguments to pass to docker run
- * @param {boolean} options.trackContainer - Whether to track this container (default: false for auto-remove, true otherwise)
- * @param {string} options.containerName - Custom container name (default: auto-generated)
- * @param {string} options.containerType - Type of container for tracking (default: 'general')
- * @returns {ChildProcess} The spawned child process
- */
-function runDockerCommand(workspaceFolder, imageName, command, options = {}) {
-  const {
-    interactive = false,
-    tty = false,
-    removeAfterRun = true,
-    workingDir = workspaceFolder, // Use the host workspace folder path as default
-    additionalArgs = [],
-    stdio = "inherit", // Allow customizing stdio
-    dockerCommand = "docker", // Allow specifying the docker command
-    mountWorkspace = true, // Allow disabling workspace mounting
-    enableTracking = !removeAfterRun, // Track by default if not auto-removing
-    containerName = null,
-    containerType = "general",
-  } = options;
-
-  const dockerArgs = ["run"];
-
-  // Generate container name if tracking is enabled
-  let finalContainerName = containerName;
-  if (enableTracking && !removeAfterRun) {
-    if (!finalContainerName) {
-      // Generate a unique container name based on workspace and timestamp
-      const baseContainerName = generateContainerName(workspaceFolder);
-      const timestamp = Date.now();
-      finalContainerName = `${baseContainerName}_${containerType}_${timestamp}`;
-    }
-    dockerArgs.push("--name", finalContainerName);
-  }
-
-  // Add interactive and TTY flags if requested
-  if (interactive) dockerArgs.push("-i");
-  if (tty) dockerArgs.push("-t");
-
-  // Remove container after run if requested
-  if (removeAfterRun) dockerArgs.push("--rm");
-
-  // Mount the workspace folder to the same path inside the container
-  if (mountWorkspace) {
-    dockerArgs.push("-v", `${workspaceFolder}:${workspaceFolder}`);
-    // Set working directory (defaults to the workspace folder path)
-    dockerArgs.push("-w", workingDir);
-  }
-
-  // Add any additional arguments
-  dockerArgs.push(...additionalArgs);
-
-  // Add the image name
-  dockerArgs.push(imageName);
-
-  // Add the command to run (if provided)
-  if (command) {
-    // Split the command into parts if it's a string
-    const commandParts =
-      typeof command === "string" ? command.split(" ") : command;
-    dockerArgs.push(...commandParts);
-  }
-
-  console.log("Running Docker command:", dockerCommand, dockerArgs.join(" "));
-
-  // Spawn the Docker process
-  const dockerProcess = spawn(dockerCommand, dockerArgs, {
-    stdio: stdio,
-  });
-
-  // Track the container if requested
-  if (enableTracking && !removeAfterRun && finalContainerName) {
-    // Wait a moment for the container to start, then track it
-    setTimeout(async () => {
-      try {
-        // Get the container ID from the name
-        const { stdout } = await execAsync(
-          `docker ps --filter "name=${finalContainerName}" --format "{{.ID}}"`,
-        );
-        const containerId = stdout.trim();
-        if (containerId) {
-          trackContainer(containerId, {
-            name: finalContainerName,
-            image: imageName,
-            workspaceFolder: workspaceFolder,
-            type: containerType,
-            command: command,
-            interactive: interactive,
-            tty: tty,
-          });
-        }
-      } catch (error) {
-        console.error(
-          `Failed to track container ${finalContainerName}: ${error.message}`,
-        );
-      }
-    }, 1000);
-  }
-
-  dockerProcess.on("error", (error) => {
-    console.error("Failed to start Docker process:", error);
-  });
-
-  // Clean up tracking when container exits (if not auto-removing)
-  if (enableTracking && !removeAfterRun && finalContainerName) {
-    dockerProcess.on("exit", () => {
-      setTimeout(async () => {
-        try {
-          const { stdout } = await execAsync(
-            `docker ps -a --filter "name=${finalContainerName}" --format "{{.ID}}"`,
-          );
-          const containerId = stdout.trim();
-          if (containerId) {
-            untrackContainer(containerId);
-          }
-        } catch (error) {
-          console.error(
-            `Failed to untrack container on exit: ${error.message}`,
-          );
-        }
-      }, 500);
-    });
-  }
-
-  return dockerProcess;
-}
-
-/**
- * Runs a command in a Docker container with output capture support
+ * Runs a command in a Docker container with output capture support (Internal Use)
+ *
+ * This function provides low-level Docker container management with full control over
+ * container lifecycle, tracking, and configuration. It's used internally by the extension
+ * for operations that require precise control over Docker behavior.
+ *
+ * For simpler use cases or user-facing scripts, consider using runCommandInNewContainer()
+ * which leverages the launch-process-in-docker.sh script for automatic image detection
+ * and simpler configuration.
+ *
  * @param {string} workspaceFolder - The path to the workspace folder to mount
  * @param {string} imageName - The name of the Docker image to use
  * @param {string} command - The command to run in the container
  * @param {string} shell - The shell to use for running the command
  * @param {Object} options - Options for running the container
- * @param {boolean} options.trackContainer - Whether to track this container (default: false for auto-remove, true otherwise)
+ * @param {boolean} options.removeAfterRun - Remove container after execution (default: true)
+ * @param {string[]} options.additionalArgs - Additional docker run arguments (default: [])
+ * @param {string} options.dockerCommand - Docker command to use (default: "docker")
+ * @param {boolean} options.mountWorkspace - Mount the workspace folder (default: true)
+ * @param {boolean} options.enableTracking - Track this container (default: true)
  * @param {string} options.containerName - Custom container name (default: auto-generated)
  * @param {string} options.containerType - Type of container for tracking (default: 'task')
  * @returns {ChildProcess} The spawned child process with piped stdio for output capture
@@ -605,60 +512,80 @@ function runDockerCommandWithOutput(
     additionalArgs = [],
     dockerCommand = "docker",
     mountWorkspace = true,
-    enableTracking = true, // Changed default to true for task tracking
+    enableTracking = true,
     containerName = null,
     containerType = "task",
   } = options;
 
-  const dockerArgs = ["run"];
-
-  // Generate container name for tracking purposes
-  let finalContainerName = containerName;
-  if (enableTracking) {
-    if (!finalContainerName) {
-      // Generate a unique container name based on workspace and timestamp
-      const baseContainerName = generateContainerName(workspaceFolder);
-      const timestamp = Date.now();
-      finalContainerName = `${baseContainerName}_${containerType}_${timestamp}`;
-    }
-    // Always add --name flag for tracking, even with --rm
-    // Docker allows named containers with --rm flag
-    dockerArgs.push("--name", finalContainerName);
-  }
-
-  // Remove container after run if requested
-  if (removeAfterRun) dockerArgs.push("--rm");
-
-  // Mount the workspace folder to the same path inside the container
-  if (mountWorkspace) {
-    dockerArgs.push("-v", `${workspaceFolder}:${workspaceFolder}`);
-    dockerArgs.push("-w", workspaceFolder);
-  }
-
-  // Add any additional arguments
-  dockerArgs.push(...additionalArgs);
-
-  // Add the image name
-  dockerArgs.push(imageName);
-
-  // Add the shell command
-  dockerArgs.push(shell, "-c", command);
-
-  console.log(
-    "Running Docker command with output capture:",
-    dockerCommand,
-    dockerArgs.join(" "),
+  // Build arguments for the launch-process-in-docker.sh script
+  const scriptPath = path.join(
+    workspaceFolder,
+    ".codeforge",
+    "scripts",
+    "launch-process-in-docker.sh",
   );
 
-  // Spawn the Docker process with piped stdio for output capture
-  const dockerProcess = spawn(dockerCommand, dockerArgs, {
+  const scriptArgs = [];
+
+  // Add image name
+  scriptArgs.push("--image", imageName);
+
+  // Add shell
+  scriptArgs.push("--shell", shell);
+
+  // Add container name if provided
+  if (containerName) {
+    scriptArgs.push("--name", containerName);
+  }
+
+  // Add container type
+  scriptArgs.push("--type", containerType);
+
+  // Add keep/remove flag
+  if (!removeAfterRun) {
+    scriptArgs.push("-k");
+  }
+
+  // Add workspace mounting flag
+  if (!mountWorkspace) {
+    scriptArgs.push("--no-mount");
+  }
+
+  // Add tracking flag
+  if (!enableTracking) {
+    scriptArgs.push("--no-track");
+  }
+
+  // Add additional docker arguments
+  for (const arg of additionalArgs) {
+    scriptArgs.push("--docker-arg", arg);
+  }
+
+  // Add the command
+  scriptArgs.push(command);
+
+  console.log(
+    "Running Docker command via script:",
+    scriptPath,
+    scriptArgs.join(" "),
+  );
+
+  // Spawn the script process with piped stdio for output capture
+  const scriptProcess = spawn(scriptPath, scriptArgs, {
+    cwd: workspaceFolder,
     stdio: ["ignore", "pipe", "pipe"],
   });
 
-  // Track the container if requested
-  if (enableTracking && finalContainerName) {
-    // For all containers (both auto-remove and persistent), track by name
-    // We use the name as the tracking ID since we always set --name now
+  scriptProcess.on("error", (error) => {
+    console.error("Failed to execute launch-process-in-docker.sh:", error);
+  });
+
+  // Also track in the extension's in-memory tracking system for compatibility
+  if (enableTracking) {
+    const finalContainerName =
+      containerName ||
+      `${generateContainerName(workspaceFolder)}_${containerType}_${Date.now()}`;
+
     trackContainer(finalContainerName, {
       name: finalContainerName,
       image: imageName,
@@ -670,15 +597,14 @@ function runDockerCommandWithOutput(
     });
 
     // Clean up tracking when container exits
-    dockerProcess.on("exit", () => {
-      // Small delay to ensure container has fully stopped
+    scriptProcess.on("exit", () => {
       setTimeout(() => {
         untrackContainer(finalContainerName);
       }, 500);
     });
   }
 
-  return dockerProcess;
+  return scriptProcess;
 }
 
 /**
@@ -853,13 +779,175 @@ async function checkDockerAvailable(dockerCommand = "docker") {
   }
 }
 
+/**
+ * Runs a command in a new Docker container using the launch-process-in-docker.sh script
+ *
+ * This is a high-level convenience function that provides a simpler interface for running
+ * commands in Docker containers. It automatically detects the Docker image based on the
+ * workspace path and handles common use cases like port forwarding and interactive mode.
+ *
+ * Container Tracking:
+ * - Containers kept with --keep flag are automatically tracked in .codeforge/tracked-containers
+ * - Tracking file format: container_id|container_name|image_name|timestamp|type|status
+ * - Stale entries are cleaned up automatically on each script invocation
+ * - Auto-removed containers (default) are not tracked
+ *
+ * Use this function when:
+ * - You need a simple way to run commands without managing Docker details
+ * - You need port forwarding support
+ * - You're creating user-facing features or CLI-like functionality
+ * - The .codeforge scripts are already initialized in the workspace
+ *
+ * Use runDockerCommandWithOutput() instead when you need:
+ * - Fine-grained control over Docker run arguments
+ * - Custom container tracking behavior
+ * - Integration with extension's internal container management
+ * - Operations that don't rely on .codeforge scripts being installed
+ *
+ * Requirements:
+ * 1. The Docker image must be built for the workspace
+ * 2. The launch-process-in-docker.sh script must be installed in .codeforge/scripts/
+ *
+ * @param {string} workspacePath - The path to the workspace folder
+ * @param {string} command - The command to run in the container
+ * @param {Object} options - Options for running the command
+ * @param {boolean} options.interactive - Whether to run in interactive mode (default: false)
+ * @param {string[]} options.portForwards - Array of port forwards in format "HOST:CONTAINER" (default: [])
+ * @param {boolean} options.keepContainer - Keep container after execution instead of removing (default: false)
+ * @returns {ChildProcess} The spawned child process with piped stdio for output capture
+ * @throws {Error} If the Docker image doesn't exist or script is not available
+ *
+ * @example
+ * // Run a simple command (auto-removed, not tracked)
+ * const process = runCommandInNewContainer(workspacePath, 'ls -la');
+ *
+ * @example
+ * // Run with port forwarding
+ * const process = runCommandInNewContainer(
+ *   workspacePath,
+ *   'python3 -m http.server 8000',
+ *   { portForwards: ['8080:8000'] }
+ * );
+ *
+ * @example
+ * // Keep container and track it in .codeforge/tracked-containers
+ * const process = runCommandInNewContainer(
+ *   workspacePath,
+ *   'npm run build',
+ *   { keepContainer: true }
+ * );
+ *
+ * @example
+ * // Interactive shell
+ * const process = runCommandInNewContainer(
+ *   workspacePath,
+ *   '/bin/bash',
+ *   { interactive: true }
+ * );
+ */
+function runCommandInNewContainer(workspacePath, command, options = {}) {
+  const {
+    interactive = false,
+    portForwards = [],
+    keepContainer = false,
+    imageName = null,
+    shell = null,
+    containerName = null,
+    containerType = null,
+    mountWorkspace = true,
+    enableTracking = true,
+    additionalArgs = [],
+  } = options;
+
+  // Build the script command
+  const scriptPath = path.join(
+    workspacePath,
+    ".codeforge",
+    "scripts",
+    "launch-process-in-docker.sh",
+  );
+
+  const scriptArgs = [];
+
+  // Add interactive flag
+  if (interactive) {
+    scriptArgs.push("-i");
+  }
+
+  // Add port forwarding flags
+  for (const portMapping of portForwards) {
+    scriptArgs.push("-p", portMapping);
+  }
+
+  // Add keep container flag
+  if (keepContainer) {
+    scriptArgs.push("-k");
+  }
+
+  // Add image name if provided
+  if (imageName) {
+    scriptArgs.push("--image", imageName);
+  }
+
+  // Add shell if provided
+  if (shell) {
+    scriptArgs.push("--shell", shell);
+  }
+
+  // Add container name if provided
+  if (containerName) {
+    scriptArgs.push("--name", containerName);
+  }
+
+  // Add container type if provided
+  if (containerType) {
+    scriptArgs.push("--type", containerType);
+  }
+
+  // Add workspace mounting flag
+  if (!mountWorkspace) {
+    scriptArgs.push("--no-mount");
+  }
+
+  // Add tracking flag
+  if (!enableTracking) {
+    scriptArgs.push("--no-track");
+  }
+
+  // Add additional docker arguments
+  for (const arg of additionalArgs) {
+    scriptArgs.push("--docker-arg", arg);
+  }
+
+  // Add the command
+  scriptArgs.push(command);
+
+  console.log(
+    "Running command in new container:",
+    scriptPath,
+    scriptArgs.join(" "),
+  );
+
+  // Spawn the script process with piped stdio for output capture
+  const scriptProcess = spawn(scriptPath, scriptArgs, {
+    cwd: workspacePath,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  scriptProcess.on("error", (error) => {
+    console.error("Failed to execute launch-process-in-docker.sh:", error);
+  });
+
+  return scriptProcess;
+}
+
 // Export all functions
 module.exports = {
   generateContainerName,
   checkImageExists,
   buildDockerImage,
-  runDockerCommand,
   runDockerCommandWithOutput,
+  runCommandInNewContainer,
   generateDockerRunArgs,
   checkDockerAvailable,
   // Container tracking functions
