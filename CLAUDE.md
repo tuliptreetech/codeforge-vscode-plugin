@@ -4,7 +4,7 @@
 
 **CodeForge** is a comprehensive VSCode extension for Docker container management, fuzzing, and crash analysis developed by Tulip Tree Technology. It combines Docker-based development environments with advanced fuzzing capabilities and sophisticated crash analysis tools.
 
-**Current Version:** 0.1.2
+**Current Version:** 0.1.3
 **License:** MIT
 **Repository:** https://github.com/tuliptreetech/codeforge
 
