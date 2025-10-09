@@ -14,6 +14,7 @@ tracked_containers_file="$codeforge_directory/tracked-containers"
 
 # Default values
 INTERACTIVE=false
+STDIN_OPEN=false
 PORT_FORWARDS=()
 COMMAND=""
 REMOVE_AFTER_RUN=true
@@ -24,6 +25,7 @@ MOUNT_WORKSPACE=true
 CONTAINER_NAME=""
 CONTAINER_TYPE="script"
 ENABLE_TRACKING=true
+QUIET=false
 
 # Usage information
 usage() {
@@ -32,9 +34,11 @@ usage() {
     echo "Execute commands in a new CodeForge Docker container."
     echo ""
     echo "Options:"
-    echo "  -i, --interactive            Run in interactive mode (allocate TTY)"
+    echo "  -i, --interactive            Run in interactive mode (allocate TTY and keep stdin open)"
+    echo "  --stdin                      Keep stdin open without allocating TTY (for VSCode terminals)"
     echo "  -p, --port HOST:CONTAINER    Forward port from host to container (can be specified multiple times)"
     echo "  -k, --keep                   Keep container after execution (default: remove)"
+    echo "  -q, --quiet                  Suppress diagnostic messages"
     echo "  --image IMAGE                Use specific Docker image (default: auto-detect from workspace)"
     echo "  --shell SHELL                Shell to use for command execution (default: /bin/bash)"
     echo "  --name NAME                  Custom container name (default: auto-generated)"
@@ -62,6 +66,10 @@ while [[ $# -gt 0 ]]; do
             INTERACTIVE=true
             shift
             ;;
+        --stdin)
+            STDIN_OPEN=true
+            shift
+            ;;
         -p|--port)
             if [ -z "${2-}" ]; then
                 echo "Error: -p/--port requires an argument (HOST:CONTAINER)"
@@ -72,6 +80,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -k|--keep)
             REMOVE_AFTER_RUN=false
+            shift
+            ;;
+        -q|--quiet)
+            QUIET=true
             shift
             ;;
         --image)
@@ -223,6 +235,11 @@ cleanup_stale_entries() {
 
 # Main execution
 main() {
+    # In interactive or stdin mode, default to quiet unless explicitly disabled
+    if [ "$QUIET" = false ] && { [ "$INTERACTIVE" = true ] || [ "$STDIN_OPEN" = true ]; }; then
+        QUIET=true
+    fi
+
     # Clean up stale entries first (only if tracking is enabled)
     if [ "$ENABLE_TRACKING" = true ]; then
         cleanup_stale_entries
@@ -242,7 +259,9 @@ main() {
         exit 1
     fi
 
-    echo "Using Docker image: $IMAGE_NAME" >&2
+    if [ "$QUIET" = false ]; then
+        echo "Using Docker image: $IMAGE_NAME" >&2
+    fi
 
     # Generate unique container name if not provided
     if [ -z "$CONTAINER_NAME" ]; then
@@ -259,7 +278,8 @@ main() {
     fi
 
     # Add interactive/TTY flags
-    if [ "$INTERACTIVE" = true ]; then
+    # Both interactive and stdin modes need -it for proper terminal functionality
+    if [ "$INTERACTIVE" = true ] || [ "$STDIN_OPEN" = true ]; then
         DOCKER_RUN_ARGS+=("-i" "-t")
     fi
 
@@ -291,14 +311,23 @@ main() {
     # Add the image name
     DOCKER_RUN_ARGS+=("$IMAGE_NAME")
 
-    # Add the command with shell
+    # Add the command with shell wrapper
     DOCKER_RUN_ARGS+=("$SHELL" "-c" "$COMMAND")
 
     # Execute the command
-    echo "Running: docker ${DOCKER_RUN_ARGS[*]}" >&2
+    if [ "$QUIET" = false ]; then
+        echo "Running: docker ${DOCKER_RUN_ARGS[*]}" >&2
+    fi
 
-    # Run in background if tracking is enabled so we can track it
-    if [ "$ENABLE_TRACKING" = true ]; then
+    # For stdin mode (VSCode terminals), we must exec docker directly
+    # Otherwise the terminal won't connect properly to the container's stdin/stdout
+    if [ "$STDIN_OPEN" = true ]; then
+        # In stdin mode, exec docker so this script is replaced by the docker process
+        # This allows VSCode terminal's stdin/stdout to connect directly to the container
+        # Note: This means we can't track the container in the usual way for stdin mode
+        exec docker "${DOCKER_RUN_ARGS[@]}"
+    elif [ "$ENABLE_TRACKING" = true ]; then
+        # For non-stdin mode with tracking, run in background so we can track it
         # Start the container
         docker "${DOCKER_RUN_ARGS[@]}" &
         DOCKER_PID=$!
@@ -313,7 +342,9 @@ main() {
             # Track the container
             TIMESTAMP=$(date +%s)
             track_container "$CONTAINER_ID" "$CONTAINER_NAME" "$IMAGE_NAME" "$TIMESTAMP" "$CONTAINER_TYPE"
-            echo "Container tracked: $CONTAINER_NAME (ID: $CONTAINER_ID)" >&2
+            if [ "$QUIET" = false ]; then
+                echo "Container tracked: $CONTAINER_NAME (ID: $CONTAINER_ID)" >&2
+            fi
         fi
 
         # Wait for the docker command to complete
