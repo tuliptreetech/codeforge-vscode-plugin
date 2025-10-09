@@ -94,6 +94,15 @@ suite("ResourceManager Test Suite", () => {
       path.join(mockExtensionPath, "resources", "scripts", "clear-crashes.sh"),
       "#!/usr/bin/env bash\necho 'Clearing crashes'\n",
     );
+    await fs.writeFile(
+      path.join(
+        mockExtensionPath,
+        "resources",
+        "scripts",
+        "launch-process-in-docker.sh",
+      ),
+      "#!/usr/bin/env bash\necho 'Launch process in docker'\n",
+    );
 
     // Initialize ResourceManager with mock extension path
     resourceManager = new ResourceManager(mockExtensionPath);
@@ -825,12 +834,12 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
         await fs.mkdir(targetDir, { recursive: true });
       });
 
-      test("Should dump all six script files with executable permissions", async () => {
+      test("Should dump all seven script files with executable permissions", async () => {
         const dumpedPaths = await resourceManager.dumpScripts(targetDir);
 
         // Verify return value is an array with correct length
         assert.strictEqual(Array.isArray(dumpedPaths), true);
-        assert.strictEqual(dumpedPaths.length, 6);
+        assert.strictEqual(dumpedPaths.length, 7);
 
         // Expected script files
         const expectedScripts = [
@@ -840,6 +849,7 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
           "find-crashes.sh",
           "generate-backtrace.sh",
           "clear-crashes.sh",
+          "launch-process-in-docker.sh",
         ];
 
         // Verify all scripts were dumped
@@ -906,6 +916,13 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
           clearContent,
           "#!/usr/bin/env bash\necho 'Clearing crashes'\n",
         );
+
+        // Verify launch-process-in-docker.sh content
+        const launchProcessContent = await fs.readFile(dumpedPaths[6], "utf8");
+        assert.strictEqual(
+          launchProcessContent,
+          "#!/usr/bin/env bash\necho 'Launch process in docker'\n",
+        );
       });
 
       test("Should create target directory if it doesn't exist", async () => {
@@ -913,7 +930,7 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
 
         const dumpedPaths = await resourceManager.dumpScripts(newTargetDir);
 
-        assert.strictEqual(dumpedPaths.length, 6);
+        assert.strictEqual(dumpedPaths.length, 7);
 
         // Verify all files were created in the new directory
         for (const dumpedPath of dumpedPaths) {

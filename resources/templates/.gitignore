@@ -2,3 +2,5 @@
 /fuzzing
 # ignore the scripts we install
 /scripts
+# ignore container tracking file
+/tracked-containers

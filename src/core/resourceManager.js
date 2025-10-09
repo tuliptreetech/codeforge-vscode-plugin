@@ -134,6 +134,7 @@ class ResourceManager {
         "find-crashes.sh",
         "generate-backtrace.sh",
         "clear-crashes.sh",
+        "launch-process-in-docker.sh",
       ];
       const dumpedPaths = [];
 
