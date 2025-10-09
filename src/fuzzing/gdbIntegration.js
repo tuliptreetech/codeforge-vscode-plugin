@@ -283,53 +283,55 @@ class GdbTerminalLauncher {
 
     // Get Docker configuration
     const vscode = require("vscode");
+    const path = require("path");
     const config = vscode.workspace.getConfiguration("codeforge");
-    const dockerCommand = config.get("dockerCommand", "docker");
     const defaultShell = config.get("defaultShell", "/bin/bash");
     const configAdditionalArgs = config.get("additionalDockerRunArgs", []);
     const mountWorkspace = config.get("mountWorkspace", true);
 
-    // Prepare Docker run options
-    const dockerOptions = {
-      interactive: true,
-      tty: true,
-      removeAfterRun: removeAfterRun,
-      mountWorkspace: mountWorkspace,
-      workingDir: workspacePath,
-      additionalArgs: [...configAdditionalArgs, ...additionalArgs],
-      shell: defaultShell,
-      enableTracking: true,
-      containerType: "gdb-analysis",
-    };
-
-    // Generate Docker run arguments
-    const shellArgs = this.dockerOperations.generateDockerRunArgs(
+    // Build launch script path and arguments
+    const scriptPath = path.join(
       workspacePath,
-      baseContainerName,
-      dockerOptions,
+      ".codeforge",
+      "scripts",
+      "launch-process-in-docker.sh",
     );
 
-    // Add the GDB command to the shell arguments
-    // We need to modify the shell args to run GDB instead of the default shell
     // Disable LLVM profiling to prevent default.profraw from being created
     const gdbCommandString = `LLVM_PROFILE_FILE=/dev/null ${gdbCommand.join(" ")}`;
 
-    // Replace the default shell with a command that starts GDB
-    const lastShellIndex = shellArgs.lastIndexOf(defaultShell);
-    if (lastShellIndex !== -1) {
-      // Replace shell with bash -c "gdb command"
-      shellArgs[lastShellIndex] = "/bin/bash";
-      shellArgs.splice(lastShellIndex + 1, 0, "-c", gdbCommandString);
-    } else {
-      // Fallback: add the command at the end
-      shellArgs.push("/bin/bash", "-c", gdbCommandString);
+    const scriptArgs = [
+      "-i", // Interactive
+      "--image",
+      baseContainerName,
+      "--shell",
+      "/bin/bash",
+      "--type",
+      "gdb-analysis",
+    ];
+
+    // Add keep flag if not auto-removing
+    if (!removeAfterRun) {
+      scriptArgs.push("-k");
     }
 
+    // Add workspace mounting flag
+    if (!mountWorkspace) {
+      scriptArgs.push("--no-mount");
+    }
+
+    // Add additional docker arguments
+    for (const arg of [...configAdditionalArgs, ...additionalArgs]) {
+      scriptArgs.push("--docker-arg", arg);
+    }
+
+    // Add the GDB command
+    scriptArgs.push(gdbCommandString);
+
     return {
-      shellPath: dockerCommand,
-      shellArgs: shellArgs,
+      shellPath: scriptPath,
+      shellArgs: scriptArgs,
       terminalName: terminalName,
-      generatedContainerName: dockerOptions.generatedContainerName,
     };
   }
 }

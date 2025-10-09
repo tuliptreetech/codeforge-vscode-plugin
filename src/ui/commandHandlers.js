@@ -218,78 +218,61 @@ class CodeForgeCommandHandlers {
 
       // Get configuration
       const config = vscode.workspace.getConfiguration("codeforge");
-      const dockerCommand = config.get("dockerCommand", "docker");
       const removeAfterRun = config.get("removeContainersAfterRun", true);
       const defaultShell = config.get("defaultShell", "/bin/bash");
       const additionalArgs = config.get("additionalDockerRunArgs", []);
       const mountWorkspace = config.get("mountWorkspace", true);
 
-      // Use dockerOperations to generate Docker run arguments
-      const options = {
-        interactive: true,
-        tty: true,
-        removeAfterRun: removeAfterRun,
-        mountWorkspace: mountWorkspace,
-        workingDir: workspacePath,
-        additionalArgs: additionalArgs,
-        shell: defaultShell,
-        enableTracking: true, // Always enable tracking for terminals
-        containerType: "terminal",
-      };
-
-      const shellArgs = dockerOperations.generateDockerRunArgs(
+      // Build launch script path and arguments
+      const scriptPath = path.join(
         workspacePath,
-        containerName,
-        options,
+        ".codeforge",
+        "scripts",
+        "launch-process-in-docker.sh",
       );
+
+      const scriptArgs = [
+        "-i", // Interactive
+        "--image",
+        containerName,
+        "--shell",
+        defaultShell,
+        "--type",
+        "terminal",
+      ];
+
+      // Add keep flag if not auto-removing
+      if (!removeAfterRun) {
+        scriptArgs.push("-k");
+      }
+
+      // Add workspace mounting flag
+      if (!mountWorkspace) {
+        scriptArgs.push("--no-mount");
+      }
+
+      // Add additional docker arguments
+      for (const arg of additionalArgs) {
+        scriptArgs.push("--docker-arg", arg);
+      }
+
+      // Add the shell command to start an interactive session
+      scriptArgs.push(defaultShell);
 
       const terminal = vscode.window.createTerminal({
         name: `CodeForge: ${path.basename(workspacePath)}`,
-        shellPath: dockerCommand,
-        shellArgs: shellArgs,
+        shellPath: scriptPath,
+        shellArgs: scriptArgs,
       });
 
       terminal.show();
 
-      // Track the container after it's launched
-      const generatedName = options.generatedContainerName;
-      if (generatedName) {
-        // Always attempt to track, even with auto-remove (for the duration it's running)
-        dockerOperations
-          .trackLaunchedContainer(
-            generatedName,
-            workspacePath,
-            containerName,
-            "terminal",
-          )
-          .then((tracked) => {
-            if (tracked) {
-              this.safeOutputLog(
-                `Launched and tracked terminal container: ${generatedName}`,
-              );
-            } else {
-              this.safeOutputLog(
-                `Launched terminal but could not track container: ${generatedName}`,
-              );
-              if (!removeAfterRun) {
-                vscode.window.showWarningMessage(
-                  `CodeForge: Terminal started but container tracking failed. Container may not appear in active list.`,
-                );
-              }
-            }
-            // Update webview state
-            this.updateWebviewState();
-          })
-          .catch((error) => {
-            this.safeOutputLog(
-              `Error tracking terminal container: ${error.message}`,
-            );
-          });
-      } else {
-        this.safeOutputLog(
-          `Launched terminal in container: ${containerName} (no container name generated)`,
-        );
-      }
+      // Container tracking is now handled by the launch-process-in-docker.sh script
+      // It will track containers in .codeforge/tracked-containers
+      this.safeOutputLog(
+        `Launched terminal using ${containerName} (tracking handled by script)`,
+      );
+      this.updateWebviewState();
     } catch (error) {
       this.safeOutputLog(`Error: ${error.message}`, false);
       vscode.window.showErrorMessage(
