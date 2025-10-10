@@ -82,7 +82,6 @@ class CodeForgeCommandHandlers {
           "CodeForge: This project is not initialized. Would you like to initialize it now?",
           { modal: true },
           "Initialize Now",
-          "Cancel",
         );
 
         if (action !== "Initialize Now") {
@@ -133,7 +132,6 @@ class CodeForgeCommandHandlers {
           `CodeForge: Docker image '${containerName}' not found. Would you like to build it now?`,
           { modal: true },
           "Build Now",
-          "Cancel",
         );
 
         if (buildAction !== "Build Now") {
