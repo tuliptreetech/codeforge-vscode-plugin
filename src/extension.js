@@ -60,7 +60,11 @@ function activate(context) {
 
   // Register the task provider
   try {
-    const taskProvider = new CodeForgeTaskProvider(context, outputChannel);
+    const taskProvider = new CodeForgeTaskProvider(
+      context,
+      outputChannel,
+      resourceManager,
+    );
     const taskProviderDisposable = vscode.tasks.registerTaskProvider(
       "codeforge",
       taskProvider,

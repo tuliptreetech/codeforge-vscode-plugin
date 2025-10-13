@@ -498,6 +498,7 @@ function buildDockerImage(workspaceFolder, imageName) {
  * @param {boolean} options.enableTracking - Track this container (default: true)
  * @param {string} options.containerName - Custom container name (default: auto-generated)
  * @param {string} options.containerType - Type of container for tracking (default: 'task')
+ * @param {Object} options.resourceManager - ResourceManager instance for getting script paths (optional)
  * @returns {ChildProcess} The spawned child process with piped stdio for output capture
  */
 function runDockerCommandWithOutput(
@@ -515,17 +516,27 @@ function runDockerCommandWithOutput(
     enableTracking = true,
     containerName = null,
     containerType = "task",
+    resourceManager = null,
   } = options;
 
   // Build arguments for the launch-process-in-docker.sh script
-  const scriptPath = path.join(
-    workspaceFolder,
-    ".codeforge",
-    "scripts",
-    "launch-process-in-docker.sh",
-  );
+  // If resourceManager is provided, use the extension script path
+  // Otherwise, fall back to workspace path for backward compatibility
+  const scriptPath = resourceManager
+    ? resourceManager.getScriptPath("launch-process-in-docker.sh")
+    : path.join(
+        workspaceFolder,
+        ".codeforge",
+        "scripts",
+        "launch-process-in-docker.sh",
+      );
 
   const scriptArgs = [];
+
+  // If using extension scripts, pass workspace directory as first argument
+  if (resourceManager) {
+    scriptArgs.push(workspaceFolder);
+  }
 
   // Add image name
   scriptArgs.push("--image", imageName);
@@ -554,6 +565,19 @@ function runDockerCommandWithOutput(
   // Add tracking flag
   if (!enableTracking) {
     scriptArgs.push("--no-track");
+  }
+
+  // If using extension scripts, mount the scripts directory into the container
+  // at the expected .codeforge/scripts location so scripts work without modification
+  if (resourceManager) {
+    const scriptsPath = resourceManager.scriptsPath;
+    const workspacePath = workspaceFolder;
+    // Mount extension scripts at .codeforge/scripts inside the container
+    scriptArgs.push("--docker-arg", `-v`);
+    scriptArgs.push(
+      "--docker-arg",
+      `${scriptsPath}:${workspacePath}/.codeforge/scripts:ro`,
+    );
   }
 
   // Add additional docker arguments
@@ -796,17 +820,15 @@ async function checkDockerAvailable(dockerCommand = "docker") {
  * - You need a simple way to run commands without managing Docker details
  * - You need port forwarding support
  * - You're creating user-facing features or CLI-like functionality
- * - The .codeforge scripts are already initialized in the workspace
  *
  * Use runDockerCommandWithOutput() instead when you need:
  * - Fine-grained control over Docker run arguments
  * - Custom container tracking behavior
  * - Integration with extension's internal container management
- * - Operations that don't rely on .codeforge scripts being installed
  *
  * Requirements:
  * 1. The Docker image must be built for the workspace
- * 2. The launch-process-in-docker.sh script must be installed in .codeforge/scripts/
+ * 2. If resourceManager is not provided, .codeforge scripts must be installed (legacy mode)
  *
  * @param {string} workspacePath - The path to the workspace folder
  * @param {string} command - The command to run in the container
@@ -814,19 +836,20 @@ async function checkDockerAvailable(dockerCommand = "docker") {
  * @param {boolean} options.interactive - Whether to run in interactive mode (default: false)
  * @param {string[]} options.portForwards - Array of port forwards in format "HOST:CONTAINER" (default: [])
  * @param {boolean} options.keepContainer - Keep container after execution instead of removing (default: false)
+ * @param {Object} options.resourceManager - ResourceManager instance for getting script paths (optional)
  * @returns {ChildProcess} The spawned child process with piped stdio for output capture
  * @throws {Error} If the Docker image doesn't exist or script is not available
  *
  * @example
  * // Run a simple command (auto-removed, not tracked)
- * const process = runCommandInNewContainer(workspacePath, 'ls -la');
+ * const process = runCommandInNewContainer(workspacePath, 'ls -la', { resourceManager });
  *
  * @example
  * // Run with port forwarding
  * const process = runCommandInNewContainer(
  *   workspacePath,
  *   'python3 -m http.server 8000',
- *   { portForwards: ['8080:8000'] }
+ *   { portForwards: ['8080:8000'], resourceManager }
  * );
  *
  * @example
@@ -834,7 +857,7 @@ async function checkDockerAvailable(dockerCommand = "docker") {
  * const process = runCommandInNewContainer(
  *   workspacePath,
  *   'npm run build',
- *   { keepContainer: true }
+ *   { keepContainer: true, resourceManager }
  * );
  *
  * @example
@@ -842,7 +865,7 @@ async function checkDockerAvailable(dockerCommand = "docker") {
  * const process = runCommandInNewContainer(
  *   workspacePath,
  *   '/bin/bash',
- *   { interactive: true }
+ *   { interactive: true, resourceManager }
  * );
  */
 function runCommandInNewContainer(workspacePath, command, options = {}) {
@@ -857,17 +880,27 @@ function runCommandInNewContainer(workspacePath, command, options = {}) {
     mountWorkspace = true,
     enableTracking = true,
     additionalArgs = [],
+    resourceManager = null,
   } = options;
 
   // Build the script command
-  const scriptPath = path.join(
-    workspacePath,
-    ".codeforge",
-    "scripts",
-    "launch-process-in-docker.sh",
-  );
+  // If resourceManager is provided, use the extension script path
+  // Otherwise, fall back to workspace path for backward compatibility
+  const scriptPath = resourceManager
+    ? resourceManager.getScriptPath("launch-process-in-docker.sh")
+    : path.join(
+        workspacePath,
+        ".codeforge",
+        "scripts",
+        "launch-process-in-docker.sh",
+      );
 
   const scriptArgs = [];
+
+  // If using extension scripts, pass workspace directory as first argument
+  if (resourceManager) {
+    scriptArgs.push(workspacePath);
+  }
 
   // Add interactive flag
   if (interactive) {
@@ -912,6 +945,18 @@ function runCommandInNewContainer(workspacePath, command, options = {}) {
   // Add tracking flag
   if (!enableTracking) {
     scriptArgs.push("--no-track");
+  }
+
+  // If using extension scripts, mount the scripts directory into the container
+  // at the expected .codeforge/scripts location so scripts work without modification
+  if (resourceManager) {
+    const scriptsPath = resourceManager.scriptsPath;
+    // Mount extension scripts at .codeforge/scripts inside the container
+    scriptArgs.push("--docker-arg", `-v`);
+    scriptArgs.push(
+      "--docker-arg",
+      `${scriptsPath}:${workspacePath}/.codeforge/scripts:ro`,
+    );
   }
 
   // Add additional docker arguments

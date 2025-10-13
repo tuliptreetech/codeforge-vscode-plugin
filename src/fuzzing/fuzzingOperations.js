@@ -17,6 +17,7 @@ async function buildFuzzTestsWithScript(
   containerName,
   fuzzTests,
   terminal,
+  resourceManager = null,
 ) {
   const results = {
     builtTargets: 0,
@@ -65,7 +66,7 @@ async function buildFuzzTestsWithScript(
       containerName,
       buildCommand,
       "/bin/bash",
-      options,
+      { ...options, resourceManager },
     );
 
     let stdout = "";
@@ -463,6 +464,7 @@ async function runFuzzTestsWithScript(
   containerName,
   fuzzTests,
   terminal,
+  resourceManager = null,
 ) {
   const results = {
     executed: 0,
@@ -515,7 +517,7 @@ async function runFuzzTestsWithScript(
       containerName,
       runCommand,
       "/bin/bash",
-      options,
+      { ...options, resourceManager },
     );
 
     let stdout = "";
@@ -907,6 +909,8 @@ async function orchestrateFuzzingWorkflow(
       workspacePath,
       containerName,
       terminal,
+      false,
+      options.resourceManager,
     );
 
     if (fuzzTests.length === 0) {
@@ -943,6 +947,7 @@ async function orchestrateFuzzingWorkflow(
         containerName,
         fuzzTests,
         terminal,
+        options.resourceManager,
       );
 
       results.builtTargets = buildResult.builtTargets;
@@ -969,6 +974,7 @@ async function orchestrateFuzzingWorkflow(
           containerName,
           fuzzTests,
           terminal,
+          options.resourceManager,
         );
 
         results.executedFuzzers = fuzzingResults.executed;
@@ -1143,6 +1149,8 @@ async function buildFuzzingTargetsOnly(
       workspacePath,
       containerName,
       terminal,
+      false,
+      options.resourceManager,
     );
 
     if (fuzzTests.length === 0) {
@@ -1188,6 +1196,7 @@ async function buildFuzzingTargetsOnly(
         containerName,
         fuzzTests,
         terminal,
+        options.resourceManager,
       );
 
       results.builtTargets = buildResult.builtTargets;
@@ -1676,7 +1685,12 @@ function generateBuildSummary(results) {
  * @param {string} preset - Optional preset name (will use 'Debug' as default)
  * @returns {Promise<Object>} Build results with success status and details
  */
-async function buildFuzzTarget(workspacePath, fuzzerName, preset = "Debug") {
+async function buildFuzzTarget(
+  workspacePath,
+  fuzzerName,
+  preset = "Debug",
+  options = {},
+) {
   const containerName = dockerOperations.generateContainerName(workspacePath);
 
   // Create a simple terminal-like object for logging
@@ -1720,6 +1734,7 @@ async function buildFuzzTarget(workspacePath, fuzzerName, preset = "Debug") {
       containerName,
       [fuzzTest],
       terminal,
+      options.resourceManager,
     );
 
     if (results.errors.length > 0) {
@@ -1785,7 +1800,12 @@ async function buildFuzzTarget(workspacePath, fuzzerName, preset = "Debug") {
  * @param {string} preset - Optional preset name (will use 'Debug' as default)
  * @returns {Promise<Object>} Run results with execution details
  */
-async function runFuzzTarget(workspacePath, fuzzerName, preset = "Debug") {
+async function runFuzzTarget(
+  workspacePath,
+  fuzzerName,
+  preset = "Debug",
+  options = {},
+) {
   const containerName = dockerOperations.generateContainerName(workspacePath);
 
   // Create a simple terminal-like object for logging
@@ -1806,6 +1826,7 @@ async function runFuzzTarget(workspacePath, fuzzerName, preset = "Debug") {
       containerName,
       [fuzzTest],
       terminal,
+      options.resourceManager,
     );
 
     return {

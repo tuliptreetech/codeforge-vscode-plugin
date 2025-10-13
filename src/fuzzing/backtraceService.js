@@ -11,8 +11,9 @@ const dockerOperations = require("../core/dockerOperations");
  * - The crash file to exist in .codeforge/fuzzing/fuzzer_name-output/
  */
 class BacktraceService {
-  constructor() {
+  constructor(resourceManager = null) {
     this.dockerOperations = dockerOperations;
+    this.resourceManager = resourceManager;
   }
 
   /**
@@ -69,7 +70,7 @@ class BacktraceService {
         imageName,
         backtraceCommand,
         "/bin/bash",
-        options,
+        { ...options, resourceManager: this.resourceManager },
       );
 
       let stdout = "";

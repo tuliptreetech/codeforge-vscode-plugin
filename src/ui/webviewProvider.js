@@ -44,7 +44,7 @@ class CodeForgeWebviewProvider {
     });
 
     // Initialize services
-    this._fuzzerDiscoveryService = new FuzzerDiscoveryService();
+    this._fuzzerDiscoveryService = new FuzzerDiscoveryService(resourceManager);
     this._initializationService = new InitializationDetectionService(
       resourceManager,
     );

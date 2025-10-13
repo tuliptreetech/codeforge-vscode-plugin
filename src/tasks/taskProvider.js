@@ -8,9 +8,10 @@ const fs = require("fs").promises;
  * Provides tasks that run commands inside Docker containers
  */
 class CodeForgeTaskProvider {
-  constructor(context, outputChannel) {
+  constructor(context, outputChannel, resourceManager = null) {
     this.context = context;
     this.outputChannel = outputChannel;
+    this.resourceManager = resourceManager;
     this._tasks = [];
   }
 
@@ -120,6 +121,7 @@ class CodeForgeTaskProvider {
           workspaceFolder.uri.fsPath,
           taskDefinition,
           this.outputChannel,
+          this.resourceManager,
         );
       }),
       [],
@@ -142,10 +144,16 @@ class CodeForgeTaskProvider {
  * Custom terminal implementation for CodeForge tasks
  */
 class CodeForgeTaskTerminal {
-  constructor(workspacePath, definition, outputChannel) {
+  constructor(
+    workspacePath,
+    definition,
+    outputChannel,
+    resourceManager = null,
+  ) {
     this.workspacePath = workspacePath;
     this.definition = definition;
     this.outputChannel = outputChannel;
+    this.resourceManager = resourceManager;
     this.command = definition.command || "/bin/bash";
     this.writeEmitter = new vscode.EventEmitter();
     this.closeEmitter = new vscode.EventEmitter();
@@ -297,6 +305,7 @@ class CodeForgeTaskTerminal {
           removeAfterRun: removeAfterRun,
           additionalArgs: finalAdditionalArgs,
           dockerCommand: dockerCommand,
+          resourceManager: this.resourceManager,
           mountWorkspace: mountWorkspace,
           enableTracking: true, // Always track task containers
           containerType: "task", // Mark as task type for tracking

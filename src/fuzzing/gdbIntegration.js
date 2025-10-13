@@ -257,8 +257,9 @@ class PathMapper {
  * GDB Terminal Launcher - Creates GDB terminal sessions
  */
 class GdbTerminalLauncher {
-  constructor(dockerOperations) {
+  constructor(dockerOperations, resourceManager = null) {
     this.dockerOperations = dockerOperations;
+    this.resourceManager = resourceManager;
   }
 
   /**
@@ -289,18 +290,33 @@ class GdbTerminalLauncher {
     const configAdditionalArgs = config.get("additionalDockerRunArgs", []);
     const mountWorkspace = config.get("mountWorkspace", true);
 
-    // Build launch script path and arguments
-    const scriptPath = path.join(
-      workspacePath,
-      ".codeforge",
-      "scripts",
-      "launch-process-in-docker.sh",
-    );
+    // Build launch script path - use resourceManager if available, otherwise fall back to workspace path
+    let scriptPath;
+    if (this.resourceManager) {
+      scriptPath = this.resourceManager.getScriptPath(
+        "launch-process-in-docker.sh",
+      );
+    } else {
+      scriptPath = path.join(
+        workspacePath,
+        ".codeforge",
+        "scripts",
+        "launch-process-in-docker.sh",
+      );
+    }
 
     // Disable LLVM profiling to prevent default.profraw from being created
     const gdbCommandString = `LLVM_PROFILE_FILE=/dev/null ${gdbCommand.join(" ")}`;
 
-    const scriptArgs = [
+    const scriptArgs = [];
+
+    // If using resourceManager, add workspace directory as first argument
+    if (this.resourceManager) {
+      scriptArgs.push(workspacePath);
+    }
+
+    // Add standard script arguments
+    scriptArgs.push(
       // NOTE: Use --stdin instead of -i! VSCode provides stdin but not a TTY
       // Using -i (which adds -it) causes "input device is not a TTY" error
       "--stdin",
@@ -310,7 +326,7 @@ class GdbTerminalLauncher {
       defaultShell,
       "--type",
       "gdb-analysis",
-    ];
+    );
 
     // Add keep flag if not auto-removing
     if (!removeAfterRun) {
@@ -325,6 +341,16 @@ class GdbTerminalLauncher {
     // Add additional docker arguments
     for (const arg of [...configAdditionalArgs, ...additionalArgs]) {
       scriptArgs.push("--docker-arg", arg);
+    }
+
+    // If using resourceManager, mount the scripts directory into the container
+    if (this.resourceManager) {
+      const scriptsPath = this.resourceManager.scriptsPath;
+      scriptArgs.push("--docker-arg", "-v");
+      scriptArgs.push(
+        "--docker-arg",
+        `${scriptsPath}:${workspacePath}/.codeforge/scripts:ro`,
+      );
     }
 
     // Add the GDB command
@@ -342,8 +368,9 @@ class GdbTerminalLauncher {
  * GDB Server Launcher - Launches gdbserver in a Docker container with port forwarding
  */
 class GdbServerLauncher {
-  constructor(dockerOperations) {
+  constructor(dockerOperations, resourceManager = null) {
     this.dockerOperations = dockerOperations;
+    this.resourceManager = resourceManager;
   }
 
   /**
@@ -457,13 +484,20 @@ class GdbServerLauncher {
  * GDB Integration - Main orchestration class
  */
 class GdbIntegration {
-  constructor(dockerOperations) {
+  constructor(dockerOperations, resourceManager = null) {
     this.dockerOperations = dockerOperations;
+    this.resourceManager = resourceManager;
     this.commandBuilder = new GdbCommandBuilder();
     this.fuzzerResolver = new FuzzerResolver();
     this.pathMapper = new PathMapper();
-    this.terminalLauncher = new GdbTerminalLauncher(dockerOperations);
-    this.gdbServerLauncher = new GdbServerLauncher(dockerOperations);
+    this.terminalLauncher = new GdbTerminalLauncher(
+      dockerOperations,
+      resourceManager,
+    );
+    this.gdbServerLauncher = new GdbServerLauncher(
+      dockerOperations,
+      resourceManager,
+    );
   }
 
   /**

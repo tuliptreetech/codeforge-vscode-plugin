@@ -163,14 +163,11 @@ suite("Initialization Detection Service Test Suite", () => {
       );
 
       // Verify all components are marked as existing
+      // Scripts are no longer required in workspace
       const expectedComponents = [
         "codeforgeDirectory",
         "dockerfile",
         "gitignore",
-        "scriptsDirectory",
-        "buildScript",
-        "findScript",
-        "runScript",
       ];
 
       expectedComponents.forEach((component) => {
@@ -185,17 +182,16 @@ suite("Initialization Detection Service Test Suite", () => {
     test("Should return false for partially initialized project", async () => {
       // Mock some files as missing
       fsStatStub.callsFake((filePath) => {
-        if (
-          filePath.includes("Dockerfile") ||
-          filePath.includes("build-fuzz-tests.sh")
-        ) {
+        if (filePath.includes("Dockerfile")) {
           const error = new Error("File not found");
           error.code = "ENOENT";
           return Promise.reject(error);
         }
 
         const mockStats =
-          filePath.includes("scripts") && !filePath.includes(".sh")
+          filePath.includes(".codeforge") &&
+          !filePath.includes("Dockerfile") &&
+          !filePath.includes(".gitignore")
             ? { isDirectory: () => true, size: 0, mtime: new Date() }
             : { isDirectory: () => false, size: 1024, mtime: new Date() };
 
@@ -214,19 +210,10 @@ suite("Initialization Detection Service Test Suite", () => {
         result.missingComponents.includes("dockerfile"),
         "Should include dockerfile as missing",
       );
-      assert.ok(
-        result.missingComponents.includes("buildScript"),
-        "Should include buildScript as missing",
-      );
       assert.strictEqual(
         result.details.dockerfile.exists,
         false,
         "Dockerfile should not exist",
-      );
-      assert.strictEqual(
-        result.details.buildScript.exists,
-        false,
-        "Build script should not exist",
       );
     });
 
@@ -248,19 +235,11 @@ suite("Initialization Detection Service Test Suite", () => {
       );
       assert.strictEqual(
         result.missingComponents.length,
-        10,
-        "Should have 7 missing components",
+        3,
+        "Should have 3 missing components",
       );
 
-      const expectedMissing = [
-        "codeforgeDirectory",
-        "dockerfile",
-        "gitignore",
-        "scriptsDirectory",
-        "buildScript",
-        "findScript",
-        "runScript",
-      ];
+      const expectedMissing = ["codeforgeDirectory", "dockerfile", "gitignore"];
 
       expectedMissing.forEach((component) => {
         assert.ok(
@@ -293,8 +272,8 @@ suite("Initialization Detection Service Test Suite", () => {
       );
       assert.strictEqual(
         result.missingComponents.length,
-        10,
-        "Should have 7 missing components",
+        3,
+        "Should have 3 missing components",
       );
 
       // Verify error codes are captured
@@ -450,7 +429,7 @@ suite("Initialization Detection Service Test Suite", () => {
       let callCount = 0;
       fsStatStub.callsFake((filePath) => {
         callCount++;
-        if (callCount <= 7) {
+        if (callCount <= 3) {
           // First call (initial check) - all missing
           const error = new Error("File not found");
           error.code = "ENOENT";
@@ -468,9 +447,6 @@ suite("Initialization Detection Service Test Suite", () => {
             mtime: new Date(),
           };
 
-          if (filePath.includes("scripts") && !filePath.includes(".sh")) {
-            return Promise.resolve(mockDirStats);
-          }
           if (
             filePath.includes(".codeforge") &&
             !filePath.includes("Dockerfile") &&
@@ -507,10 +483,7 @@ suite("Initialization Detection Service Test Suite", () => {
         mockResourceManager.dumpDockerfile.called,
         "Should create Dockerfile",
       );
-      assert.ok(
-        mockResourceManager.dumpScripts.called,
-        "Should create scripts",
-      );
+      // Scripts are no longer dumped to workspace
     });
 
     test("Should handle partial initialization correctly", async () => {
@@ -519,13 +492,12 @@ suite("Initialization Detection Service Test Suite", () => {
       fsStatStub.callsFake((filePath) => {
         callCount++;
 
-        if (callCount <= 7) {
+        if (callCount <= 3) {
           // Initial check - some exist, some don't
           if (
             filePath.includes(".codeforge") &&
             !filePath.includes("Dockerfile") &&
-            !filePath.includes(".gitignore") &&
-            !filePath.includes("scripts")
+            !filePath.includes(".gitignore")
           ) {
             return Promise.resolve({
               isDirectory: () => true,
@@ -533,7 +505,7 @@ suite("Initialization Detection Service Test Suite", () => {
               mtime: new Date(),
             });
           }
-          // Scripts directory doesn't exist initially, so all scripts are missing
+          // Dockerfile and gitignore don't exist initially
 
           const error = new Error("File not found");
           error.code = "ENOENT";
@@ -551,14 +523,10 @@ suite("Initialization Detection Service Test Suite", () => {
             mtime: new Date(),
           };
 
-          if (filePath.includes("scripts") && !filePath.includes(".sh")) {
-            return Promise.resolve(mockDirStats);
-          }
           if (
             filePath.includes(".codeforge") &&
             !filePath.includes("Dockerfile") &&
-            !filePath.includes(".gitignore") &&
-            !filePath.includes("scripts")
+            !filePath.includes(".gitignore")
           ) {
             return Promise.resolve(mockDirStats);
           }
@@ -584,10 +552,7 @@ suite("Initialization Detection Service Test Suite", () => {
         mockResourceManager.dumpDockerfile.called,
         "Should create missing Dockerfile",
       );
-      assert.ok(
-        mockResourceManager.dumpScripts.called,
-        "Should create missing scripts",
-      );
+      // Scripts are no longer dumped to workspace
     });
 
     test("Should handle initialization failure", async () => {
@@ -763,15 +728,11 @@ suite("Initialization Detection Service Test Suite", () => {
         "Should have not_initialized status",
       );
       assert.ok(
-        result.message.includes("Missing 2 of 10"),
+        result.message.includes("Missing 1 of 3"),
         "Should indicate missing count",
       );
       assert.ok(
         result.message.includes("dockerfile"),
-        "Should list missing components",
-      );
-      assert.ok(
-        result.message.includes("buildScript"),
         "Should list missing components",
       );
     });
@@ -905,7 +866,7 @@ suite("Initialization Detection Service Test Suite", () => {
       );
       assert.strictEqual(
         result.missingComponents.length,
-        10,
+        3,
         "Should have all components missing",
       );
     });
