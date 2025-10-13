@@ -43,6 +43,7 @@ async function discoverFuzzTestsWithScript(
   containerName,
   terminal,
   cleanCache = false,
+  resourceManager = null,
 ) {
   return new Promise((resolve, reject) => {
     safeFuzzingLog(terminal, "Discovering fuzz tests...");
@@ -51,6 +52,7 @@ async function discoverFuzzTestsWithScript(
       removeAfterRun: true,
       mountWorkspace: true,
       dockerCommand: "docker",
+      resourceManager: resourceManager,
     };
 
     // Build the script command with appropriate flags

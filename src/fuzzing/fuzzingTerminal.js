@@ -8,9 +8,10 @@ const fs = require("fs").promises;
  * Based on CodeForgeTaskTerminal pattern from taskProvider.js
  */
 class CodeForgeFuzzingTerminal {
-  constructor(workspacePath, specificFuzzer = null) {
+  constructor(workspacePath, specificFuzzer = null, resourceManager = null) {
     this.workspacePath = workspacePath;
     this.specificFuzzer = specificFuzzer;
+    this.resourceManager = resourceManager;
     this.writeEmitter = new vscode.EventEmitter();
     this.closeEmitter = new vscode.EventEmitter();
     this.fuzzingStartTime = null;
@@ -131,6 +132,7 @@ class CodeForgeFuzzingTerminal {
             this.workspacePath,
             this, // Pass terminal as output channel replacement
             progressCallback,
+            { resourceManager: this.resourceManager },
           );
         }
 
@@ -204,6 +206,8 @@ class CodeForgeFuzzingTerminal {
       this.workspacePath,
       containerName,
       this,
+      false,
+      this.resourceManager,
     );
 
     // Find the specific fuzzer
@@ -226,6 +230,7 @@ class CodeForgeFuzzingTerminal {
       containerName,
       [fuzzerTest],
       this,
+      this.resourceManager,
     );
 
     if (buildResults.builtTargets === 0) {
@@ -241,6 +246,7 @@ class CodeForgeFuzzingTerminal {
       containerName,
       [fuzzerTest],
       this,
+      this.resourceManager,
     );
 
     progressCallback("Fuzzing complete", 100);
@@ -321,8 +327,9 @@ class CodeForgeFuzzingTerminal {
  * Similar to CodeForgeFuzzingTerminal but focused on build-only workflow
  */
 class CodeForgeBuildTerminal {
-  constructor(workspacePath) {
+  constructor(workspacePath, resourceManager = null) {
     this.workspacePath = workspacePath;
+    this.resourceManager = resourceManager;
     this.writeEmitter = new vscode.EventEmitter();
     this.closeEmitter = new vscode.EventEmitter();
     this.buildStartTime = null;
@@ -430,6 +437,7 @@ class CodeForgeBuildTerminal {
           this.workspacePath,
           this, // Pass terminal as output channel replacement
           progressCallback,
+          { resourceManager: this.resourceManager },
         );
 
         // Store results for notification system

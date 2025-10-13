@@ -172,7 +172,7 @@ suite("Initialization Integration Test Suite", () => {
       let callCount = 0;
       fsStatStub.callsFake((filePath) => {
         callCount++;
-        if (callCount <= 7) {
+        if (callCount <= 3) {
           // Initial check - all missing
           const error = new Error("File not found");
           error.code = "ENOENT";
@@ -190,9 +190,6 @@ suite("Initialization Integration Test Suite", () => {
             mtime: new Date(),
           };
 
-          if (filePath.includes("scripts") && !filePath.includes(".sh")) {
-            return Promise.resolve(mockDirStats);
-          }
           if (
             filePath.includes(".codeforge") &&
             !filePath.includes("Dockerfile") &&
@@ -247,7 +244,6 @@ suite("Initialization Integration Test Suite", () => {
       // Reset resource manager call history to track calls
       mockResourceManager.dumpGitignore.resetHistory();
       mockResourceManager.dumpDockerfile.resetHistory();
-      mockResourceManager.dumpScripts.resetHistory();
 
       await commandHandlers.handleInitializeProject();
 
@@ -260,10 +256,7 @@ suite("Initialization Integration Test Suite", () => {
         mockResourceManager.dumpDockerfile.called,
         "Should create Dockerfile",
       );
-      assert.ok(
-        mockResourceManager.dumpScripts.called,
-        "Should create scripts",
-      );
+      // Scripts are no longer dumped to workspace
 
       // Step 7: Verify success message was shown
       assert.ok(

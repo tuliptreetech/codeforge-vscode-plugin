@@ -172,6 +172,31 @@ class ResourceManager {
       return false;
     }
   }
+
+  /**
+   * Gets the full path to a script file in the extension
+   * @param {string} scriptName - Name of the script file (e.g., 'build-fuzz-tests.sh')
+   * @returns {string} The full path to the script file in the extension
+   */
+  getScriptPath(scriptName) {
+    return path.join(this.scriptsPath, scriptName);
+  }
+
+  /**
+   * Gets all available script names
+   * @returns {string[]} Array of script filenames
+   */
+  getAvailableScripts() {
+    return [
+      "build-fuzz-tests.sh",
+      "find-fuzz-tests.sh",
+      "run-fuzz-tests.sh",
+      "find-crashes.sh",
+      "generate-backtrace.sh",
+      "clear-crashes.sh",
+      "launch-process-in-docker.sh",
+    ];
+  }
 }
 
 module.exports = { ResourceManager };

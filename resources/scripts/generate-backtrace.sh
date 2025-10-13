@@ -30,7 +30,18 @@ if [[ -e "$backtrace_output_file" ]]; then
     exit 0
 fi
 
-crash_file="$output_dir/crash-$crash_hash"
+# Check for crash file in corpus subdirectory first (LibFuzzer default location)
+crash_file="$output_dir/corpus/crash-$crash_hash"
+if [[ ! -e "$crash_file" ]]; then
+    # Fall back to output directory root for backward compatibility
+    crash_file="$output_dir/crash-$crash_hash"
+fi
+
+if [[ ! -e "$crash_file" ]]; then
+    echo "Error: Crash file not found: crash-$crash_hash"
+    exit 1
+fi
+
 exe="$fuzzing_directory/$fuzzer_name"
 
 # Disable LLVM profiling to prevent default.profraw from being created

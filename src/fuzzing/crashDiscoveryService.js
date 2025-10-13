@@ -13,9 +13,10 @@ const dockerOperations = require("../core/dockerOperations");
  * .codeforge/fuzzing/{FUZZER}-output/crash-{HASH}
  */
 class CrashDiscoveryService {
-  constructor() {
+  constructor(resourceManager = null) {
     this.fs = fs;
     this.path = path;
+    this.resourceManager = resourceManager;
   }
 
   /**
@@ -41,7 +42,7 @@ class CrashDiscoveryService {
         imageName,
         findCommand,
         "/bin/bash",
-        options,
+        { ...options, resourceManager: this.resourceManager },
       );
 
       let stdout = "";
@@ -160,7 +161,19 @@ class CrashDiscoveryService {
 
         // Build crash file path
         const outputDir = this.path.join(fuzzingDir, `${fuzzerName}-output`);
-        const crashFilePath = this.path.join(outputDir, `crash-${crashHash}`);
+
+        // Check if crash file exists in corpus subdirectory first (LibFuzzer default location)
+        let crashFilePath = this.path.join(
+          outputDir,
+          "corpus",
+          `crash-${crashHash}`,
+        );
+        try {
+          await this.fs.access(crashFilePath);
+        } catch {
+          // Fall back to output directory root for backward compatibility
+          crashFilePath = this.path.join(outputDir, `crash-${crashHash}`);
+        }
 
         // Get crash info with file stats
         let crashInfo;

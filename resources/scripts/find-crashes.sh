@@ -26,6 +26,16 @@ for f in $fuzzers; do
         continue
     fi
 
+    # Check for crashes in the corpus subdirectory (where LibFuzzer stores them)
+    if [[ -d "$output_dir/corpus" ]]; then
+        for file in ${output_dir}/corpus/crash-*; do
+            if [[ -e "$file" ]]; then
+                echo "$fuzzer_name/$(basename $file | sed 's/^crash-//')"
+            fi
+        done
+    fi
+
+    # Also check for crashes in the output directory root (for backward compatibility)
     for file in ${output_dir}/crash-*; do
         if [[ -e "$file" ]]; then
             echo "$fuzzer_name/$(basename $file | sed 's/^crash-//')"

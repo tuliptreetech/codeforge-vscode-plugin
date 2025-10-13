@@ -57,6 +57,10 @@ suite("Command Handlers Test Suite", () => {
       dumpDockerfile: sandbox.stub().resolves(),
       dumpGitignore: sandbox.stub().resolves(),
       extensionPath: "/mock/extension/path",
+      scriptsPath: "/mock/extension/path/resources/scripts",
+      getScriptPath: sandbox
+        .stub()
+        .callsFake((name) => `/mock/extension/path/resources/scripts/${name}`),
     };
 
     commandHandlers = new CodeForgeCommandHandlers(

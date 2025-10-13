@@ -6,11 +6,31 @@ set -euo pipefail
 # This script automatically detects the Docker image for the current workspace
 # and runs commands in a new container with support for interactive mode and port forwarding.
 # Tracks persistent containers in .codeforge/tracked-containers for lifecycle management.
+#
+# Usage: launch-process-in-docker.sh <workspace_directory> [options] [command]
 
-scripts_directory="$(dirname "$(realpath "$0")")"
-codeforge_directory="$(realpath "$scripts_directory/..")"
-root_directory="$(realpath "$codeforge_directory/..")"
+# Validate that workspace directory was provided as the first parameter
+if [ $# -lt 1 ]; then
+    echo "Error: Workspace directory must be provided as the first argument"
+    echo "Usage: $0 <workspace_directory> [options] [command]"
+    exit 1
+fi
+
+# Extract workspace directory from first argument
+root_directory="$1"
+shift  # Remove first argument so remaining args can be processed normally
+
+# Verify workspace directory exists
+if [ ! -d "$root_directory" ]; then
+    echo "Error: Workspace directory does not exist: $root_directory"
+    exit 1
+fi
+
+codeforge_directory="$root_directory/.codeforge"
 tracked_containers_file="$codeforge_directory/tracked-containers"
+
+# Ensure .codeforge directory exists
+mkdir -p "$codeforge_directory"
 
 # Default values
 INTERACTIVE=false
@@ -29,9 +49,12 @@ QUIET=false
 
 # Usage information
 usage() {
-    echo "Usage: $0 [options] [command]"
+    echo "Usage: $0 <workspace_directory> [options] [command]"
     echo ""
     echo "Execute commands in a new CodeForge Docker container."
+    echo ""
+    echo "Arguments:"
+    echo "  workspace_directory          Path to the workspace directory (required)"
     echo ""
     echo "Options:"
     echo "  -i, --interactive            Run in interactive mode (allocate TTY and keep stdin open)"

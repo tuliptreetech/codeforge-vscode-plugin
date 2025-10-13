@@ -26,25 +26,11 @@ class InitializationDetectionService {
     }
 
     const codeforgeDir = path.join(workspacePath, ".codeforge");
+    // Scripts are no longer required in workspace - they're used from extension directory
     const requiredPaths = {
       codeforgeDirectory: codeforgeDir,
       dockerfile: path.join(codeforgeDir, "Dockerfile"),
       gitignore: path.join(codeforgeDir, ".gitignore"),
-      scriptsDirectory: path.join(codeforgeDir, "scripts"),
-      buildScript: path.join(codeforgeDir, "scripts", "build-fuzz-tests.sh"),
-      findScript: path.join(codeforgeDir, "scripts", "find-fuzz-tests.sh"),
-      runScript: path.join(codeforgeDir, "scripts", "run-fuzz-tests.sh"),
-      findCrashesScript: path.join(codeforgeDir, "scripts", "find-crashes.sh"),
-      generateBacktraceScript: path.join(
-        codeforgeDir,
-        "scripts",
-        "generate-backtrace.sh",
-      ),
-      clearCrashesScript: path.join(
-        codeforgeDir,
-        "scripts",
-        "clear-crashes.sh",
-      ),
     };
 
     const missingComponents = [];
@@ -103,7 +89,6 @@ class InitializationDetectionService {
 
     try {
       const codeforgeDir = path.join(workspacePath, ".codeforge");
-      const scriptsDir = path.join(codeforgeDir, "scripts");
 
       // Report progress
       const reportProgress = (message, percentage) => {
@@ -149,33 +134,9 @@ class InitializationDetectionService {
         await this.resourceManager.dumpDockerfile(codeforgeDir);
       }
 
-      reportProgress("Creating scripts directory and scripts...", 80);
+      reportProgress("Verifying initialization...", 80);
 
-      // Create scripts directory and copy scripts if they don't exist
-      if (!currentStatus.details.scriptsDirectory?.exists) {
-        await fs.mkdir(scriptsDir, { recursive: true });
-        await this.resourceManager.dumpScripts(scriptsDir);
-      } else {
-        // Check individual scripts and create missing ones
-        const scriptChecks = [
-          { key: "buildScript", method: "dumpScripts" },
-          { key: "findScript", method: "dumpScripts" },
-          { key: "runScript", method: "dumpScripts" },
-          { key: "findCrashesScript", method: "dumpScripts" },
-          { key: "generateBacktraceScript", method: "dumpScripts" },
-          { key: "clearCrashesScript", method: "dumpScripts" },
-        ];
-
-        const missingScripts = scriptChecks.filter(
-          (script) => !currentStatus.details[script.key]?.exists,
-        );
-
-        if (missingScripts.length > 0) {
-          await this.resourceManager.dumpScripts(scriptsDir);
-        }
-      }
-
-      reportProgress("Verifying initialization...", 90);
+      // Scripts are no longer copied to workspace - they're used directly from extension
 
       // Verify initialization was successful
       const finalStatus = await this.isCodeForgeInitialized(workspacePath);

@@ -23,10 +23,11 @@ const { getOutputDirectory } = require("./fuzzingConfig");
  * }
  */
 class FuzzerDiscoveryService {
-  constructor() {
+  constructor(resourceManager = null) {
     this.fs = fs;
     this.path = path;
-    this.crashDiscoveryService = new CrashDiscoveryService();
+    this.resourceManager = resourceManager;
+    this.crashDiscoveryService = new CrashDiscoveryService(resourceManager);
     this.cachedFuzzers = new Map();
     this.cacheTimestamp = null;
     this.cacheTimeout = 30000; // 30 seconds cache timeout
@@ -120,7 +121,7 @@ class FuzzerDiscoveryService {
         imageName,
         findCommand,
         "/bin/bash",
-        options,
+        { ...options, resourceManager: this.resourceManager },
       );
 
       let stdout = "";
