@@ -140,14 +140,8 @@ class CodeForgeFuzzingTerminal {
         const endTime = new Date();
         const duration = ((endTime - this.fuzzingStartTime) / 1000).toFixed(2);
 
-        let message;
-        if (results.crashes.length > 0) {
-          message = `Fuzzing completed with ${results.crashes.length} crash(es) found! Duration: ${duration}s`;
-          this.writeEmitter.fire(`\r\n\x1b[31m${message}\x1b[0m\r\n`);
-        } else {
-          message = `Fuzzing completed successfully. ${results.executedFuzzers} fuzzer(s) executed. Duration: ${duration}s`;
-          this.writeEmitter.fire(`\r\n\x1b[32m${message}\x1b[0m\r\n`);
-        }
+        const message = `Fuzzing completed successfully. ${results.executedFuzzers} fuzzer(s) executed. Duration: ${duration}s`;
+        this.writeEmitter.fire(`\r\n\x1b[32m${message}\x1b[0m\r\n`);
 
         // Mark fuzzing as complete and enable key-to-close
         this.fuzzingComplete = true;

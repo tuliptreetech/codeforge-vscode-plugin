@@ -107,15 +107,25 @@
 
   // Update UI state
   function updateState(newState) {
-    console.log("Updating state:", newState);
     // Deep merge for nested objects to prevent state accumulation issues
     if (newState.fuzzers) {
       currentState.fuzzers = {
-        isLoading: newState.fuzzers.isLoading ?? currentState.fuzzers.isLoading,
+        isLoading:
+          newState.fuzzers.isLoading !== undefined
+            ? newState.fuzzers.isLoading
+            : currentState.fuzzers.isLoading,
         lastUpdated:
-          newState.fuzzers.lastUpdated ?? currentState.fuzzers.lastUpdated,
-        data: newState.fuzzers.data ?? currentState.fuzzers.data,
-        error: newState.fuzzers.error ?? currentState.fuzzers.error,
+          newState.fuzzers.lastUpdated !== undefined
+            ? newState.fuzzers.lastUpdated
+            : currentState.fuzzers.lastUpdated,
+        data:
+          newState.fuzzers.data !== undefined
+            ? newState.fuzzers.data
+            : currentState.fuzzers.data,
+        error:
+          newState.fuzzers.error !== undefined
+            ? newState.fuzzers.error
+            : currentState.fuzzers.error,
       };
     }
     if (newState.initialization) {
@@ -445,7 +455,7 @@
   }
 
   function renderFuzzerItem(fuzzer) {
-    const crashCount = fuzzer.crashes.length;
+    const crashCount = fuzzer.crashes?.length || 0;
     const crashText = crashCount === 1 ? "crash" : "crashes";
     // Use displayName from backend (formatted by fuzzerUtils) or fallback to name
     const displayName = fuzzer.displayName || fuzzer.name;

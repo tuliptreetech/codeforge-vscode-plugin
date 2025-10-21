@@ -235,6 +235,9 @@ cleanup_stale_entries() {
         return
     fi
 
+    # Ensure the directory exists before creating temp file
+    mkdir -p "$(dirname "$tracked_containers_file")"
+
     local temp_file="${tracked_containers_file}.tmp"
     > "$temp_file"
 

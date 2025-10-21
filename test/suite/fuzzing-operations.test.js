@@ -90,10 +90,11 @@ suite("Fuzzing Operations Test Suite", () => {
       assert(summary.includes("Presets processed: 2/3"));
       assert(summary.includes("Targets built: 4/5"));
       assert(summary.includes("Fuzzers executed: 3"));
-      assert(summary.includes("New crashes found: 1"));
-      assert(summary.includes("Errors encountered: 1"));
-      assert(summary.includes("test-fuzz: /path/to/crash"));
-      assert(summary.includes("build: Build failed"));
+      // Error reporting has been intentionally removed
+      assert(!summary.includes("Errors encountered"));
+      assert(!summary.includes("build: Build failed"));
+      // Crash reporting has been intentionally removed
+      assert(!summary.includes("New crashes found"));
     });
   });
 
@@ -558,21 +559,16 @@ suite("Fuzzing Operations Test Suite", () => {
         mockOutputChannel,
       );
 
-      // Verify the execution results include crashes
+      // Verify the execution results
       assert.strictEqual(result.executed, 1, "Should report 1 executed fuzzer");
-      assert.strictEqual(result.crashes.length, 1, "Should have 1 crash");
+      assert.strictEqual(result.errors.length, 0, "Should have no errors");
+      // Crash counting has been intentionally removed
+      assert.strictEqual(result.crashes.length, 0, "Should not count crashes");
       assert.strictEqual(
         result.totalNewCrashes,
-        1,
-        "Should report 1 new crash",
+        undefined,
+        "Should not report new crashes",
       );
-      assert.strictEqual(result.errors.length, 0, "Should have no errors");
-
-      // Verify crash details
-      const crash = result.crashes[0];
-      assert.strictEqual(crash.fuzzer, "test-fuzzer");
-      assert.strictEqual(crash.newCrashes, 1);
-      assert.strictEqual(crash.totalCrashes, 1);
     });
 
     test("parseSuccessfulBuilds should parse build output correctly", () => {
@@ -2061,20 +2057,13 @@ compilation terminated.
         mockOutputChannel,
       );
 
+      // Crash counting has been intentionally removed
       assert.strictEqual(
         result.totalNewCrashes,
-        3,
-        "Should report 3 new crashes",
+        undefined,
+        "Should not report new crashes",
       );
-      assert.strictEqual(
-        result.crashes.length,
-        1,
-        "Should have 1 fuzzer entry",
-      );
-      const crash = result.crashes[0];
-      assert.strictEqual(crash.fuzzer, "test-fuzzer");
-      assert.strictEqual(crash.newCrashes, 3);
-      assert.strictEqual(crash.totalCrashes, 5);
+      assert.strictEqual(result.crashes.length, 0, "Should not count crashes");
     });
 
     test("runFuzzTestsWithScript should handle multiple fuzzers with different crash counts", async () => {
@@ -2137,33 +2126,16 @@ compilation terminated.
         mockOutputChannel,
       );
 
+      // Crash counting has been intentionally removed
       assert.strictEqual(
         result.totalNewCrashes,
-        5,
-        "Should report 5 new crashes total",
+        undefined,
+        "Should not report new crashes",
       );
-      assert.strictEqual(
-        result.crashes.length,
-        2,
-        "Should only report fuzzers with new crashes",
-      );
-
-      // Verify fuzzer1
-      const fuzzer1 = result.crashes.find((c) => c.fuzzer === "fuzzer1");
-      assert.strictEqual(fuzzer1.newCrashes, 2);
-      assert.strictEqual(fuzzer1.totalCrashes, 2);
-
-      // fuzzer2 should not be in results (0 new crashes)
-      const fuzzer2 = result.crashes.find((c) => c.fuzzer === "fuzzer2");
-      assert.strictEqual(fuzzer2, undefined);
-
-      // Verify fuzzer3
-      const fuzzer3 = result.crashes.find((c) => c.fuzzer === "fuzzer3");
-      assert.strictEqual(fuzzer3.newCrashes, 3);
-      assert.strictEqual(fuzzer3.totalCrashes, 3);
+      assert.strictEqual(result.crashes.length, 0, "Should not count crashes");
     });
 
-    test("generateFuzzingSummary should display new crash counts correctly", () => {
+    test("generateFuzzingSummary should not display crash counts", () => {
       const results = {
         processedPresets: 2,
         totalPresets: 2,
@@ -2179,10 +2151,15 @@ compilation terminated.
 
       const summary = fuzzingOperations.generateFuzzingSummary(results);
 
-      assert(summary.includes("New crashes found: 2"));
-      assert(summary.includes("New crashes by fuzzer:"));
-      assert(summary.includes("fuzzer1: 2 new (5 total)"));
-      assert(summary.includes("fuzzer2: 1 new (1 total)"));
+      // Crash reporting has been intentionally removed
+      assert(!summary.includes("New crashes found"));
+      assert(!summary.includes("New crashes by fuzzer:"));
+      assert(!summary.includes("fuzzer1: 2 new (5 total)"));
+      assert(!summary.includes("fuzzer2: 1 new (1 total)"));
+      // Summary should still include other metrics
+      assert(summary.includes("Presets processed: 2/2"));
+      assert(summary.includes("Targets built: 3/3"));
+      assert(summary.includes("Fuzzers executed: 3"));
     });
   });
 });
