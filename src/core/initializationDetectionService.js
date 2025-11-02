@@ -26,9 +26,10 @@ class InitializationDetectionService {
     }
 
     const codeforgeDir = path.join(workspacePath, ".codeforge");
-    // Scripts are no longer required in workspace - they're used from extension directory
+    const scriptsDir = path.join(codeforgeDir, "scripts");
     const requiredPaths = {
       codeforgeDirectory: codeforgeDir,
+      scriptsDirectory: scriptsDir,
       dockerfile: path.join(codeforgeDir, "Dockerfile"),
       gitignore: path.join(codeforgeDir, ".gitignore"),
     };
@@ -134,9 +135,15 @@ class InitializationDetectionService {
         await this.resourceManager.dumpDockerfile(codeforgeDir);
       }
 
-      reportProgress("Verifying initialization...", 80);
+      reportProgress("Copying scripts...", 70);
 
-      // Scripts are no longer copied to workspace - they're used directly from extension
+      // Copy scripts to workspace .codeforge/scripts directory
+      const scriptsDir = path.join(codeforgeDir, "scripts");
+      if (!currentStatus.details.scriptsDirectory?.exists) {
+        await this.resourceManager.dumpScripts(scriptsDir);
+      }
+
+      reportProgress("Verifying initialization...", 90);
 
       // Verify initialization was successful
       const finalStatus = await this.isCodeForgeInitialized(workspacePath);

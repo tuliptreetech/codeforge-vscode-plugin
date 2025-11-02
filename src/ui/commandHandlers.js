@@ -222,12 +222,16 @@ class CodeForgeCommandHandlers {
       const mountWorkspace = config.get("mountWorkspace", true);
 
       // Build launch script path and arguments
-      const scriptPath = this.resourceManager.getScriptPath(
+      // Use workspace .codeforge/scripts directory
+      const scriptPath = path.join(
+        workspacePath,
+        ".codeforge",
+        "scripts",
         "launch-process-in-docker.sh",
       );
 
       const scriptArgs = [
-        // Pass workspace directory as first argument
+        // First argument must be workspace directory (required by script)
         workspacePath,
         // NOTE: Use --stdin instead of -i! VSCode provides stdin but not a TTY
         // Using -i (which adds -it) causes "input device is not a TTY" error
@@ -239,14 +243,6 @@ class CodeForgeCommandHandlers {
         "--type",
         "terminal",
       ];
-
-      // Mount extension scripts directory into the container at .codeforge/scripts
-      const scriptsPath = this.resourceManager.scriptsPath;
-      scriptArgs.push("--docker-arg", `-v`);
-      scriptArgs.push(
-        "--docker-arg",
-        `${scriptsPath}:${workspacePath}/.codeforge/scripts:ro`,
-      );
 
       // Add keep flag if not auto-removing
       if (!removeAfterRun) {
