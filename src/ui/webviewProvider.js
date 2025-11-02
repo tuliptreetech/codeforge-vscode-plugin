@@ -151,6 +151,7 @@ class CodeForgeWebviewProvider {
         analyzeCrash: "codeforge.analyzeCrash",
         debugCrash: "codeforge.debugCrash",
         clearCrashes: "codeforge.clearCrashes",
+        reevaluateCrashes: "codeforge.reevaluateCrashes",
         viewCorpus: "codeforge.viewCorpus",
         initializeCodeForge: "codeforge.initializeProject",
       };
