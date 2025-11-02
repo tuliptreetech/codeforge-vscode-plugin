@@ -1683,6 +1683,215 @@ class CodeForgeCommandHandlers {
   }
 
   /**
+   * Reevaluate crashes for a fuzzer
+   */
+  async handleReevaluateCrashes(params) {
+    try {
+      const { fuzzerName } = params;
+      const { path: workspacePath } = this.getWorkspaceInfo();
+
+      if (!fuzzerName) {
+        throw new Error("Fuzzer name not provided");
+      }
+
+      // Get fuzzer preset from cache, or refresh if not found
+      let cachedFuzzer =
+        this.fuzzerDiscoveryService.getCachedFuzzer(fuzzerName);
+
+      // If fuzzer not in cache or cache is invalid, refresh the fuzzer data
+      if (!cachedFuzzer || !cachedFuzzer.preset) {
+        this.safeOutputLog(
+          `Fuzzer ${fuzzerName} not in cache, refreshing fuzzer data...`,
+          false,
+        );
+
+        const containerName =
+          dockerOperations.generateContainerName(workspacePath);
+
+        // Refresh fuzzer data to populate cache
+        await this.fuzzerDiscoveryService.refreshFuzzerData(
+          workspacePath,
+          containerName,
+        );
+
+        // Try to get the fuzzer again
+        cachedFuzzer = this.fuzzerDiscoveryService.getCachedFuzzer(fuzzerName);
+
+        if (!cachedFuzzer || !cachedFuzzer.preset) {
+          throw new Error(`Could not find preset for fuzzer: ${fuzzerName}`);
+        }
+      }
+
+      // Check initialization and build status
+      const containerName =
+        dockerOperations.generateContainerName(workspacePath);
+      const initialized = await this.ensureInitializedAndBuilt(
+        workspacePath,
+        containerName,
+      );
+      if (!initialized) {
+        vscode.window.showInformationMessage(
+          "CodeForge: Reevaluate crashes cancelled - project initialization and Docker build required",
+        );
+        return;
+      }
+
+      this.safeOutputLog(
+        `Reevaluating crashes for fuzzer: ${fuzzerName}`,
+        false,
+      );
+
+      // Show progress notification
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `CodeForge: Reevaluating crashes for ${fuzzerName}...`,
+          cancellable: false,
+        },
+        async (progress) => {
+          try {
+            // First, rebuild the fuzzer to ensure we have the latest binary
+            progress.report({ message: "Building fuzzer..." });
+
+            const fuzzerIdentifier = `${cachedFuzzer.preset}:${fuzzerName}`;
+            const buildCommand = `.codeforge/scripts/build-fuzz-tests.sh "${fuzzerIdentifier}"`;
+
+            const buildOptions = {
+              removeAfterRun: true,
+              mountWorkspace: true,
+              dockerCommand: "docker",
+              containerType: "build_fuzzer",
+              resourceManager: this.resourceManager,
+            };
+
+            const buildProcess = dockerOperations.runDockerCommandWithOutput(
+              workspacePath,
+              containerName,
+              buildCommand,
+              "/bin/bash",
+              buildOptions,
+            );
+
+            let buildStdout = "";
+            let buildStderr = "";
+
+            buildProcess.stdout.on("data", (data) => {
+              buildStdout += data.toString();
+            });
+
+            buildProcess.stderr.on("data", (data) => {
+              buildStderr += data.toString();
+            });
+
+            await new Promise((resolve, reject) => {
+              buildProcess.on("close", (code) => {
+                if (code !== 0) {
+                  this.safeOutputLog(
+                    `Build failed with exit code ${code}: ${buildStderr}`,
+                    false,
+                  );
+                  reject(
+                    new Error(
+                      `Build failed with exit code ${code}: ${buildStderr}`,
+                    ),
+                  );
+                  return;
+                }
+
+                this.safeOutputLog(`Successfully built ${fuzzerName}`);
+                resolve();
+              });
+
+              buildProcess.on("error", (error) => {
+                reject(
+                  new Error(`Failed to execute build script: ${error.message}`),
+                );
+              });
+            });
+
+            // Now reevaluate crashes
+            progress.report({ message: "Reevaluating crashes..." });
+
+            const reevaluateCommand = `.codeforge/scripts/reevaluate-crashes.sh "${fuzzerIdentifier}"`;
+
+            const reevaluateOptions = {
+              removeAfterRun: true,
+              mountWorkspace: true,
+              dockerCommand: "docker",
+              containerType: "reevaluate_crashes",
+              resourceManager: this.resourceManager,
+            };
+
+            const reevaluateProcess =
+              dockerOperations.runDockerCommandWithOutput(
+                workspacePath,
+                containerName,
+                reevaluateCommand,
+                "/bin/bash",
+                reevaluateOptions,
+              );
+
+            let reevaluateStdout = "";
+            let reevaluateStderr = "";
+
+            reevaluateProcess.stdout.on("data", (data) => {
+              reevaluateStdout += data.toString();
+            });
+
+            reevaluateProcess.stderr.on("data", (data) => {
+              reevaluateStderr += data.toString();
+            });
+
+            await new Promise((resolve, reject) => {
+              reevaluateProcess.on("close", (code) => {
+                if (code !== 0) {
+                  this.safeOutputLog(
+                    `Reevaluate crashes script failed with exit code ${code}: ${reevaluateStderr}`,
+                    false,
+                  );
+                  reject(
+                    new Error(
+                      `Reevaluate crashes script failed with exit code ${code}: ${reevaluateStderr}`,
+                    ),
+                  );
+                  return;
+                }
+
+                this.safeOutputLog(
+                  `Successfully reevaluated crashes for ${fuzzerName}`,
+                );
+                resolve();
+              });
+
+              reevaluateProcess.on("error", (error) => {
+                reject(
+                  new Error(
+                    `Failed to execute reevaluate crashes script: ${error.message}`,
+                  ),
+                );
+              });
+            });
+          } catch (error) {
+            throw error;
+          }
+        },
+      );
+
+      // Refresh fuzzer data
+      await this.handleRefreshFuzzers();
+
+      vscode.window.showInformationMessage(
+        `CodeForge: Reevaluated crashes for ${fuzzerName}`,
+      );
+    } catch (error) {
+      this.safeOutputLog(`Error reevaluating crashes: ${error.message}`, false);
+      vscode.window.showErrorMessage(
+        `CodeForge: Failed to reevaluate crashes - ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * View corpus files for a fuzzer
    */
   async handleViewCorpus(params) {
@@ -1855,6 +2064,7 @@ class CodeForgeCommandHandlers {
       "codeforge.analyzeCrash": this.handleAnalyzeCrash.bind(this),
       "codeforge.debugCrash": this.handleDebugCrash.bind(this),
       "codeforge.clearCrashes": this.handleClearCrashes.bind(this),
+      "codeforge.reevaluateCrashes": this.handleReevaluateCrashes.bind(this),
       "codeforge.viewCorpus": this.handleViewCorpus.bind(this),
       "codeforge.initializeProject": this.handleInitializeProject.bind(this),
     };

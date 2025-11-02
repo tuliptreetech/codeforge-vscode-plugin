@@ -192,6 +192,7 @@
       analyzeCrash: "Analyzing crash...",
       debugCrash: "Launching GDB server...",
       clearCrashes: "Clearing crashes...",
+      reevaluateCrashes: "Reevaluating crashes...",
       viewCorpus: "Opening corpus viewer...",
       initializeCodeForge: "Initializing CodeForge...",
     };
@@ -521,6 +522,7 @@
           </div>
           <div class="fuzzer-actions">
             <button class="fuzzer-action-btn" data-action="runFuzzer" data-fuzzer-name="${fuzzer.name}" title="Run this fuzzer">▶️</button>
+            <button class="fuzzer-action-btn" data-action="reevaluateCrashes" data-fuzzer-name="${fuzzer.name}" title="Reevaluate crashes for this fuzzer">🔄</button>
             <button class="fuzzer-action-btn" data-action="viewCorpus" data-fuzzer-name="${fuzzer.name}" title="View corpus files">📁</button>
           </div>
         </div>
@@ -537,6 +539,16 @@
         btn.addEventListener("click", (e) => {
           const fuzzerName = e.target.dataset.fuzzerName;
           executeCommand("runFuzzer", { fuzzerName });
+        });
+      });
+
+    // Reevaluate crashes buttons
+    document
+      .querySelectorAll('.fuzzer-action-btn[data-action="reevaluateCrashes"]')
+      .forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const fuzzerName = e.target.dataset.fuzzerName;
+          executeCommand("reevaluateCrashes", { fuzzerName });
         });
       });
 

@@ -1,6 +1,9 @@
 const vscode = require("vscode");
 const dockerOperations = require("./core/dockerOperations");
 const { ResourceManager } = require("./core/resourceManager");
+const {
+  InitializationDetectionService,
+} = require("./core/initializationDetectionService");
 const { CodeForgeTaskProvider } = require("./tasks/taskProvider");
 const { CodeForgeWebviewProvider } = require("./ui/webviewProvider");
 const { CodeForgeCommandHandlers } = require("./ui/commandHandlers");
@@ -199,6 +202,11 @@ function activate(context) {
       webviewProvider._checkInitializationStatus();
     }
   }, 500);
+
+  // Ensure all scripts are present in initialized workspaces (for upgrades)
+  setTimeout(() => {
+    ensureScriptsAreSynced(resourceManager);
+  }, 1000);
 
   // Run fuzzer discovery asynchronously after extension activation
   runInitialFuzzerDiscovery();
@@ -471,6 +479,49 @@ async function ensureInitializedAndBuilt(workspacePath, containerName) {
     return false;
   }
 }
+
+/**
+ * Ensures all required scripts are present in initialized workspaces
+ * This is useful for upgrading existing installations when new scripts are added
+ */
+async function ensureScriptsAreSynced(resourceManager) {
+  try {
+    // Check if there's an open workspace
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      return;
+    }
+
+    const workspacePath = workspaceFolder.uri.fsPath;
+
+    // Create initialization service
+    const initService = new InitializationDetectionService(resourceManager);
+
+    // Check if project is initialized
+    const hasProject = await initService.hasCodeForgeProject(workspacePath);
+    if (!hasProject) {
+      // Project not initialized, nothing to sync
+      return;
+    }
+
+    // Ensure all scripts are present
+    const result = await initService.ensureScriptsArePresent(workspacePath);
+
+    if (result.installedScripts.length > 0) {
+      safeOutputLog(
+        `Installed missing scripts: ${result.installedScripts.join(", ")}`,
+      );
+    }
+
+    if (result.errors.length > 0) {
+      safeOutputLog(`Script sync errors: ${result.errors.join(", ")}`, true);
+    }
+  } catch (error) {
+    safeOutputLog(`Error syncing scripts: ${error.message}`);
+    // Don't show error to user as this is a background operation
+  }
+}
+
 /**
  * Runs initial fuzzer discovery asynchronously after extension activation
  * This ensures fuzzers are available immediately when the webview is opened

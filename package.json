@@ -103,6 +103,11 @@
         "command": "codeforge.regenerateFuzzerList",
         "title": "CodeForge: Regenerate Fuzzer List",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "codeforge.reevaluateCrashes",
+        "title": "CodeForge: Reevaluate Crashes",
+        "icon": "$(sync)"
       }
     ],
     "menus": {},

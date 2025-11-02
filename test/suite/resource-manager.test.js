@@ -103,6 +103,15 @@ suite("ResourceManager Test Suite", () => {
       ),
       "#!/usr/bin/env bash\necho 'Launch process in docker'\n",
     );
+    await fs.writeFile(
+      path.join(
+        mockExtensionPath,
+        "resources",
+        "scripts",
+        "reevaluate-crashes.sh",
+      ),
+      "#!/usr/bin/env bash\necho 'Reevaluate crashes'\n",
+    );
 
     // Initialize ResourceManager with mock extension path
     resourceManager = new ResourceManager(mockExtensionPath);
@@ -834,12 +843,12 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
         await fs.mkdir(targetDir, { recursive: true });
       });
 
-      test("Should dump all seven script files with executable permissions", async () => {
+      test("Should dump all eight script files with executable permissions", async () => {
         const dumpedPaths = await resourceManager.dumpScripts(targetDir);
 
         // Verify return value is an array with correct length
         assert.strictEqual(Array.isArray(dumpedPaths), true);
-        assert.strictEqual(dumpedPaths.length, 7);
+        assert.strictEqual(dumpedPaths.length, 8);
 
         // Expected script files
         const expectedScripts = [
@@ -850,6 +859,7 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
           "generate-backtrace.sh",
           "clear-crashes.sh",
           "launch-process-in-docker.sh",
+          "reevaluate-crashes.sh",
         ];
 
         // Verify all scripts were dumped
@@ -930,7 +940,7 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
 
         const dumpedPaths = await resourceManager.dumpScripts(newTargetDir);
 
-        assert.strictEqual(dumpedPaths.length, 7);
+        assert.strictEqual(dumpedPaths.length, 8);
 
         // Verify all files were created in the new directory
         for (const dumpedPath of dumpedPaths) {

@@ -219,6 +219,80 @@ class InitializationDetectionService {
       return false;
     }
   }
+
+  /**
+   * Ensure all required scripts are present in the workspace
+   * This is useful for upgrading existing installations when new scripts are added
+   * @param {string} workspacePath - Path to the workspace directory
+   * @returns {Promise<{success: boolean, installedScripts: string[], errors: string[]}>}
+   */
+  async ensureScriptsArePresent(workspacePath) {
+    if (!workspacePath || !this.resourceManager) {
+      return {
+        success: false,
+        installedScripts: [],
+        errors: ["No workspace path or resource manager not available"],
+      };
+    }
+
+    const codeforgeDir = path.join(workspacePath, ".codeforge");
+    const scriptsDir = path.join(codeforgeDir, "scripts");
+
+    try {
+      // Check if .codeforge directory exists
+      try {
+        await fs.access(codeforgeDir);
+      } catch (error) {
+        // If .codeforge doesn't exist, project is not initialized
+        return {
+          success: false,
+          installedScripts: [],
+          errors: ["Project not initialized - .codeforge directory not found"],
+        };
+      }
+
+      // Ensure scripts directory exists
+      await fs.mkdir(scriptsDir, { recursive: true });
+
+      // Get list of all available scripts from resource manager
+      const availableScripts = this.resourceManager.getAvailableScripts();
+      const installedScripts = [];
+      const errors = [];
+
+      // Check and install each script if missing
+      for (const scriptName of availableScripts) {
+        const scriptPath = path.join(scriptsDir, scriptName);
+
+        try {
+          // Check if script exists
+          await fs.access(scriptPath);
+          // Script exists, no need to install
+        } catch (error) {
+          // Script doesn't exist, install it
+          try {
+            await this.resourceManager.dumpScript(scriptName, scriptsDir);
+            installedScripts.push(scriptName);
+          } catch (installError) {
+            errors.push(
+              `Failed to install ${scriptName}: ${installError.message}`,
+            );
+          }
+        }
+      }
+
+      return {
+        success: errors.length === 0,
+        installedScripts,
+        errors,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        installedScripts: [],
+        errors: [`Failed to ensure scripts are present: ${error.message}`],
+      };
+    }
+  }
 }
 
 module.exports = { InitializationDetectionService };
