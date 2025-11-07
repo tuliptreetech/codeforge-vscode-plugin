@@ -24,6 +24,7 @@ async handleRunFuzzing() {
 ```
 
 **Key Steps**:
+
 - Validates initialization status
 - Validates Docker image exists
 - Creates a custom terminal implementation (PTY) for fuzzing
@@ -33,6 +34,7 @@ async handleRunFuzzing() {
 **Location**: `/home/ms/codeforge-vscode-plugin/src/fuzzing/fuzzingTerminal.js:33`
 
 **Flow**:
+
 ```
 1. Terminal opens (open() method)
    ↓
@@ -98,12 +100,13 @@ if (crashMatch) {
   results.crashes.push({
     fuzzer: fuzzerName,
     file: crashFile,
-    relativePath: crashFile.split("/").slice(-2).join("/")
+    relativePath: crashFile.split("/").slice(-2).join("/"),
   });
 }
 ```
 
 **Crash File Structure**:
+
 ```
 .codeforge/fuzzing/
 ├── {FUZZER_NAME}-output/
@@ -156,6 +159,7 @@ discoverCrashes()
 ```
 
 **Example**:
+
 ```json
 {
   "id": "abc12345",
@@ -177,6 +181,7 @@ discoverCrashes()
 **Location**: `/home/ms/codeforge-vscode-plugin/src/fuzzing/fuzzerDiscoveryService.js`
 
 **Flow**:
+
 ```
 discoverFuzzers(workspacePath, imageName)
 ├─ Check cache validity (30-second timeout)
@@ -220,13 +225,13 @@ discoverFuzzers(workspacePath, imageName)
 ```javascript
 associateCrashesWithFuzzers(fuzzerName, crashData) {
   // crashData is from CrashDiscoveryService: [{fuzzerName, crashes[]}, ...]
-  
+
   for (const fuzzerCrashData of crashData) {
     if (fuzzerCrashData.fuzzerName === fuzzerName) {
       associatedCrashes.push(...fuzzerCrashData.crashes);
     }
   }
-  
+
   // Sort by creation time (newest first)
   return associatedCrashes.sort((a, b) =>
     new Date(b.createdAt) - new Date(a.createdAt)
@@ -237,16 +242,18 @@ associateCrashesWithFuzzers(fuzzerName, crashData) {
 ### 3.4 Cache Management
 
 **Cache Properties**:
+
 - Duration: 30 seconds (defined at fuzzerDiscoveryService.js:33)
 - Stored in: `cachedFuzzers` Map
 - Timestamp: `cacheTimestamp`
 
 **Cache Methods**:
+
 ```javascript
-isCacheValid()          // Check if cache is still valid
-updateCache(fuzzers)    // Update cache with new data
-invalidateCache()       // Clear cache
-refreshFuzzerData()     // Bypass cache, discover fresh data
+isCacheValid(); // Check if cache is still valid
+updateCache(fuzzers); // Update cache with new data
+invalidateCache(); // Clear cache
+refreshFuzzerData(); // Bypass cache, discover fresh data
 ```
 
 ---
@@ -258,6 +265,7 @@ refreshFuzzerData()     // Bypass cache, discover fresh data
 **Location**: `/home/ms/codeforge-vscode-plugin/src/ui/webviewProvider.js`
 
 **Initial State Management**:
+
 ```
 resolveWebviewView()
 ├─ Create webview with HTML/CSS/JS
@@ -299,6 +307,7 @@ _performInitialFuzzerDiscovery()
 ### 4.3 State Update Messages (webviewProvider.js:193-234)
 
 **Format**:
+
 ```javascript
 {
   type: "stateUpdate",
@@ -333,7 +342,7 @@ _performInitialFuzzerDiscovery()
 ```javascript
 if (elements.refreshFuzzersBtn) {
   elements.refreshFuzzersBtn.addEventListener("click", () =>
-    executeCommand("refreshFuzzers")
+    executeCommand("refreshFuzzers"),
   );
 }
 ```
@@ -343,6 +352,7 @@ if (elements.refreshFuzzersBtn) {
 **Location**: `/home/ms/codeforge-vscode-plugin/src/ui/commandHandlers.js:751`
 
 **Flow**:
+
 ```
 handleRefreshFuzzers()
 ├─ Get workspace path
@@ -384,6 +394,7 @@ refreshFuzzerData(workspacePath, containerName, fuzzerName = null)
 ### 6.1 State to UI Mapping (webview.js:109-148)
 
 **Main Update Flow**:
+
 ```
 updateState(newState)
 ├─ Deep merge nested objects (fuzzers, initialization)
@@ -399,6 +410,7 @@ updateState(newState)
 **Location**: `/home/ms/codeforge-vscode-plugin/src/ui/webview.js:405`
 
 **Rendering States**:
+
 ```
 if (fuzzers.isLoading)
   └─ Show loading spinner with "Scanning for fuzzers..."
@@ -441,6 +453,7 @@ else
 ### 6.3 Crash Action Handlers (webview.js:534-608)
 
 **View Crash** (👁️):
+
 ```
 → executeCommand("viewCrash", {crashId, filePath, fuzzerName})
 → handleViewCrash() in commandHandlers
@@ -448,6 +461,7 @@ else
 ```
 
 **Analyze Crash** (🔍):
+
 ```
 → executeCommand("analyzeCrash", {crashId, fuzzerName, filePath})
 → handleAnalyzeCrash() in commandHandlers
@@ -455,6 +469,7 @@ else
 ```
 
 **Debug Crash** (🐛):
+
 ```
 → executeCommand("debugCrash", {crashId, fuzzerName, filePath})
 → handleDebugCrash() in commandHandlers
@@ -462,6 +477,7 @@ else
 ```
 
 **Clear All Crashes**:
+
 ```
 → executeCommand("clearCrashes", {fuzzerName})
 → handleClearCrashes() in commandHandlers
@@ -484,17 +500,18 @@ const baseUpdateState = updateState;
 
 updateState = function (newState) {
   const wasFuzzing = lastFuzzingState;
-  const isFuzzing = newState.isLoading && getCurrentCommand() === "runFuzzingTests";
-  
+  const isFuzzing =
+    newState.isLoading && getCurrentCommand() === "runFuzzingTests";
+
   baseUpdateState(newState);
-  
+
   // If fuzzing just completed → auto-refresh crashes
   if (wasFuzzing && !isFuzzing) {
     setTimeout(() => {
       executeCommand("refreshFuzzers");
-    }, 1000);  // Wait 1 second before refresh
+    }, 1000); // Wait 1 second before refresh
   }
-  
+
   lastFuzzingState = isFuzzing;
 };
 ```
@@ -509,7 +526,7 @@ setInterval(() => {
   if (!currentState.isLoading) {
     vscode.postMessage({ type: "requestState" });
   }
-}, 30000);  // 30-second interval
+}, 30000); // 30-second interval
 ```
 
 ### 7.3 Command Completion Auto-Refresh (webview.js:348-359)
@@ -533,32 +550,38 @@ case "commandComplete":
 
 ## 8. MONITORING METHODS SUMMARY
 
-| Method | Interval | Trigger | Type |
-|--------|----------|---------|------|
-| **Auto-refresh after fuzzing** | 1 second | Fuzzing command completion | Event-driven |
-| **Periodic refresh** | 30 seconds | Timer | Time-based polling |
-| **Post-command refresh** | 500ms | Any command completion | Event-driven |
-| **Manual refresh button** | On-demand | User click | User-triggered |
-| **Operation-specific refresh** | Immediate | clearCrashes, reevaluateCrashes | Event-driven |
+| Method                         | Interval   | Trigger                         | Type               |
+| ------------------------------ | ---------- | ------------------------------- | ------------------ |
+| **Auto-refresh after fuzzing** | 1 second   | Fuzzing command completion      | Event-driven       |
+| **Periodic refresh**           | 30 seconds | Timer                           | Time-based polling |
+| **Post-command refresh**       | 500ms      | Any command completion          | Event-driven       |
+| **Manual refresh button**      | On-demand  | User click                      | User-triggered     |
+| **Operation-specific refresh** | Immediate  | clearCrashes, reevaluateCrashes | Event-driven       |
 
 ---
 
 ## 9. CURRENT POLLING/WATCHING MECHANISMS
 
 ### 9.1 File System Monitoring
+
 **Status**: NOT implemented
+
 - No file watchers on crash directories
 - No native fs.watch() usage for crash files
 - Relies entirely on script execution and polling
 
 ### 9.2 Cache-Based Updates
+
 **Status**: IMPLEMENTED (30-second TTL)
+
 - `FuzzerDiscoveryService` maintains 30-second cache
 - Cache auto-invalidates on refresh
 - Reduces Docker script execution frequency
 
 ### 9.3 Script-Based Discovery
+
 **Status**: PRIMARY MECHANISM
+
 - Uses Docker scripts to query file system:
   - `find-fuzz-tests.sh` - discovers fuzzer binaries
   - `find-crashes.sh` - discovers crash files
@@ -566,7 +589,9 @@ case "commandComplete":
 - Real-time file system introspection
 
 ### 9.4 User-Triggered Refresh
+
 **Status**: IMPLEMENTED
+
 - Manual refresh button in UI
 - Clears cache and forces discovery
 - Returns results to UI in ~1-2 seconds
@@ -575,15 +600,15 @@ case "commandComplete":
 
 ## 10. KEY FILES AND RESPONSIBILITIES
 
-| File | Responsibility |
-|------|-----------------|
-| `fuzzingOperations.js` | Orchestrates full fuzzing workflow, parses crash output |
-| `crashDiscoveryService.js` | Executes crash discovery script, parses results, builds crash objects |
+| File                        | Responsibility                                                         |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `fuzzingOperations.js`      | Orchestrates full fuzzing workflow, parses crash output                |
+| `crashDiscoveryService.js`  | Executes crash discovery script, parses results, builds crash objects  |
 | `fuzzerDiscoveryService.js` | Integrates fuzzer + crash discovery, manages cache, associates crashes |
-| `webviewProvider.js` | Manages webview state, coordinates UI updates with backend |
-| `commandHandlers.js` | Handles all user commands, triggers refresh operations |
-| `webview.js` | Renders UI, manages click handlers, implements auto-refresh timers |
-| `fuzzingTerminal.js` | Custom terminal PTY, runs fuzzing workflow, streams output |
+| `webviewProvider.js`        | Manages webview state, coordinates UI updates with backend             |
+| `commandHandlers.js`        | Handles all user commands, triggers refresh operations                 |
+| `webview.js`                | Renders UI, manages click handlers, implements auto-refresh timers     |
+| `fuzzingTerminal.js`        | Custom terminal PTY, runs fuzzing workflow, streams output             |
 
 ---
 
@@ -627,14 +652,17 @@ Webview receives stateUpdate
 ## 12. PERFORMANCE CHARACTERISTICS
 
 ### Cache Effectiveness
+
 - **With cache (valid)**: ~50ms UI update (no Docker calls)
 - **Without cache (refresh)**: ~2-5 seconds (Docker script execution)
 
 ### Polling Overhead
+
 - **Per 30-second cycle**: 1 Docker script execution if no loading
 - **Annual calls** (30-second polling): ~1,440 script executions
 
 ### Script Execution Flow
+
 ```
 User action
   ↓
@@ -654,15 +682,16 @@ UI updates in real-time
 ## 13. KNOWN LIMITATIONS & FUTURE IMPROVEMENTS
 
 ### Current Limitations
+
 1. **No file watching**: Relies on polling, not real-time fs events
 2. **No streaming updates**: Crashes only discovered after fuzzing completes
 3. **Cache TTL**: 30-second minimum delay for crash updates
 4. **Script dependency**: All discovery requires Docker container startup
 
 ### Potential Improvements
+
 1. **Native file watching**: Use `chokidar` or `fs.watch()` on crash directories
 2. **Real-time streaming**: Monitor fuzzer output during execution
 3. **Shorter cache TTL**: Increase responsiveness (trade-off with performance)
 4. **Local file discovery**: Skip Docker for crash enumeration if possible
 5. **Incremental updates**: Only fetch new crashes since last scan
-
