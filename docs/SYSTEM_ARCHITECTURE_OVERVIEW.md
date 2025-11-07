@@ -90,6 +90,7 @@ Complete architectural documentation for the CodeForge VSCode extension.
 ## Discovery Services Architecture
 
 ### FuzzerDiscoveryService
+
 - **Location**: `src/fuzzing/fuzzerDiscoveryService.js`
 - **Responsibility**: Discover fuzzers and associate crashes
 - **Key Methods**:
@@ -99,11 +100,13 @@ Complete architectural documentation for the CodeForge VSCode extension.
   - `associateCrashesWithFuzzers()` - Match crashes to fuzzers
 
 **Cache System**:
+
 - TTL: 30 seconds
 - Stored in: `cachedFuzzers` Map
 - Invalidated by: `refreshFuzzerData()` or TTL expiration
 
 ### CrashDiscoveryService
+
 - **Location**: `src/fuzzing/crashDiscoveryService.js`
 - **Responsibility**: Find crash files and build metadata
 - **Key Methods**:
@@ -113,12 +116,14 @@ Complete architectural documentation for the CodeForge VSCode extension.
   - `buildCrashInfo()` - Create CrashInfo objects with file stats
 
 **Data Output**:
+
 - Array of `{fuzzerName, crashes[], outputDir, lastScan}`
 - Each crash contains: `{id, fullHash, filePath, fileSize, createdAt, fuzzerName}`
 
 ## Webview State Management
 
 ### State Object Structure
+
 ```javascript
 {
   isLoading: boolean,              // Global loading state
@@ -140,6 +145,7 @@ Complete architectural documentation for the CodeForge VSCode extension.
 ```
 
 ### Message Types
+
 1. **stateUpdate** - State changed, re-render UI
 2. **commandComplete** - Command finished, request fresh state
 3. **error** - Error occurred, show error state
@@ -147,23 +153,27 @@ Complete architectural documentation for the CodeForge VSCode extension.
 ## Refresh Mechanisms
 
 ### Manual Refresh
+
 - User clicks 🔄 button in activity bar
 - Calls: `executeCommand("refreshFuzzers")`
 - Effect: Clears cache, discovers all fuzzers/crashes
 
 ### Auto-Refresh After Fuzzing
+
 - **Trigger**: Fuzzing command completes
 - **Delay**: 1 second after completion
 - **Implementation**: `webview.js:677-684`
 - **Effect**: Calls `executeCommand("refreshFuzzers")`
 
 ### Periodic Auto-Refresh
+
 - **Interval**: Every 30 seconds
 - **Condition**: Only if not currently loading
 - **Implementation**: `webview.js:689-691`
 - **Effect**: Requests fresh state from extension
 
 ### Post-Command Auto-Refresh
+
 - **Trigger**: Any command completes successfully
 - **Delay**: 500ms after command completes
 - **Implementation**: `webview.js:354-356`
@@ -172,6 +182,7 @@ Complete architectural documentation for the CodeForge VSCode extension.
 ## File System Structure
 
 ### Crash Storage Location
+
 ```
 workspace/.codeforge/fuzzing/
 ├── {FUZZER_NAME}-output/
@@ -188,6 +199,7 @@ workspace/.codeforge/fuzzing/
 ```
 
 ### Discovery Process
+
 1. Find all directories matching `*-output` pattern
 2. For each directory, list `corpus/` subdirectory
 3. Filter for files starting with `crash-`
@@ -196,17 +208,20 @@ workspace/.codeforge/fuzzing/
 ## Performance Profile
 
 ### Timing
+
 - **Initial fuzzer discovery**: ~2-5 seconds (with Docker)
 - **Cached fuzzer data**: ~50ms (from 30-second cache)
 - **Refresh operation**: ~2-5 seconds (bypasses cache)
 - **Post-command UI update**: 500-1000ms total latency
 
 ### Polling
+
 - **Frequency**: 1 call per 30 seconds (minimum)
 - **Annual calls**: ~1,440 discovery cycles (at 30-second interval)
 - **Cache effectiveness**: 99% reduction in Docker calls during valid cache period
 
 ### Resource Usage
+
 - **Per discovery**: 2 Docker script executions (find-fuzz-tests.sh + find-crashes.sh)
 - **Memory**: Minimal (Map-based cache, ~1KB per fuzzer)
 - **Network**: None (local Docker operations)
@@ -214,15 +229,18 @@ workspace/.codeforge/fuzzing/
 ## Error Handling Strategy
 
 ### Silent Failures (Don't Show User)
+
 - Initial fuzzer discovery in `_performInitialFuzzerDiscovery()`
 - Errors logged to console, not shown in UI
 
 ### User-Facing Errors
+
 - Crash analysis/debugging errors - Show popup
 - Clear crashes errors - Show popup
 - Reevaluate crashes errors - Show popup
 
 ### Error Recovery
+
 - No auto-retry (user must click refresh)
 - Fallback to cached data if discovery fails
 - Error state shown with retry button
@@ -230,11 +248,13 @@ workspace/.codeforge/fuzzing/
 ## Extension Commands
 
 ### Fuzzing Commands
+
 - `codeforge.runFuzzingTests` - Start full fuzzing workflow
 - `codeforge.buildFuzzingTests` - Build targets without fuzzing
 - `codeforge.runFuzzer` - Run specific fuzzer by name
 
 ### Crash Commands
+
 - `codeforge.viewCrash` - Open hex viewer for crash file
 - `codeforge.analyzeCrash` - Run GDB analysis
 - `codeforge.debugCrash` - Launch GDB server for remote debugging
@@ -242,12 +262,14 @@ workspace/.codeforge/fuzzing/
 - `codeforge.reevaluateCrashes` - Rebuild fuzzer and reevaluate crashes
 
 ### UI Commands
+
 - `codeforge.refreshFuzzers` - Manual refresh of fuzzer/crash data
 - `codeforge.launchTerminal` - Launch container terminal
 
 ## Integration Points
 
 ### With VSCode API
+
 - **Activity Bar**: Webview displays in custom activity bar icon
 - **Terminal API**: Custom PTY for fuzzing output
 - **Debugger**: Creates launch configs for GDB debugging
@@ -255,12 +277,14 @@ workspace/.codeforge/fuzzing/
 - **Settings**: Configuration via `contributes.configuration` in package.json
 
 ### With Docker
+
 - **Engine**: Uses Docker CLI for container operations
 - **Scripts**: Executes `.codeforge/scripts/*.sh` inside containers
 - **Mounts**: Workspace mounted to `/workspace` in containers
 - **Port Forwarding**: Supports custom port mappings
 
 ### With CMake
+
 - **Presets**: Reads CMakePresets.json for fuzzer configurations
 - **Targets**: Discovers fuzzer targets via CMake introspection
 - **Compilation**: Compiles fuzzers using CMake and provided presets
@@ -268,6 +292,7 @@ workspace/.codeforge/fuzzing/
 ## Future Enhancements
 
 ### Proposed Improvements
+
 1. **Real-time file watching** - Replace polling with fs.watch()
 2. **Streaming crash discovery** - Show crashes during fuzzing
 3. **Incremental updates** - Only fetch new crashes since last scan
@@ -275,6 +300,7 @@ workspace/.codeforge/fuzzing/
 5. **Configurable cache TTL** - User-adjustable refresh rate
 
 ### Known Limitations
+
 1. No native file watching (polling-based)
 2. Crashes only discovered after fuzzing completes
 3. All discovery requires Docker container
