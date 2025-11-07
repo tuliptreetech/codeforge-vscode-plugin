@@ -146,6 +146,12 @@ class CodeForgeFuzzingTerminal {
         // Mark fuzzing as complete and enable key-to-close
         this.fuzzingComplete = true;
 
+        // Automatically refresh fuzzer/crash data in the activity bar
+        this.writeEmitter.fire(
+          `\r\n\x1b[36mRefreshing activity bar...\x1b[0m\r\n`,
+        );
+        await vscode.commands.executeCommand("codeforge.refreshFuzzers");
+
         // Add message prompting user to press any key to close
         this.writeEmitter.fire(
           `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
@@ -446,6 +452,12 @@ class CodeForgeBuildTerminal {
 
         // Mark build as complete and enable key-to-close
         this.buildComplete = true;
+
+        // Automatically refresh fuzzer data in the activity bar
+        this.writeEmitter.fire(
+          `\r\n\x1b[36mRefreshing activity bar...\x1b[0m\r\n`,
+        );
+        await vscode.commands.executeCommand("codeforge.refreshFuzzers");
 
         // Add message prompting user to press any key to close
         this.writeEmitter.fire(
