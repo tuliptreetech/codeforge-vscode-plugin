@@ -526,10 +526,7 @@ function runDockerCommandWithOutput(
     "launch-process-in-docker.sh",
   );
 
-  const scriptArgs = [
-    // First argument must be workspace directory (required by script)
-    workspaceFolder,
-  ];
+  const scriptArgs = [];
 
   // Add image name
   scriptArgs.push("--image", imageName);
@@ -864,7 +861,6 @@ function runCommandInNewContainer(workspacePath, command, options = {}) {
   } = options;
 
   // Build the script command
-  // If resourceManager is provided, use the extension script path
   // Use workspace .codeforge/scripts directory
   const scriptPath = path.join(
     workspacePath,

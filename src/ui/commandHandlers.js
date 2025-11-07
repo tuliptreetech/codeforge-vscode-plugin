@@ -231,8 +231,6 @@ class CodeForgeCommandHandlers {
       );
 
       const scriptArgs = [
-        // First argument must be workspace directory (required by script)
-        workspacePath,
         // NOTE: Use --stdin instead of -i! VSCode provides stdin but not a TTY
         // Using -i (which adds -it) causes "input device is not a TTY" error
         "--stdin",
@@ -259,8 +257,7 @@ class CodeForgeCommandHandlers {
         scriptArgs.push("--docker-arg", arg);
       }
 
-      // Add the shell command to start an interactive session
-      scriptArgs.push(defaultShell);
+      // No command needed - script defaults to interactive shell when no command is provided
 
       const terminal = vscode.window.createTerminal({
         name: `CodeForge: ${path.basename(workspacePath)}`,
