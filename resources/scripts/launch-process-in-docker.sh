@@ -7,25 +7,10 @@ set -euo pipefail
 # and runs commands in a new container with support for interactive mode and port forwarding.
 # Tracks persistent containers in .codeforge/tracked-containers for lifecycle management.
 #
-# Usage: launch-process-in-docker.sh <workspace_directory> [options] [command]
+# Usage: launch-process-in-docker.sh [options] [command]
 
-# Validate that workspace directory was provided as the first parameter
-if [ $# -lt 1 ]; then
-    echo "Error: Workspace directory must be provided as the first argument"
-    echo "Usage: $0 <workspace_directory> [options] [command]"
-    exit 1
-fi
-
-# Extract workspace directory from first argument
-root_directory="$1"
-shift  # Remove first argument so remaining args can be processed normally
-
-# Verify workspace directory exists
-if [ ! -d "$root_directory" ]; then
-    echo "Error: Workspace directory does not exist: $root_directory"
-    exit 1
-fi
-
+# The workspace directory is where we are running from
+root_directory="$(pwd)"
 codeforge_directory="$root_directory/.codeforge"
 tracked_containers_file="$codeforge_directory/tracked-containers"
 
@@ -49,12 +34,9 @@ QUIET=false
 
 # Usage information
 usage() {
-    echo "Usage: $0 <workspace_directory> [options] [command]"
+    echo "Usage: $0 [options] [command]"
     echo ""
     echo "Execute commands in a new CodeForge Docker container."
-    echo ""
-    echo "Arguments:"
-    echo "  workspace_directory          Path to the workspace directory (required)"
     echo ""
     echo "Options:"
     echo "  -i, --interactive            Run in interactive mode (allocate TTY and keep stdin open)"
@@ -72,6 +54,7 @@ usage() {
     echo "  -h, --help                   Show this help message"
     echo ""
     echo "Examples:"
+    echo "  $0                                           # Open interactive shell (default)"
     echo "  $0 ls -la                                    # Run 'ls -la' in new container"
     echo "  $0 -i /bin/bash                              # Open interactive bash shell"
     echo "  $0 -p 8080:80 python3 -m http.server        # Run web server with port forwarding"
@@ -168,10 +151,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Validate that a command was provided
+# If no command was provided, default to interactive shell with stdin mode
 if [ -z "$COMMAND" ]; then
-    echo "Error: No command specified"
-    usage
+    STDIN_OPEN=true
+    CONTAINER_TYPE="terminal"
+    COMMAND="$SHELL"
 fi
 
 # Generate container image name from workspace path
