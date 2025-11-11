@@ -368,6 +368,49 @@ For complete configuration documentation, parameter reference, validation rules,
 
 ## Release Notes
 
+### 0.1.4
+
+Major architectural update focused on security, reliability, and deployment improvements:
+
+#### Security & Reliability
+
+- **Security Validation**: Added comprehensive fuzzer name validation to prevent shell injection attacks, with 48 test cases ensuring robust protection
+- **Timeout Handling**: Implemented configurable timeouts for Docker operations to prevent infinite hangs when Docker daemon is unresponsive
+- **Input Validation**: Fuzzer names now validated against strict patterns to prevent command injection vulnerabilities
+
+#### Docker Image Distribution
+
+- **GHCR Integration**: Migrated from local Docker builds to pre-built images from GitHub Container Registry (ghcr.io/tuliptreetech/codeforge-docker)
+  - Faster deployment without requiring local image builds
+  - Improved consistency across all installations
+  - Pre-configured fuzzing environment with all necessary tools
+- **Multi-Architecture Support**: Removed hardcoded platform constraints for native execution on ARM64 systems
+  - Apple Silicon and ARM servers now run containers natively without emulation overhead
+  - Automatic platform detection for optimal performance
+
+#### Script Architecture
+
+- **Docker-Based Scripts**: Migrated 7 fuzzing scripts from local resources to Docker image
+  - Scripts accessed via clean `codeforge <script-name>` CLI interface
+  - Reduced local resource requirements
+  - Simplified maintenance and updates
+- **Crash Reevaluation**: New functionality to test crash files against rebuilt binaries, automatically identifying fixed bugs
+- **Script Auto-Sync**: Scripts automatically synchronized on extension load for seamless upgrades
+
+#### User Experience
+
+- **Simplified Launch Script**: Auto-detects workspace directory, eliminating required positional arguments
+- **Fuzzing UI Refresh**: Automatic refresh after fuzzing runs for up-to-date crash information
+- **Streamlined Initialization**: Reduced from 4 to 3 initialization components
+- **Cleaner Interface**: Removed unnecessary cancel buttons
+
+#### Bug Fixes
+
+- Fixed null reference issues in TaskProvider
+- Enhanced initialization state verification
+- Improved crash discovery to check multiple locations
+- Fixed fuzzer display state management bugs
+
 ### 0.1.3
 
 Refinement release focused on terminal integration, Docker operations unification, and developer documentation:

@@ -1,17 +1,33 @@
+# VSCode and development directories
 .vscode/**
 .vscode-test/**
-.gitignore
-node_modules/**
+.github/**
 .git/**
-*.vsix
-**/*.map
-.eslintrc.json
+
+# Test files and utilities
 test/**
+
+# Development and configuration files
+.gitignore
+.eslintrc.json
 tsconfig.json
 vsc-extension-quickstart.md
 **/jsconfig.json
 **/*.ts
-.codeforge/**
-.github/**
+**/*.map
+
+# Internal documentation (not needed in VSIX)
+CLAUDE.md
+PUBLISHING.md
 docs/**
 examples/**
+
+# Build artifacts and dependencies
+node_modules/**
+*.vsix
+
+# IDE artifacts
+**/.DS_Store
+
+# CodeForge workspace directory (shouldn't be in extension)
+.codeforge/**
