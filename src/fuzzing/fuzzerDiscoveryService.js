@@ -113,8 +113,8 @@ class FuzzerDiscoveryService {
         containerType: "fuzzer_discovery",
       };
 
-      // Execute the find-fuzz-tests.sh script
-      const findCommand = ".codeforge/scripts/find-fuzz-tests.sh -q";
+      // Execute the find-fuzz-tests script
+      const findCommand = "codeforge find-fuzz-tests -q";
 
       const findProcess = dockerOperations.runDockerCommandWithOutput(
         workspacePath,

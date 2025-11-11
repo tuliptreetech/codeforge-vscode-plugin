@@ -864,9 +864,8 @@ class CodeForgeCommandHandlers {
         },
         async (progress) => {
           try {
-            // Execute find-fuzz-tests.sh script with -c parameter to clean cache
-            const regenerateCommand =
-              ".codeforge/scripts/find-fuzz-tests.sh -c -q";
+            // Execute find-fuzz-tests script with -c parameter to clean cache
+            const regenerateCommand = "codeforge find-fuzz-tests -c -q";
 
             const options = {
               removeAfterRun: true,
@@ -1620,7 +1619,7 @@ class CodeForgeCommandHandlers {
       // Execute clear-crashes.sh script inside Docker container
       // The script expects fuzzer name in "preset:fuzzer_name" format
       const fuzzerIdentifier = `${cachedFuzzer.preset}:${fuzzerName}`;
-      const clearCommand = `.codeforge/scripts/clear-crashes.sh "${fuzzerIdentifier}"`;
+      const clearCommand = `codeforge clear-crashes "${fuzzerIdentifier}"`;
 
       const options = {
         removeAfterRun: true,
@@ -1763,7 +1762,7 @@ class CodeForgeCommandHandlers {
             progress.report({ message: "Building fuzzer..." });
 
             const fuzzerIdentifier = `${cachedFuzzer.preset}:${fuzzerName}`;
-            const buildCommand = `.codeforge/scripts/build-fuzz-tests.sh "${fuzzerIdentifier}"`;
+            const buildCommand = `codeforge build-fuzz-tests "${fuzzerIdentifier}"`;
 
             const buildOptions = {
               removeAfterRun: true,
@@ -1821,7 +1820,7 @@ class CodeForgeCommandHandlers {
             // Now reevaluate crashes
             progress.report({ message: "Reevaluating crashes..." });
 
-            const reevaluateCommand = `.codeforge/scripts/reevaluate-crashes.sh "${fuzzerIdentifier}"`;
+            const reevaluateCommand = `codeforge reevaluate-crashes "${fuzzerIdentifier}"`;
 
             const reevaluateOptions = {
               removeAfterRun: true,

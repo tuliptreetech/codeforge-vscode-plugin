@@ -61,7 +61,7 @@ Stage 1: Discovery (10% progress)
 
 Stage 2: Build (30% → 70% progress)
 ├─ Call buildFuzzTestsWithScript()
-│  ├─ Execute: .codeforge/scripts/build-fuzz-tests.sh "preset:fuzzer ..."
+│  ├─ Execute: codeforge build-fuzz-tests "preset:fuzzer ..."
 │  ├─ Stream stdout/stderr to terminal in real-time
 │  └─ Parse output for "[+] built fuzzer:" patterns
 ├─ Collect build results (builtTargets, errors, builtFuzzers)
@@ -69,7 +69,7 @@ Stage 2: Build (30% → 70% progress)
 
 Stage 3: Execution (70% → 85% progress)
 ├─ Call runFuzzTestsWithScript()
-│  ├─ Execute: .codeforge/scripts/run-fuzz-tests.sh "preset:fuzzer ..."
+│  ├─ Execute: codeforge run-fuzz-tests "preset:fuzzer ..."
 │  ├─ Stream stdout/stderr to terminal in real-time
 │  └─ Parse output for crash patterns:
 │     - "[+] running fuzzer: <path>" → execution count
@@ -130,8 +130,8 @@ if (crashMatch) {
 ```
 discoverCrashes()
 ├─ Check if .codeforge/fuzzing directory exists
-├─ Execute find-crashes.sh script in Docker container
-│  └─ Command: .codeforge/scripts/find-crashes.sh
+├─ Execute find-crashes script in Docker container
+│  └─ Command: codeforge find-crashes
 ├─ Parse script output for: "fuzzer_name/crash_hash" format
 ├─ For each crash:
 │  ├─ Build crash file path (check corpus/ first, fallback to root)

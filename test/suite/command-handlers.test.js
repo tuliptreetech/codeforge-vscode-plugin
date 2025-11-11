@@ -697,11 +697,11 @@ suite("Command Handlers Test Suite", () => {
         testEnvironment.dockerMocks.runDockerCommandWithOutput.calledWith(
           sinon.match.string,
           sinon.match.string,
-          ".codeforge/scripts/find-fuzz-tests.sh -c -q",
+          "codeforge find-fuzz-tests -c -q",
           "/bin/bash",
           sinon.match.object,
         ),
-        "Should call find-fuzz-tests.sh with -c -q flags",
+        "Should call codeforge find-fuzz-tests with -c -q flags",
       );
 
       // Verify refresh was called after regeneration
@@ -1641,9 +1641,7 @@ suite("Command Handlers Test Suite", () => {
         testEnvironment.dockerMocks.runDockerCommandWithOutput.calledWith(
           sinon.match.string, // workspacePath
           sinon.match.string, // containerName
-          sinon.match(
-            /\.codeforge\/scripts\/clear-crashes\.sh "libfuzzer:libfuzzer"/,
-          ),
+          sinon.match(/codeforge clear-crashes "libfuzzer:libfuzzer"/),
           "/bin/bash",
           sinon.match.object,
         ),

@@ -279,7 +279,7 @@ workspace/.codeforge/fuzzing/
 ### With Docker
 
 - **Engine**: Uses Docker CLI for container operations
-- **Scripts**: Executes `.codeforge/scripts/*.sh` inside containers
+- **Scripts**: Executes scripts via `codeforge <script-name>` command inside containers (scripts are built into the Docker image)
 - **Mounts**: Workspace mounted to `/workspace` in containers
 - **Port Forwarding**: Supports custom port mappings
 

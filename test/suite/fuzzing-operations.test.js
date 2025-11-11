@@ -189,7 +189,7 @@ suite("Fuzzing Operations Test Suite", () => {
         runDockerCommandStub.firstCall.args;
       assert.strictEqual(workspacePath, "/test/workspace");
       assert.strictEqual(containerName, "test-container");
-      assert(command.includes(".codeforge/scripts/find-fuzz-tests.sh"));
+      assert(command.includes("codeforge find-fuzz-tests"));
       assert(command.includes("-q")); // Should include quiet flag
     });
 
@@ -416,7 +416,7 @@ suite("Fuzzing Operations Test Suite", () => {
         runDockerCommandStub.firstCall.args;
       assert.strictEqual(workspacePath, "/test/workspace");
       assert.strictEqual(containerName, "test-container");
-      assert(command.includes(".codeforge/scripts/build-fuzz-tests.sh"));
+      assert(command.includes("codeforge build-fuzz-tests"));
       assert(command.includes("debug:test-fuzzer release:another-fuzzer"));
     });
 
@@ -516,7 +516,7 @@ suite("Fuzzing Operations Test Suite", () => {
         runDockerCommandStub.firstCall.args;
       assert.strictEqual(workspacePath, "/test/workspace");
       assert.strictEqual(containerName, "test-container");
-      assert(command.includes(".codeforge/scripts/run-fuzz-tests.sh"));
+      assert(command.includes("codeforge run-fuzz-tests"));
       assert(command.includes("debug:test-fuzzer release:another-fuzzer"));
     });
 

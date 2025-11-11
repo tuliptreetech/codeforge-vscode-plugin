@@ -797,24 +797,16 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
         await fs.mkdir(targetDir, { recursive: true });
       });
 
-      test("Should dump all eight script files with executable permissions", async () => {
+      test("Should dump launch-process-in-docker.sh script file with executable permissions", async () => {
         const dumpedPaths = await resourceManager.dumpScripts(targetDir);
 
         // Verify return value is an array with correct length
+        // Note: Only launch-process-in-docker.sh is dumped now; other scripts are in Docker image
         assert.strictEqual(Array.isArray(dumpedPaths), true);
-        assert.strictEqual(dumpedPaths.length, 8);
+        assert.strictEqual(dumpedPaths.length, 1);
 
-        // Expected script files
-        const expectedScripts = [
-          "build-fuzz-tests.sh",
-          "find-fuzz-tests.sh",
-          "run-fuzz-tests.sh",
-          "find-crashes.sh",
-          "generate-backtrace.sh",
-          "clear-crashes.sh",
-          "launch-process-in-docker.sh",
-          "reevaluate-crashes.sh",
-        ];
+        // Expected script file
+        const expectedScripts = ["launch-process-in-docker.sh"];
 
         // Verify all scripts were dumped
         for (let i = 0; i < expectedScripts.length; i++) {
@@ -836,53 +828,11 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
         }
       });
 
-      test("Should verify specific content of each dumped script", async () => {
+      test("Should verify specific content of dumped script", async () => {
         const dumpedPaths = await resourceManager.dumpScripts(targetDir);
 
-        // Verify build-fuzz-tests.sh content
-        const buildContent = await fs.readFile(dumpedPaths[0], "utf8");
-        assert.strictEqual(
-          buildContent,
-          "#!/usr/bin/env bash\necho 'Building fuzz tests'\n",
-        );
-
-        // Verify find-fuzz-tests.sh content
-        const findContent = await fs.readFile(dumpedPaths[1], "utf8");
-        assert.strictEqual(
-          findContent,
-          "#!/usr/bin/env bash\necho 'Finding fuzz tests'\n",
-        );
-
-        // Verify run-fuzz-tests.sh content
-        const runContent = await fs.readFile(dumpedPaths[2], "utf8");
-        assert.strictEqual(
-          runContent,
-          "#!/usr/bin/env bash\necho 'Running fuzz tests'\n",
-        );
-
-        // Verify find-crashes.sh content
-        const findCrashesContent = await fs.readFile(dumpedPaths[3], "utf8");
-        assert.strictEqual(
-          findCrashesContent,
-          "#!/usr/bin/env bash\necho 'Finding crashes'\n",
-        );
-
-        // Verify generate-backtrace.sh content
-        const backtraceContent = await fs.readFile(dumpedPaths[4], "utf8");
-        assert.strictEqual(
-          backtraceContent,
-          "#!/usr/bin/env bash\necho 'Generating backtrace'\n",
-        );
-
-        // Verify clear-crashes.sh content
-        const clearContent = await fs.readFile(dumpedPaths[5], "utf8");
-        assert.strictEqual(
-          clearContent,
-          "#!/usr/bin/env bash\necho 'Clearing crashes'\n",
-        );
-
         // Verify launch-process-in-docker.sh content
-        const launchProcessContent = await fs.readFile(dumpedPaths[6], "utf8");
+        const launchProcessContent = await fs.readFile(dumpedPaths[0], "utf8");
         assert.strictEqual(
           launchProcessContent,
           "#!/usr/bin/env bash\necho 'Launch process in docker'\n",
@@ -894,7 +844,7 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
 
         const dumpedPaths = await resourceManager.dumpScripts(newTargetDir);
 
-        assert.strictEqual(dumpedPaths.length, 8);
+        assert.strictEqual(dumpedPaths.length, 1);
 
         // Verify all files were created in the new directory
         for (const dumpedPath of dumpedPaths) {
@@ -910,40 +860,20 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
         }
       });
 
-      test("Should overwrite existing script files", async () => {
-        // Create existing files with old content
+      test("Should overwrite existing script file", async () => {
+        // Create existing file with old content
         await fs.writeFile(
-          path.join(targetDir, "build-fuzz-tests.sh"),
-          "Old build script",
-        );
-        await fs.writeFile(
-          path.join(targetDir, "find-fuzz-tests.sh"),
-          "Old find script",
-        );
-        await fs.writeFile(
-          path.join(targetDir, "run-fuzz-tests.sh"),
-          "Old run script",
+          path.join(targetDir, "launch-process-in-docker.sh"),
+          "Old launch script",
         );
 
         const dumpedPaths = await resourceManager.dumpScripts(targetDir);
 
-        // Verify all files were overwritten with correct content
-        const buildContent = await fs.readFile(dumpedPaths[0], "utf8");
+        // Verify file was overwritten with correct content
+        const launchContent = await fs.readFile(dumpedPaths[0], "utf8");
         assert.strictEqual(
-          buildContent,
-          "#!/usr/bin/env bash\necho 'Building fuzz tests'\n",
-        );
-
-        const findContent = await fs.readFile(dumpedPaths[1], "utf8");
-        assert.strictEqual(
-          findContent,
-          "#!/usr/bin/env bash\necho 'Finding fuzz tests'\n",
-        );
-
-        const runContent = await fs.readFile(dumpedPaths[2], "utf8");
-        assert.strictEqual(
-          runContent,
-          "#!/usr/bin/env bash\necho 'Running fuzz tests'\n",
+          launchContent,
+          "#!/usr/bin/env bash\necho 'Launch process in docker'\n",
         );
 
         // Verify executable permissions are set
@@ -954,14 +884,14 @@ RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu
         }
       });
 
-      test("Should throw error if any script is missing", async () => {
-        // Remove one of the script files
+      test("Should throw error if script is missing", async () => {
+        // Remove the script file
         await fs.unlink(
           path.join(
             mockExtensionPath,
             "resources",
             "scripts",
-            "find-fuzz-tests.sh",
+            "launch-process-in-docker.sh",
           ),
         );
 

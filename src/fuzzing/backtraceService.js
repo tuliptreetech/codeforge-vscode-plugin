@@ -62,8 +62,8 @@ class BacktraceService {
         containerType: "backtrace_generation",
       };
 
-      // Execute the generate-backtrace.sh script
-      const backtraceCommand = `.codeforge/scripts/generate-backtrace.sh "${crashIdentifier}"`;
+      // Execute the generate-backtrace script
+      const backtraceCommand = `codeforge generate-backtrace "${crashIdentifier}"`;
 
       const backtraceProcess = this.dockerOperations.runDockerCommandWithOutput(
         workspacePath,
