@@ -107,22 +107,15 @@ class ResourceManager {
 
   /**
    * Dumps all script files to a target directory with executable permissions
+   * Note: Most scripts are now available in the Docker image via 'codeforge <script-name>'.
+   * Only launch-process-in-docker.sh is dumped locally as it's needed to launch containers.
    * @param {string} targetDir - Target directory to dump the scripts to
    * @returns {Promise<string[]>} Array of full paths to the dumped script files
    * @throws {Error} If any script cannot be dumped
    */
   async dumpScripts(targetDir) {
     try {
-      const scriptFiles = [
-        "build-fuzz-tests.sh",
-        "find-fuzz-tests.sh",
-        "run-fuzz-tests.sh",
-        "find-crashes.sh",
-        "generate-backtrace.sh",
-        "clear-crashes.sh",
-        "launch-process-in-docker.sh",
-        "reevaluate-crashes.sh",
-      ];
+      const scriptFiles = ["launch-process-in-docker.sh"];
       const dumpedPaths = [];
 
       for (const scriptFile of scriptFiles) {
@@ -171,19 +164,11 @@ class ResourceManager {
 
   /**
    * Gets all available script names
+   * Note: Most scripts are now in the Docker image. Only launch-process-in-docker.sh is local.
    * @returns {string[]} Array of script filenames
    */
   getAvailableScripts() {
-    return [
-      "build-fuzz-tests.sh",
-      "find-fuzz-tests.sh",
-      "run-fuzz-tests.sh",
-      "find-crashes.sh",
-      "generate-backtrace.sh",
-      "clear-crashes.sh",
-      "launch-process-in-docker.sh",
-      "reevaluate-crashes.sh",
-    ];
+    return ["launch-process-in-docker.sh"];
   }
 }
 

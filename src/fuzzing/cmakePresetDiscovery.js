@@ -60,7 +60,7 @@ async function discoverFuzzTestsWithScript(
     if (cleanCache) {
       flags.push("-c");
     }
-    const scriptCommand = `.codeforge/scripts/find-fuzz-tests.sh ${flags.join(" ")}`;
+    const scriptCommand = `codeforge find-fuzz-tests ${flags.join(" ")}`;
 
     const dockerProcess = dockerOperations.runDockerCommandWithOutput(
       workspacePath,

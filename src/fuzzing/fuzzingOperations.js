@@ -59,7 +59,7 @@ async function buildFuzzTestsWithScript(
     };
 
     // Execute the build script with the fuzzer list
-    const buildCommand = `.codeforge/scripts/build-fuzz-tests.sh "${fuzzerList}"`;
+    const buildCommand = `codeforge build-fuzz-tests "${fuzzerList}"`;
 
     const buildProcess = dockerOperations.runDockerCommandWithOutput(
       workspacePath,
@@ -503,7 +503,7 @@ async function runFuzzTestsWithScript(
     };
 
     // Execute the run script with the fuzzer list
-    const runCommand = `.codeforge/scripts/run-fuzz-tests.sh "${fuzzerList}"`;
+    const runCommand = `codeforge run-fuzz-tests "${fuzzerList}"`;
 
     const runProcess = dockerOperations.runDockerCommandWithOutput(
       workspacePath,

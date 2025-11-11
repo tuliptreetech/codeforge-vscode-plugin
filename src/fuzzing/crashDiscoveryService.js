@@ -34,8 +34,8 @@ class CrashDiscoveryService {
         containerType: "crash_discovery",
       };
 
-      // Execute the find-crashes.sh script
-      const findCommand = ".codeforge/scripts/find-crashes.sh";
+      // Execute the find-crashes script
+      const findCommand = "codeforge find-crashes";
 
       const findProcess = dockerOperations.runDockerCommandWithOutput(
         workspacePath,
