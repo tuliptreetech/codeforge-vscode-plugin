@@ -6,6 +6,68 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.4] - 2025-11-11
+
+### Added
+
+- **Security Validation**: Comprehensive fuzzer name validation to prevent shell injection attacks with 48 test cases
+- **Timeout Handling**: Configurable timeouts for Docker operations (checkImageExists, isContainerRunning) to prevent infinite hangs
+- **Crash Reevaluation**: New functionality to test crash files against rebuilt binaries to identify fixed bugs
+- **Script Auto-Sync**: Automatic script synchronization on extension load for seamless upgrades
+
+### Enhanced
+
+- **Docker Image Distribution**: Migrated from local Docker builds to pre-built GHCR images (ghcr.io/tuliptreetech/codeforge-cmake)
+  - Improved reliability and consistency across installations
+  - Faster deployment without local build requirements
+  - Pre-configured fuzzing environment with all tools built-in
+- **Multi-Architecture Support**: Removed hardcoded linux/amd64 platform constraints for native ARM64 execution
+  - Enables Apple Silicon and ARM servers to run containers without emulation overhead
+  - Automatic platform detection and native execution
+- **Script Architecture**: Migrated 7 fuzzing scripts from local resources to Docker image
+  - Scripts now accessed via `codeforge <script-name>` CLI format
+  - Reduced local resource footprint
+  - Only launch-process-in-docker.sh remains local for container bootstrapping
+- **Launch Script Interface**: Simplified launch-process-in-docker.sh by auto-detecting workspace directory
+  - Removed workspace directory as required positional argument
+  - Script now uses $(pwd) automatically
+  - Default behavior launches interactive shell when no command specified
+- **Fuzzing UI**: Added automatic refresh after each fuzzing run for up-to-date crash information
+- **Initialization Components**: Reduced from 4 to 3 components (removed Dockerfile, kept directory/gitignore/scripts)
+
+### Fixed
+
+- **Null Reference Protection**: Added safety checks in TaskProvider to prevent crashes
+- **State Verification**: Enhanced initialization state verification
+- **Directory Creation**: Fixed container cleanup script directory creation issues
+- **Fuzzer Display**: Fixed state management bug preventing fuzzers from displaying
+- **Crash Discovery**: Improved crash detection to check both corpus subdirectory and output root
+
+### Refactored
+
+- **Resource Management**: Updated ResourceManager to handle GHCR image workflow
+  - Removed dumpDockerfile() method
+  - Implemented pullAndTagDockerImage() with platform support
+  - Updated all initialization and fuzzing services for image pull workflow
+- **Testing Updates**: Fixed 22 failing tests related to Docker image workflow changes
+  - Updated mocks and expectations for pull-based architecture
+  - Removed dumpDockerfile test suite
+  - Added Docker operation mocks for initialization tests
+- **Script Paths**: Updated all script invocations throughout fuzzing services and command handlers
+- **Documentation**: Updated focus from security testing to quality assurance and bug detection
+
+### Security
+
+- **Input Validation**: Fuzzer names now validated against strict patterns to prevent command injection
+- **Timeout Protection**: Docker operations timeout after configurable period to prevent resource exhaustion
+
+### Technical
+
+- **Test Coverage**: Added 48 comprehensive fuzzer name validation tests
+- **Error Handling**: Improved error messages and user feedback for initialization and Docker operations
+- **Code Cleanup**: Removed inaccurate crash/error reporting from fuzzing output
+- **Button UI**: Removed unnecessary cancel buttons for cleaner interface
+
 ## [0.1.3] - 2025-10-09
 
 ### Added
