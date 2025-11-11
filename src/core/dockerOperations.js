@@ -390,13 +390,13 @@ async function checkImageExists(imageName) {
 /**
  * Pulls a Docker image from GitHub Container Registry and tags it with a project-specific name
  * @param {string} imageName - The name to tag the pulled image with
- * @param {string} sourceImage - The source image to pull (default: ghcr.io/tuliptreetech/codeforge-docker:main-1f56677)
+ * @param {string} sourceImage - The source image to pull (default: ghcr.io/tuliptreetech/codeforge-docker:main-bbda721)
  * @param {Object} outputChannel - Optional VSCode output channel for logging
  * @returns {Promise<void>} Resolves when the pull and tag are complete
  */
 function pullAndTagDockerImage(
   imageName,
-  sourceImage = "ghcr.io/tuliptreetech/codeforge-docker:main-1f56677",
+  sourceImage = "ghcr.io/tuliptreetech/codeforge-docker:main-bbda721",
   outputChannel = null,
 ) {
   return new Promise((resolve, reject) => {
@@ -412,10 +412,10 @@ function pullAndTagDockerImage(
       }
     };
 
-    log(`Pulling Docker image: ${sourceImage} (platform: linux/amd64)`);
+    log(`Pulling Docker image: ${sourceImage}`);
 
     // First, pull the image with platform specification
-    const pullArgs = ["pull", "--platform", "linux/amd64", sourceImage];
+    const pullArgs = ["pull", sourceImage];
     const pullProcess = spawn("docker", pullArgs, {
       stdio: "pipe", // Capture stdout/stderr for logging
     });
