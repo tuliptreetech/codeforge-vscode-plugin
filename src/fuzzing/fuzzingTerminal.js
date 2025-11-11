@@ -40,23 +40,13 @@ class CodeForgeFuzzingTerminal {
         this.workspacePath,
       );
 
-      // Check if initialization is needed
-      const dockerfilePath = path.join(
-        this.workspacePath,
-        ".codeforge",
-        "Dockerfile",
-      );
-      let dockerfileExists = false;
-      try {
-        await fs.access(dockerfilePath);
-        dockerfileExists = true;
-      } catch {
-        dockerfileExists = false;
-      }
+      // Check if Docker image exists
+      const imageExists =
+        await dockerOperations.checkImageExists(containerName);
 
-      if (!dockerfileExists) {
+      if (!imageExists) {
         const message =
-          'CodeForge: Dockerfile not found. Please run "CodeForge: Initialize CodeForge" first.';
+          'CodeForge: Docker image not found. Please run "CodeForge: Initialize CodeForge" first.';
         this.writeEmitter.fire(`\r\n\x1b[33m${message}\x1b[0m\r\n`);
 
         // Mark fuzzing as complete (failed) and enable key-to-close
@@ -67,36 +57,6 @@ class CodeForgeFuzzingTerminal {
           `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
         );
         return;
-      }
-
-      // Check if Docker image exists
-      const imageExists =
-        await dockerOperations.checkImageExists(containerName);
-      if (!imageExists) {
-        const buildMessage = `CodeForge: Docker image not found. Building ${containerName}...`;
-        this.writeEmitter.fire(`\r\n\x1b[33m${buildMessage}\x1b[0m\r\n`);
-
-        // Build the image
-        try {
-          await dockerOperations.buildDockerImage(
-            this.workspacePath,
-            containerName,
-          );
-          const successMessage = `Successfully built Docker image: ${containerName}`;
-          this.writeEmitter.fire(`\r\n\x1b[32m${successMessage}\x1b[0m\r\n`);
-        } catch (error) {
-          const errorMessage = `Failed to build Docker image: ${error.message}`;
-          this.writeEmitter.fire(`\r\n\x1b[31m${errorMessage}\x1b[0m\r\n`);
-
-          // Mark fuzzing as complete (failed) and enable key-to-close
-          this.fuzzingComplete = true;
-
-          // Add message prompting user to press any key to close
-          this.writeEmitter.fire(
-            `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
-          );
-          return;
-        }
       }
 
       // Start fuzzing workflow
@@ -358,23 +318,13 @@ class CodeForgeBuildTerminal {
         this.workspacePath,
       );
 
-      // Check if initialization is needed
-      const dockerfilePath = path.join(
-        this.workspacePath,
-        ".codeforge",
-        "Dockerfile",
-      );
-      let dockerfileExists = false;
-      try {
-        await fs.access(dockerfilePath);
-        dockerfileExists = true;
-      } catch {
-        dockerfileExists = false;
-      }
+      // Check if Docker image exists
+      const imageExists =
+        await dockerOperations.checkImageExists(containerName);
 
-      if (!dockerfileExists) {
+      if (!imageExists) {
         const message =
-          'CodeForge: Dockerfile not found. Please run "CodeForge: Initialize CodeForge" first.';
+          'CodeForge: Docker image not found. Please run "CodeForge: Initialize CodeForge" first.';
         this.writeEmitter.fire(`\r\n\x1b[33m${message}\x1b[0m\r\n`);
 
         // Mark build as complete (failed) and enable key-to-close
@@ -385,36 +335,6 @@ class CodeForgeBuildTerminal {
           `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
         );
         return;
-      }
-
-      // Check if Docker image exists
-      const imageExists =
-        await dockerOperations.checkImageExists(containerName);
-      if (!imageExists) {
-        const buildMessage = `CodeForge: Docker image not found. Building ${containerName}...`;
-        this.writeEmitter.fire(`\r\n\x1b[33m${buildMessage}\x1b[0m\r\n`);
-
-        // Build the image
-        try {
-          await dockerOperations.buildDockerImage(
-            this.workspacePath,
-            containerName,
-          );
-          const successMessage = `Successfully built Docker image: ${containerName}`;
-          this.writeEmitter.fire(`\r\n\x1b[32m${successMessage}\x1b[0m\r\n`);
-        } catch (error) {
-          const errorMessage = `Failed to build Docker image: ${error.message}`;
-          this.writeEmitter.fire(`\r\n\x1b[31m${errorMessage}\x1b[0m\r\n`);
-
-          // Mark build as complete (failed) and enable key-to-close
-          this.buildComplete = true;
-
-          // Add message prompting user to press any key to close
-          this.writeEmitter.fire(
-            `\r\n\x1b[93mPress any key to close terminal...\x1b[0m\r\n`,
-          );
-          return;
-        }
       }
 
       // Start build workflow

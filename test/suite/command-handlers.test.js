@@ -54,7 +54,6 @@ suite("Command Handlers Test Suite", () => {
 
     // Create mock resource manager
     mockResourceManager = {
-      dumpDockerfile: sandbox.stub().resolves(),
       dumpGitignore: sandbox.stub().resolves(),
       extensionPath: "/mock/extension/path",
       scriptsPath: "/mock/extension/path/resources/scripts",
@@ -2013,6 +2012,11 @@ suite("Command Handlers Test Suite", () => {
         });
 
       // Ensure VSCode window methods are properly stubbed on the actual vscode module
+      // Configure showInformationMessage to return a resolved promise
+      testEnvironment.vscodeMocks.window.showInformationMessage.resolves(
+        undefined,
+      );
+
       if (
         !vscode.window.showInformationMessage ||
         !vscode.window.showInformationMessage.isSinonProxy
@@ -2038,7 +2042,7 @@ suite("Command Handlers Test Suite", () => {
         success: true,
         details: {
           message: "CodeForge initialized successfully",
-          createdComponents: ["dockerfile", "gitignore", "scripts"],
+          createdComponents: ["gitignore", "scripts"],
         },
       };
       mockInitializationService.initializeProjectWithProgress.resolves(
@@ -2052,6 +2056,7 @@ suite("Command Handlers Test Suite", () => {
         mockInitializationService.initializeProjectWithProgress.calledWith(
           "/test/workspace",
           sinon.match.func,
+          mockOutputChannel,
         ),
         "Should call initializeProjectWithProgress with workspace path and progress callback",
       );
@@ -2065,9 +2070,7 @@ suite("Command Handlers Test Suite", () => {
       // Verify success message was shown
       assert.ok(
         testEnvironment.vscodeMocks.window.showInformationMessage.calledWith(
-          sinon.match(
-            /Project initialized successfully.*dockerfile, gitignore, scripts/,
-          ),
+          sinon.match(/Project initialized successfully.*gitignore, scripts/),
         ),
         "Should show success message with created components",
       );
@@ -2109,7 +2112,7 @@ suite("Command Handlers Test Suite", () => {
       // Mock successful initialization
       const mockResult = {
         success: true,
-        details: { createdComponents: ["dockerfile"] },
+        details: { createdComponents: ["gitignore"] },
       };
       mockInitializationService.initializeProjectWithProgress.resolves(
         mockResult,
@@ -2146,7 +2149,8 @@ suite("Command Handlers Test Suite", () => {
           capturedProgressCallback = progressCallback;
           // Simulate progress updates
           progressCallback("Creating .codeforge directory...", 20);
-          progressCallback("Creating Dockerfile...", 60);
+          progressCallback("Creating .gitignore file...", 40);
+          progressCallback("Pulling Docker image...", 70);
           progressCallback("CodeForge initialization complete!", 100);
           return mockResult;
         },
@@ -2346,7 +2350,7 @@ suite("Command Handlers Test Suite", () => {
       // Mock successful initialization
       const mockResult = {
         success: true,
-        details: { createdComponents: ["dockerfile"] },
+        details: { createdComponents: ["gitignore"] },
       };
       mockInitializationService.initializeProjectWithProgress.resolves(
         mockResult,
@@ -2368,7 +2372,7 @@ suite("Command Handlers Test Suite", () => {
       // Mock successful initialization
       const mockResult = {
         success: true,
-        details: { createdComponents: ["dockerfile"] },
+        details: { createdComponents: ["gitignore"] },
       };
       mockInitializationService.initializeProjectWithProgress.resolves(
         mockResult,

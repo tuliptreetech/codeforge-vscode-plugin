@@ -13,6 +13,7 @@ const fs = require("fs").promises;
 const path = require("path");
 
 let outputChannel;
+let resourceManager;
 
 // Module-level storage for provider references
 let webviewProvider = null;
@@ -375,96 +376,63 @@ function activate(context) {
  */
 async function ensureInitializedAndBuilt(workspacePath, containerName) {
   try {
-    const dockerfilePath = path.join(workspacePath, ".codeforge", "Dockerfile");
-
-    // Check if Dockerfile exists
-    let dockerfileExists = false;
-    try {
-      await fs.access(dockerfilePath);
-      dockerfileExists = true;
-    } catch (error) {
-      // Dockerfile doesn't exist
-      dockerfileExists = false;
-    }
-
-    // If Dockerfile doesn't exist, automatically initialize
-    if (!dockerfileExists) {
-      safeOutputLog(
-        "CodeForge: Dockerfile not found. Automatically initializing...",
-        true,
-      );
-
-      // Create .codeforge directory
-      const codeforgeDir = path.join(workspacePath, ".codeforge");
-      await fs.mkdir(codeforgeDir, { recursive: true });
-      outputChannel.appendLine(`Created directory: ${codeforgeDir}`);
-
-      // Write Dockerfile
-      try {
-        await resourceManager.dumpDockerfile(codeforgeDir);
-        outputChannel.appendLine(`Created Dockerfile: ${dockerfilePath}`);
-      } catch (error) {
-        outputChannel.appendLine(`Error creating Dockerfile: ${error.message}`);
-        throw error;
-      }
-
-      // Write .gitignore
-      try {
-        await resourceManager.dumpGitignore(codeforgeDir);
-        const gitignorePath = path.join(codeforgeDir, ".gitignore");
-        outputChannel.appendLine(`Created .gitignore: ${gitignorePath}`);
-      } catch (error) {
-        outputChannel.appendLine(`Error creating .gitignore: ${error.message}`);
-        throw error;
-      }
-    }
-
     // Check if Docker image exists
     const imageExists = await dockerOperations.checkImageExists(containerName);
 
-    // If image doesn't exist, automatically build it
+    // If image doesn't exist, automatically initialize (which will pull it)
     if (!imageExists) {
       safeOutputLog(
-        `CodeForge: Docker image not found. Automatically building ${containerName}...`,
+        "CodeForge: Docker image not found. Automatically initializing...",
         true,
       );
 
-      // Show progress notification
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: "CodeForge: Automatically building Docker environment...",
-          cancellable: false,
-        },
-        async (progress) => {
-          try {
-            // Build the Docker image
-            await dockerOperations.buildDockerImage(
-              workspacePath,
-              containerName,
-            );
-            outputChannel.appendLine(
-              `Successfully built Docker image: ${containerName}`,
-            );
-            vscode.window.showInformationMessage(
-              `CodeForge: Automatically built Docker image ${containerName}`,
-            );
-          } catch (error) {
-            throw error;
-          }
-        },
+      // Show initial message with option to show details
+      const showDetailsPromise = vscode.window.showInformationMessage(
+        "CodeForge: Initializing project and pulling Docker image...",
+        "Show Details",
       );
 
-      // Verify the image was built successfully
-      const imageExistsAfterBuild =
-        await dockerOperations.checkImageExists(containerName);
-      if (!imageExistsAfterBuild) {
-        outputChannel.appendLine("Error: Docker image build failed");
+      // Handle "Show Details" click in background
+      showDetailsPromise.then((selection) => {
+        if (selection === "Show Details") {
+          outputChannel.show();
+        }
+      });
+
+      // Use InitializationDetectionService to initialize the project
+      const initService = new InitializationDetectionService(resourceManager);
+      const result = await initService.initializeProjectWithProgress(
+        workspacePath,
+        (message, percentage) => {
+          outputChannel.appendLine(`[${percentage}%] ${message}`);
+        },
+        outputChannel,
+      );
+
+      if (!result.success) {
+        outputChannel.appendLine(`Error: ${result.error}`);
         vscode.window.showErrorMessage(
-          "CodeForge: Failed to build Docker image automatically",
+          `CodeForge: Failed to initialize project: ${result.error}`,
         );
         return false;
       }
+
+      // Verify the image exists after initialization
+      const imageExistsAfterInit =
+        await dockerOperations.checkImageExists(containerName);
+      if (!imageExistsAfterInit) {
+        outputChannel.appendLine(
+          "Error: Docker image was not pulled during initialization",
+        );
+        vscode.window.showErrorMessage(
+          "CodeForge: Failed to pull Docker image automatically. Please check Docker is running and you have network connectivity.",
+        );
+        return false;
+      }
+
+      vscode.window.showInformationMessage(
+        "CodeForge: Project initialized and Docker image pulled successfully",
+      );
     }
 
     return true;

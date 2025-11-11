@@ -51,7 +51,6 @@ suite("Initialization Integration Test Suite", () => {
     // Create mock resource manager
     mockResourceManager = {
       dumpGitignore: sandbox.stub().resolves(),
-      dumpDockerfile: sandbox.stub().resolves(),
       dumpScripts: sandbox.stub().resolves(),
     };
 
@@ -78,31 +77,35 @@ suite("Initialization Integration Test Suite", () => {
     const mockInitializationService = {
       initializeProjectWithProgress: sandbox
         .stub()
-        .callsFake(async (workspacePath, progressCallback) => {
+        .callsFake(async (workspacePath, progressCallback, outputChannel) => {
           // Simulate the initialization process
           if (progressCallback) {
             progressCallback("Creating .codeforge directory...", 20);
             progressCallback("Creating .gitignore file...", 40);
-            progressCallback("Creating Dockerfile...", 60);
-            progressCallback("Creating scripts directory and scripts...", 80);
+            progressCallback("Copying scripts...", 60);
+            progressCallback("Pulling Docker image...", 70);
             progressCallback("CodeForge initialization complete!", 100);
           }
 
           // Call the actual resource manager methods
           await mockResourceManager.dumpGitignore();
-          await mockResourceManager.dumpDockerfile();
           await mockResourceManager.dumpScripts();
 
           return {
             success: true,
             details: {
               message: "CodeForge initialized successfully",
-              createdComponents: ["dockerfile", "gitignore", "scripts"],
+              createdComponents: ["gitignore", "scripts"],
             },
           };
         }),
     };
     commandHandlers.initializationService = mockInitializationService;
+
+    // Mock vscode.window.showInformationMessage to return a resolved promise
+    testEnvironment.vscodeMocks.window.showInformationMessage.resolves(
+      undefined,
+    );
 
     mockWebviewView = new MockWebviewView();
 
@@ -192,9 +195,12 @@ suite("Initialization Integration Test Suite", () => {
 
           if (
             filePath.includes(".codeforge") &&
-            !filePath.includes("Dockerfile") &&
-            !filePath.includes(".gitignore")
+            !filePath.includes(".gitignore") &&
+            !filePath.includes("scripts")
           ) {
+            return Promise.resolve(mockDirStats);
+          }
+          if (filePath.includes("scripts") && !filePath.includes(".sh")) {
             return Promise.resolve(mockDirStats);
           }
           return Promise.resolve(mockStats);
@@ -243,7 +249,6 @@ suite("Initialization Integration Test Suite", () => {
 
       // Reset resource manager call history to track calls
       mockResourceManager.dumpGitignore.resetHistory();
-      mockResourceManager.dumpDockerfile.resetHistory();
 
       await commandHandlers.handleInitializeProject();
 
@@ -251,10 +256,6 @@ suite("Initialization Integration Test Suite", () => {
       assert.ok(
         mockResourceManager.dumpGitignore.called,
         "Should create .gitignore",
-      );
-      assert.ok(
-        mockResourceManager.dumpDockerfile.called,
-        "Should create Dockerfile",
       );
       // Scripts are no longer dumped to workspace
 
@@ -665,9 +666,7 @@ suite("Initialization Integration Test Suite", () => {
   suite("Error Handling and Recovery", () => {
     test("Should handle initialization errors gracefully in integration", async () => {
       // Mock initialization failure
-      mockResourceManager.dumpDockerfile.rejects(
-        new Error("Permission denied"),
-      );
+      mockResourceManager.dumpGitignore.rejects(new Error("Permission denied"));
 
       // Mock uninitialized state
       let fsStatStub;
@@ -724,7 +723,7 @@ suite("Initialization Integration Test Suite", () => {
     test("Should recover from temporary errors", async () => {
       // Mock temporary failure followed by success
       let attemptCount = 0;
-      mockResourceManager.dumpDockerfile.callsFake(() => {
+      mockResourceManager.dumpGitignore.callsFake(() => {
         attemptCount++;
         if (attemptCount === 1) {
           return Promise.reject(new Error("Temporary failure"));

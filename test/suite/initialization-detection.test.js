@@ -42,7 +42,6 @@ suite("Initialization Detection Service Test Suite", () => {
     // Create mock resource manager
     mockResourceManager = {
       dumpGitignore: sandbox.stub().resolves(),
-      dumpDockerfile: sandbox.stub().resolves(),
       dumpScripts: sandbox.stub().resolves(),
     };
 
@@ -144,7 +143,7 @@ suite("Initialization Detection Service Test Suite", () => {
         }
         if (
           filePath.includes(".codeforge") &&
-          !filePath.includes("Dockerfile") &&
+          !filePath.includes("scripts") &&
           !filePath.includes(".gitignore")
         ) {
           return Promise.resolve(mockDirStats);
@@ -163,12 +162,7 @@ suite("Initialization Detection Service Test Suite", () => {
       );
 
       // Verify all components are marked as existing
-      // Scripts are no longer required in workspace
-      const expectedComponents = [
-        "codeforgeDirectory",
-        "dockerfile",
-        "gitignore",
-      ];
+      const expectedComponents = ["codeforgeDirectory", "gitignore"];
 
       expectedComponents.forEach((component) => {
         assert.strictEqual(
@@ -180,20 +174,17 @@ suite("Initialization Detection Service Test Suite", () => {
     });
 
     test("Should return false for partially initialized project", async () => {
-      // Mock some files as missing
+      // Mock some files as missing (.gitignore is missing)
       fsStatStub.callsFake((filePath) => {
-        if (filePath.includes("Dockerfile")) {
+        if (filePath.includes(".gitignore")) {
           const error = new Error("File not found");
           error.code = "ENOENT";
           return Promise.reject(error);
         }
 
-        const mockStats =
-          filePath.includes(".codeforge") &&
-          !filePath.includes("Dockerfile") &&
-          !filePath.includes(".gitignore")
-            ? { isDirectory: () => true, size: 0, mtime: new Date() }
-            : { isDirectory: () => false, size: 1024, mtime: new Date() };
+        const mockStats = filePath.includes(".codeforge")
+          ? { isDirectory: () => true, size: 0, mtime: new Date() }
+          : { isDirectory: () => false, size: 1024, mtime: new Date() };
 
         return Promise.resolve(mockStats);
       });
@@ -207,13 +198,13 @@ suite("Initialization Detection Service Test Suite", () => {
         "Should not be initialized",
       );
       assert.ok(
-        result.missingComponents.includes("dockerfile"),
-        "Should include dockerfile as missing",
+        result.missingComponents.includes("gitignore"),
+        "Should include gitignore as missing",
       );
       assert.strictEqual(
-        result.details.dockerfile.exists,
+        result.details.gitignore.exists,
         false,
-        "Dockerfile should not exist",
+        ".gitignore should not exist",
       );
     });
 
@@ -235,14 +226,13 @@ suite("Initialization Detection Service Test Suite", () => {
       );
       assert.strictEqual(
         result.missingComponents.length,
-        4,
-        "Should have 4 missing components",
+        3,
+        "Should have 3 missing components",
       );
 
       const expectedMissing = [
         "codeforgeDirectory",
         "scriptsDirectory",
-        "dockerfile",
         "gitignore",
       ];
 
@@ -277,8 +267,8 @@ suite("Initialization Detection Service Test Suite", () => {
       );
       assert.strictEqual(
         result.missingComponents.length,
-        4,
-        "Should have 4 missing components",
+        3,
+        "Should have 3 missing components",
       );
 
       // Verify error codes are captured
@@ -301,28 +291,28 @@ suite("Initialization Detection Service Test Suite", () => {
         await initService.isCodeForgeInitialized(mockWorkspacePath);
 
       // Check detailed information for one component
-      const dockerfileDetails = result.details.dockerfile;
+      const gitignoreDetails = result.details.gitignore;
       assert.strictEqual(
-        dockerfileDetails.exists,
+        gitignoreDetails.exists,
         true,
-        "Dockerfile should exist",
+        ".gitignore should exist",
       );
       assert.strictEqual(
-        dockerfileDetails.isDirectory,
+        gitignoreDetails.isDirectory,
         false,
-        "Dockerfile should not be directory",
+        ".gitignore should not be directory",
       );
       assert.strictEqual(
-        dockerfileDetails.size,
+        gitignoreDetails.size,
         2048,
         "Should have correct size",
       );
       assert.ok(
-        dockerfileDetails.path.includes("Dockerfile"),
+        gitignoreDetails.path.includes(".gitignore"),
         "Should have correct path",
       );
       assert.ok(
-        dockerfileDetails.modified instanceof Date,
+        gitignoreDetails.modified instanceof Date,
         "Should have modification date",
       );
     });
@@ -350,6 +340,20 @@ suite("Initialization Detection Service Test Suite", () => {
       }
 
       progressCallback = sandbox.stub();
+
+      // Mock dockerOperations for initialization tests
+      const dockerOperations = require("../../src/core/dockerOperations");
+      if (!dockerOperations.checkDockerAvailable.isSinonProxy) {
+        sandbox.stub(dockerOperations, "checkDockerAvailable").resolves(true);
+      }
+      if (!dockerOperations.pullAndTagDockerImage.isSinonProxy) {
+        sandbox.stub(dockerOperations, "pullAndTagDockerImage").resolves();
+      }
+      if (!dockerOperations.generateContainerName.isSinonProxy) {
+        sandbox
+          .stub(dockerOperations, "generateContainerName")
+          .returns("test-container");
+      }
     });
 
     test("Should return error for null workspace path", async () => {
@@ -405,7 +409,7 @@ suite("Initialization Detection Service Test Suite", () => {
         }
         if (
           filePath.includes(".codeforge") &&
-          !filePath.includes("Dockerfile") &&
+          !filePath.includes("scripts") &&
           !filePath.includes(".gitignore")
         ) {
           return Promise.resolve(mockDirStats);
@@ -434,8 +438,8 @@ suite("Initialization Detection Service Test Suite", () => {
       let callCount = 0;
       fsStatStub.callsFake((filePath) => {
         callCount++;
-        if (callCount <= 4) {
-          // First call (initial check) - all missing (4 components now)
+        if (callCount <= 3) {
+          // First call (initial check) - all missing (3 components now)
           const error = new Error("File not found");
           error.code = "ENOENT";
           return Promise.reject(error);
@@ -454,7 +458,6 @@ suite("Initialization Detection Service Test Suite", () => {
 
           if (
             filePath.includes(".codeforge") &&
-            !filePath.includes("Dockerfile") &&
             !filePath.includes(".gitignore") &&
             !filePath.includes("scripts")
           ) {
@@ -489,10 +492,6 @@ suite("Initialization Detection Service Test Suite", () => {
         "Should create .gitignore",
       );
       assert.ok(
-        mockResourceManager.dumpDockerfile.called,
-        "Should create Dockerfile",
-      );
-      assert.ok(
         mockResourceManager.dumpScripts.called,
         "Should create scripts directory",
       );
@@ -504,11 +503,10 @@ suite("Initialization Detection Service Test Suite", () => {
       fsStatStub.callsFake((filePath) => {
         callCount++;
 
-        if (callCount <= 4) {
-          // Initial check - some exist, some don't (now checking 4 components)
+        if (callCount <= 3) {
+          // Initial check - some exist, some don't (now checking 3 components)
           if (
             filePath.includes(".codeforge") &&
-            !filePath.includes("Dockerfile") &&
             !filePath.includes(".gitignore") &&
             !filePath.includes("scripts")
           ) {
@@ -518,7 +516,7 @@ suite("Initialization Detection Service Test Suite", () => {
               mtime: new Date(),
             });
           }
-          // Dockerfile, gitignore, and scripts don't exist initially
+          // gitignore and scripts don't exist initially
 
           const error = new Error("File not found");
           error.code = "ENOENT";
@@ -538,7 +536,6 @@ suite("Initialization Detection Service Test Suite", () => {
 
           if (
             filePath.includes(".codeforge") &&
-            !filePath.includes("Dockerfile") &&
             !filePath.includes(".gitignore") &&
             !filePath.includes("scripts")
           ) {
@@ -566,10 +563,6 @@ suite("Initialization Detection Service Test Suite", () => {
         "Should create missing .gitignore",
       );
       assert.ok(
-        mockResourceManager.dumpDockerfile.called,
-        "Should create missing Dockerfile",
-      );
-      assert.ok(
         mockResourceManager.dumpScripts.called,
         "Should create missing scripts directory",
       );
@@ -577,8 +570,8 @@ suite("Initialization Detection Service Test Suite", () => {
 
     test("Should handle initialization failure", async () => {
       // Mock resource manager failure
-      mockResourceManager.dumpDockerfile.rejects(
-        new Error("Failed to create Dockerfile"),
+      mockResourceManager.dumpGitignore.rejects(
+        new Error("Failed to create .gitignore"),
       );
 
       // Mock initial state as uninitialized
@@ -645,8 +638,8 @@ suite("Initialization Detection Service Test Suite", () => {
         }
         if (
           filePath.includes(".codeforge") &&
-          !filePath.includes("Dockerfile") &&
-          !filePath.includes(".gitignore")
+          !filePath.includes(".gitignore") &&
+          !filePath.includes("scripts")
         ) {
           return Promise.resolve(mockDirStats);
         }
@@ -696,7 +689,7 @@ suite("Initialization Detection Service Test Suite", () => {
         }
         if (
           filePath.includes(".codeforge") &&
-          !filePath.includes("Dockerfile") &&
+          !filePath.includes("scripts") &&
           !filePath.includes(".gitignore")
         ) {
           return Promise.resolve(mockDirStats);
@@ -720,12 +713,9 @@ suite("Initialization Detection Service Test Suite", () => {
     });
 
     test("Should return not_initialized status with missing components", async () => {
-      // Mock partially initialized state
+      // Mock partially initialized state (.gitignore is missing)
       fsStatStub.callsFake((filePath) => {
-        if (
-          filePath.includes("Dockerfile") ||
-          filePath.includes("build-fuzz-tests.sh")
-        ) {
+        if (filePath.includes(".gitignore")) {
           const error = new Error("File not found");
           error.code = "ENOENT";
           return Promise.reject(error);
@@ -748,11 +738,11 @@ suite("Initialization Detection Service Test Suite", () => {
         "Should have not_initialized status",
       );
       assert.ok(
-        result.message.includes("Missing 1 of 4"),
+        result.message.includes("Missing 1 of 3"),
         "Should indicate missing count",
       );
       assert.ok(
-        result.message.includes("dockerfile"),
+        result.message.includes("gitignore"),
         "Should list missing components",
       );
     });
@@ -886,7 +876,7 @@ suite("Initialization Detection Service Test Suite", () => {
       );
       assert.strictEqual(
         result.missingComponents.length,
-        4,
+        3,
         "Should have all components missing",
       );
     });

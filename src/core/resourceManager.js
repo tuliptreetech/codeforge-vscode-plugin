@@ -69,20 +69,6 @@ class ResourceManager {
   }
 
   /**
-   * Dumps the Dockerfile template to a target directory
-   * @param {string} targetDir - Target directory to dump the Dockerfile to
-   * @returns {Promise<string>} The full path to the dumped Dockerfile
-   * @throws {Error} If the Dockerfile cannot be dumped
-   */
-  async dumpDockerfile(targetDir) {
-    try {
-      return await this.dumpResource("templates/Dockerfile", targetDir);
-    } catch (error) {
-      throw new Error(`Failed to dump Dockerfile: ${error.message}`);
-    }
-  }
-
-  /**
    * Dumps the .gitignore template to a target directory
    * @param {string} targetDir - Target directory to dump the .gitignore to
    * @returns {Promise<string>} The full path to the dumped .gitignore file
