@@ -124,6 +124,15 @@ class InitializationDetectionService {
       // Create .codeforge directory if it doesn't exist
       if (!currentStatus.details.codeforgeDirectory?.exists) {
         await fs.mkdir(codeforgeDir, { recursive: true });
+
+        // Verify directory was created
+        try {
+          await fs.access(codeforgeDir);
+        } catch (error) {
+          throw new Error(
+            `Failed to create .codeforge directory: ${error.message}. Check write permissions for the workspace.`,
+          );
+        }
       }
 
       reportProgress("Creating .gitignore file...", 40);
@@ -131,6 +140,16 @@ class InitializationDetectionService {
       // Create .gitignore if it doesn't exist
       if (!currentStatus.details.gitignore?.exists) {
         await this.resourceManager.dumpGitignore(codeforgeDir);
+
+        // Verify .gitignore was created
+        const gitignorePath = path.join(codeforgeDir, ".gitignore");
+        try {
+          await fs.access(gitignorePath);
+        } catch (error) {
+          throw new Error(
+            `Failed to create .gitignore file: ${error.message}. Check write permissions.`,
+          );
+        }
       }
 
       reportProgress("Copying scripts...", 60);
@@ -139,6 +158,15 @@ class InitializationDetectionService {
       const scriptsDir = path.join(codeforgeDir, "scripts");
       if (!currentStatus.details.scriptsDirectory?.exists) {
         await this.resourceManager.dumpScripts(scriptsDir);
+
+        // Verify scripts directory was created
+        try {
+          await fs.access(scriptsDir);
+        } catch (error) {
+          throw new Error(
+            `Failed to create scripts directory: ${error.message}. Check write permissions.`,
+          );
+        }
       }
 
       reportProgress("Pulling Docker image...", 70);

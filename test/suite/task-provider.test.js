@@ -136,11 +136,55 @@ suite("Task Provider Test Suite", () => {
   });
 
   suite("Task Terminal Operations", () => {
+    test("Task terminal should handle missing resourceManager", async () => {
+      const mockWorkspaceFolder = "/test/workspace";
+      const mockDefinition = {
+        type: "codeforge",
+        command: "echo 'test'",
+      };
+
+      // Create terminal WITHOUT resourceManager (null)
+      const terminal = new CodeForgeTaskTerminal(
+        mockWorkspaceFolder,
+        mockDefinition,
+        mockOutputChannel,
+        null, // resourceManager is null
+      );
+
+      let writeOutput = "";
+      let closeCode = null;
+
+      terminal.onDidWrite((data) => {
+        writeOutput += data;
+      });
+
+      terminal.onDidClose((code) => {
+        closeCode = code;
+      });
+
+      await terminal.open();
+
+      assert.ok(
+        writeOutput.includes("Extension is not properly initialized"),
+        "Terminal should show extension not initialized message",
+      );
+      assert.ok(
+        writeOutput.includes("reload the window"),
+        "Terminal should suggest reloading the window",
+      );
+      assert.strictEqual(closeCode, 1, "Terminal should close with error code");
+    });
+
     test("Task terminal should handle missing Dockerfile", async () => {
       const mockWorkspaceFolder = "/test/workspace";
       const mockDefinition = {
         type: "codeforge",
         command: "echo 'test'",
+      };
+
+      // Mock resource manager
+      const mockResourceManager = {
+        scriptsPath: "/mock/scripts",
       };
 
       // Mock file system - Dockerfile doesn't exist
@@ -152,6 +196,7 @@ suite("Task Provider Test Suite", () => {
         mockWorkspaceFolder,
         mockDefinition,
         mockOutputChannel,
+        mockResourceManager,
       );
 
       let writeOutput = "";
@@ -182,6 +227,11 @@ suite("Task Provider Test Suite", () => {
         interactive: true,
       };
 
+      // Mock resource manager
+      const mockResourceManager = {
+        scriptsPath: "/mock/scripts",
+      };
+
       // Mock file system - Dockerfile exists
       const accessStub = sandbox.stub(fs, "access").resolves();
 
@@ -194,6 +244,7 @@ suite("Task Provider Test Suite", () => {
         mockWorkspaceFolder,
         mockDefinition,
         mockOutputChannel,
+        mockResourceManager,
       );
 
       let writeOutput = "";
@@ -223,6 +274,11 @@ suite("Task Provider Test Suite", () => {
         command: "echo 'test'",
       };
 
+      // Mock resource manager
+      const mockResourceManager = {
+        scriptsPath: "/mock/scripts",
+      };
+
       // Mock file system - Dockerfile exists
       const accessStub = sandbox.stub(fs, "access").resolves();
 
@@ -235,6 +291,7 @@ suite("Task Provider Test Suite", () => {
         mockWorkspaceFolder,
         mockDefinition,
         mockOutputChannel,
+        mockResourceManager,
       );
 
       let writeOutput = "";
@@ -265,6 +322,11 @@ suite("Task Provider Test Suite", () => {
         command: "invalid-command",
       };
 
+      // Mock resource manager
+      const mockResourceManager = {
+        scriptsPath: "/mock/scripts",
+      };
+
       // Mock file system - Dockerfile exists
       const accessStub = sandbox.stub(fs, "access").resolves();
 
@@ -277,6 +339,7 @@ suite("Task Provider Test Suite", () => {
         mockWorkspaceFolder,
         mockDefinition,
         mockOutputChannel,
+        mockResourceManager,
       );
 
       // This test verifies that the terminal is created and can handle errors
