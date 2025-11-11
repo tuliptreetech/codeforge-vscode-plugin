@@ -123,59 +123,71 @@ class CodeForgeCommandHandlers {
       }
 
       // Check if Docker image exists
+      // Note: Image should have been pulled during initialization,
+      // but we check anyway in case something went wrong
       const imageExists =
         await dockerOperations.checkImageExists(containerName);
 
-      // If image doesn't exist, ask user permission to build it
       if (!imageExists) {
-        const buildAction = await vscode.window.showInformationMessage(
-          `CodeForge: Docker image '${containerName}' not found. Would you like to build it now?`,
+        // Image not found - this shouldn't happen if initialization completed successfully
+        // Offer to pull it now as a recovery option
+        const pullAction = await vscode.window.showInformationMessage(
+          `CodeForge: Docker image '${containerName}' not found. This may indicate initialization didn't complete successfully. Would you like to pull it now?`,
           { modal: true },
-          "Build Now",
+          "Pull Now",
+          "Re-initialize",
         );
 
-        if (buildAction !== "Build Now") {
+        if (pullAction === "Re-initialize") {
+          // Re-run initialization which will pull the image
+          await this.handleInitializeProject();
+          // Check again if image exists after re-initialization
+          const imageExistsAfterInit =
+            await dockerOperations.checkImageExists(containerName);
+          return imageExistsAfterInit;
+        } else if (pullAction === "Pull Now") {
           this.safeOutputLog(
-            "User cancelled Docker image build - operation aborted",
+            `CodeForge: Pulling Docker image for ${containerName}...`,
+            true,
           );
-          return false;
-        }
 
-        this.safeOutputLog(
-          `CodeForge: User requested Docker image build for ${containerName}...`,
-          true,
-        );
+          // Show progress notification
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: "CodeForge: Pulling Docker environment...",
+              cancellable: false,
+            },
+            async (progress) => {
+              try {
+                // Pull and tag the Docker image
+                await dockerOperations.pullAndTagDockerImage(
+                  containerName,
+                  undefined,
+                  this.outputChannel,
+                );
+                this.outputChannel.appendLine(
+                  `Successfully pulled and tagged Docker image: ${containerName}`,
+                );
+              } catch (error) {
+                throw error;
+              }
+            },
+          );
 
-        // Show progress notification
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: "CodeForge: Building Docker environment...",
-            cancellable: false,
-          },
-          async (progress) => {
-            try {
-              // Build the Docker image
-              await dockerOperations.buildDockerImage(
-                workspacePath,
-                containerName,
-              );
-              this.outputChannel.appendLine(
-                `Successfully built Docker image: ${containerName}`,
-              );
-            } catch (error) {
-              throw error;
-            }
-          },
-        );
-
-        // Verify the image was built successfully
-        const imageExistsAfterBuild =
-          await dockerOperations.checkImageExists(containerName);
-        if (!imageExistsAfterBuild) {
-          this.outputChannel.appendLine("Error: Docker image build failed");
-          vscode.window.showErrorMessage(
-            "CodeForge: Failed to build Docker image",
+          // Verify the image was pulled and tagged successfully
+          const imageExistsAfterPull =
+            await dockerOperations.checkImageExists(containerName);
+          if (!imageExistsAfterPull) {
+            this.outputChannel.appendLine("Error: Docker image pull failed");
+            vscode.window.showErrorMessage(
+              "CodeForge: Failed to pull Docker image",
+            );
+            return false;
+          }
+        } else {
+          this.safeOutputLog(
+            "User cancelled Docker image pull - operation aborted",
           );
           return false;
         }
@@ -1936,6 +1948,19 @@ class CodeForgeCommandHandlers {
     try {
       const { path: workspacePath } = this.getWorkspaceInfo();
 
+      // Show initial message with option to show details
+      const showDetailsPromise = vscode.window.showInformationMessage(
+        "CodeForge: Initializing project...",
+        "Show Details",
+      );
+
+      // Handle "Show Details" click in background
+      showDetailsPromise.then((selection) => {
+        if (selection === "Show Details") {
+          this.outputChannel.show();
+        }
+      });
+
       // Show progress notification with detailed feedback
       await vscode.window.withProgress(
         {
@@ -1959,6 +1984,7 @@ class CodeForgeCommandHandlers {
               await this.initializationService.initializeProjectWithProgress(
                 workspacePath,
                 progressCallback,
+                this.outputChannel,
               );
 
             if (result.success) {

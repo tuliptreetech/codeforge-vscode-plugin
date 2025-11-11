@@ -348,52 +348,6 @@ suite("ResourceManager Test Suite", () => {
     });
   });
 
-  suite("dumpDockerfile() Method", () => {
-    let targetDir;
-
-    setup(async () => {
-      targetDir = path.join(tempDir, "dockerfile-target");
-      await fs.mkdir(targetDir, { recursive: true });
-    });
-
-    test("Should dump Dockerfile template", async () => {
-      const dumpedPath = await resourceManager.dumpDockerfile(targetDir);
-
-      assert.strictEqual(dumpedPath, path.join(targetDir, "Dockerfile"));
-
-      const content = await fs.readFile(dumpedPath, "utf8");
-      assert.strictEqual(content, "FROM ubuntu:24.04\nRUN apt-get update\n");
-    });
-
-    test("Should create target directory if needed", async () => {
-      const newTargetDir = path.join(tempDir, "new-dockerfile-target");
-
-      const dumpedPath = await resourceManager.dumpDockerfile(newTargetDir);
-
-      assert.strictEqual(dumpedPath, path.join(newTargetDir, "Dockerfile"));
-
-      const content = await fs.readFile(dumpedPath, "utf8");
-      assert.strictEqual(content, "FROM ubuntu:24.04\nRUN apt-get update\n");
-    });
-
-    test("Should throw error if Dockerfile template is missing", async () => {
-      // Remove the Dockerfile template
-      await fs.unlink(
-        path.join(mockExtensionPath, "resources", "templates", "Dockerfile"),
-      );
-
-      await assert.rejects(
-        async () => {
-          await resourceManager.dumpDockerfile(targetDir);
-        },
-        {
-          name: "Error",
-          message: /Failed to dump Dockerfile/,
-        },
-      );
-    });
-  });
-
   suite("dumpGitignore() Method", () => {
     let targetDir;
 

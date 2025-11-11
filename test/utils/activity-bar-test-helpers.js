@@ -598,7 +598,7 @@ function createDockerOperationsMocks(sandbox) {
     checkImageExists: sandbox.stub().resolves(true),
     getActiveContainers: sandbox.stub().resolves(createMockContainers()),
     stopContainer: sandbox.stub().resolves(),
-    buildDockerImage: sandbox.stub().resolves(),
+    pullAndTagDockerImage: sandbox.stub().resolves(),
     getContainerStatus: sandbox.stub().resolves(createMockContainers()),
     terminateAllContainers: sandbox
       .stub()

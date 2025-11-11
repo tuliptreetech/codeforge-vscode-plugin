@@ -281,6 +281,7 @@ main() {
 
     # Build docker run command
     DOCKER_RUN_ARGS=("run")
+    DOCKER_RUN_ARGS+=("--platform" "linux/amd64")
 
     # Add container name if tracking is enabled or keeping container
     if [ "$ENABLE_TRACKING" = true ] || [ "$REMOVE_AFTER_RUN" = false ]; then

@@ -138,7 +138,9 @@ suite("Activity Bar Integration Test Suite", () => {
 
       // Setup mocks for build process
       testEnvironment.fsMocks.access.resolves();
-      testEnvironment.dockerMocks.buildDockerImage = sandbox.stub().resolves();
+      testEnvironment.dockerMocks.pullAndTagDockerImage = sandbox
+        .stub()
+        .resolves();
 
       await webviewProvider.resolveWebviewView(mockWebviewView);
 
@@ -550,7 +552,7 @@ suite("Activity Bar Integration Test Suite", () => {
 
       // Mock slow build process
       testEnvironment.fsMocks.access.resolves();
-      testEnvironment.dockerMocks.buildDockerImage = sandbox
+      testEnvironment.dockerMocks.pullAndTagDockerImage = sandbox
         .stub()
         .callsFake(() => {
           return new Promise((resolve) => setTimeout(resolve, 100));

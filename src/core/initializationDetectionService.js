@@ -1,6 +1,7 @@
 const vscode = require("vscode");
 const fs = require("fs").promises;
 const path = require("path");
+const dockerOperations = require("./dockerOperations");
 
 /**
  * Initialization Detection Service for CodeForge
@@ -30,7 +31,6 @@ class InitializationDetectionService {
     const requiredPaths = {
       codeforgeDirectory: codeforgeDir,
       scriptsDirectory: scriptsDir,
-      dockerfile: path.join(codeforgeDir, "Dockerfile"),
       gitignore: path.join(codeforgeDir, ".gitignore"),
     };
 
@@ -71,9 +71,14 @@ class InitializationDetectionService {
    * Initialize CodeForge project with progress reporting
    * @param {string} workspacePath - Path to the workspace directory
    * @param {Function} progressCallback - Callback function for progress updates
+   * @param {Object} outputChannel - Optional VSCode output channel for logging
    * @returns {Promise<{success: boolean, error?: string, details?: object}>}
    */
-  async initializeProjectWithProgress(workspacePath, progressCallback = null) {
+  async initializeProjectWithProgress(
+    workspacePath,
+    progressCallback = null,
+    outputChannel = null,
+  ) {
     if (!workspacePath) {
       return {
         success: false,
@@ -128,19 +133,81 @@ class InitializationDetectionService {
         await this.resourceManager.dumpGitignore(codeforgeDir);
       }
 
-      reportProgress("Creating Dockerfile...", 60);
-
-      // Create Dockerfile if it doesn't exist
-      if (!currentStatus.details.dockerfile?.exists) {
-        await this.resourceManager.dumpDockerfile(codeforgeDir);
-      }
-
-      reportProgress("Copying scripts...", 70);
+      reportProgress("Copying scripts...", 60);
 
       // Copy scripts to workspace .codeforge/scripts directory
       const scriptsDir = path.join(codeforgeDir, "scripts");
       if (!currentStatus.details.scriptsDirectory?.exists) {
         await this.resourceManager.dumpScripts(scriptsDir);
+      }
+
+      reportProgress("Pulling Docker image...", 70);
+
+      // Pull and tag Docker image
+      const containerName =
+        dockerOperations.generateContainerName(workspacePath);
+
+      // Check if Docker is available before attempting to pull
+      console.log("Checking Docker availability...");
+      const dockerAvailable = await dockerOperations.checkDockerAvailable();
+
+      if (!dockerAvailable) {
+        const errorMsg =
+          "Docker is not available. Please ensure Docker is installed and running.";
+        console.error(errorMsg);
+        reportProgress(errorMsg, 85);
+
+        // Show error message to user
+        if (typeof vscode !== "undefined" && vscode.window) {
+          vscode.window.showErrorMessage(
+            `CodeForge: ${errorMsg} Initialization will continue, but you'll need to pull the Docker image manually later.`,
+          );
+        }
+      } else {
+        try {
+          console.log(
+            `Pulling Docker image from GHCR and tagging as: ${containerName}`,
+          );
+          if (outputChannel) {
+            outputChannel.appendLine(
+              `Pulling Docker image from GHCR and tagging as: ${containerName}`,
+            );
+            // Don't auto-show - user can click "Show Details" button
+          }
+          await dockerOperations.pullAndTagDockerImage(
+            containerName,
+            undefined,
+            outputChannel,
+          );
+          console.log(
+            `Successfully pulled and tagged Docker image: ${containerName}`,
+          );
+          if (outputChannel) {
+            outputChannel.appendLine(
+              `Successfully pulled and tagged Docker image: ${containerName}`,
+            );
+          }
+          reportProgress("Docker image pulled and tagged successfully", 85);
+        } catch (error) {
+          // Log the error and show to user
+          const errorMsg = `Failed to pull Docker image: ${error.message}`;
+          console.error(errorMsg);
+          console.error(`Error stack: ${error.stack}`);
+          if (outputChannel) {
+            outputChannel.appendLine(`ERROR: ${errorMsg}`);
+            outputChannel.appendLine(`Error stack: ${error.stack}`);
+            // On error, show the output channel automatically
+            outputChannel.show();
+          }
+          reportProgress(errorMsg, 85);
+
+          // Show error message to user
+          if (typeof vscode !== "undefined" && vscode.window) {
+            vscode.window.showErrorMessage(
+              `CodeForge: ${errorMsg}. Initialization will continue, but you may need to pull the image manually.`,
+            );
+          }
+        }
       }
 
       reportProgress("Verifying initialization...", 90);

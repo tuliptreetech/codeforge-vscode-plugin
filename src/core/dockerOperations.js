@@ -388,78 +388,131 @@ async function checkImageExists(imageName) {
 }
 
 /**
- * Builds a Docker image from the Dockerfile in the .codeforge directory
- * @param {string} workspaceFolder - The path to the workspace folder
- * @param {string} imageName - The name to give the built image
- * @returns {Promise<void>} Resolves when the build is complete
+ * Pulls a Docker image from GitHub Container Registry and tags it with a project-specific name
+ * @param {string} imageName - The name to tag the pulled image with
+ * @param {string} sourceImage - The source image to pull (default: ghcr.io/tuliptreetech/codeforge-docker:main-1f56677)
+ * @param {Object} outputChannel - Optional VSCode output channel for logging
+ * @returns {Promise<void>} Resolves when the pull and tag are complete
  */
-function buildDockerImage(workspaceFolder, imageName) {
+function pullAndTagDockerImage(
+  imageName,
+  sourceImage = "ghcr.io/tuliptreetech/codeforge-docker:main-1f56677",
+  outputChannel = null,
+) {
   return new Promise((resolve, reject) => {
-    if (!workspaceFolder || !imageName) {
-      reject(new Error("Workspace folder and image name are required"));
+    if (!imageName) {
+      reject(new Error("Image name is required"));
       return;
     }
 
-    const dockerfilePath = path.join(
-      workspaceFolder,
-      ".codeforge",
-      "Dockerfile",
-    );
-    const buildContext = path.join(workspaceFolder, ".codeforge");
+    const log = (message) => {
+      console.log(message);
+      if (outputChannel) {
+        outputChannel.appendLine(message);
+      }
+    };
 
-    // Check if Dockerfile exists
-    const fs = require("fs");
-    if (!fs.existsSync(dockerfilePath)) {
-      reject(new Error(`Dockerfile not found at ${dockerfilePath}`));
-      return;
-    }
+    log(`Pulling Docker image: ${sourceImage} (platform: linux/amd64)`);
 
-    // Get username and user ID for build arguments
-    const username = process.env.USER || process.env.USERNAME || "user";
-    const userid = process.getuid ? process.getuid().toString() : "1000";
-
-    const buildArgs = [
-      "build",
-      "-t",
-      imageName,
-      "--build-arg",
-      `USERNAME=${username}`,
-      "--build-arg",
-      `USERID=${userid}`,
-      "-f",
-      dockerfilePath,
-      buildContext,
-    ];
-
-    console.log(
-      "Building Docker image with command:",
-      "docker",
-      buildArgs.join(" "),
-    );
-
-    const buildProcess = spawn("docker", buildArgs, {
-      stdio: "inherit",
+    // First, pull the image with platform specification
+    const pullArgs = ["pull", "--platform", "linux/amd64", sourceImage];
+    const pullProcess = spawn("docker", pullArgs, {
+      stdio: "pipe", // Capture stdout/stderr for logging
     });
 
-    let buildTimeout = setTimeout(() => {
-      buildProcess.kill();
-      reject(new Error("Docker build timed out after 10 minutes"));
+    let pullOutput = "";
+    let pullError = "";
+
+    // Capture stdout
+    pullProcess.stdout.on("data", (data) => {
+      const text = data.toString();
+      pullOutput += text;
+      log(text.trim());
+    });
+
+    // Capture stderr
+    pullProcess.stderr.on("data", (data) => {
+      const text = data.toString();
+      pullError += text;
+      log(`stderr: ${text.trim()}`);
+    });
+
+    let pullTimeout = setTimeout(() => {
+      pullProcess.kill();
+      reject(new Error("Docker pull timed out after 10 minutes"));
     }, 600000); // 10 minute timeout
 
-    buildProcess.on("close", (code) => {
-      clearTimeout(buildTimeout);
+    pullProcess.on("close", (code) => {
+      clearTimeout(pullTimeout);
       if (code === 0) {
-        console.log(`Docker image ${imageName} built successfully`);
-        resolve();
+        log(`Successfully pulled ${sourceImage}`);
+        log(`Tagging image as: ${imageName}`);
+
+        // Now tag the image with the project-specific name
+        const tagProcess = spawn("docker", ["tag", sourceImage, imageName], {
+          stdio: "pipe",
+        });
+
+        let tagOutput = "";
+        let tagError = "";
+
+        tagProcess.stdout.on("data", (data) => {
+          const text = data.toString();
+          tagOutput += text;
+          log(text.trim());
+        });
+
+        tagProcess.stderr.on("data", (data) => {
+          const text = data.toString();
+          tagError += text;
+          log(`stderr: ${text.trim()}`);
+        });
+
+        tagProcess.on("close", (tagCode) => {
+          if (tagCode === 0) {
+            log(`Docker image ${imageName} tagged successfully`);
+            resolve();
+          } else if (tagCode === null) {
+            const errorMsg = "Docker tag was terminated";
+            log(`ERROR: ${errorMsg}`);
+            if (tagError) log(`Tag error output: ${tagError}`);
+            reject(new Error(errorMsg));
+          } else {
+            const errorMsg = `Docker tag failed with exit code ${tagCode}`;
+            log(`ERROR: ${errorMsg}`);
+            if (tagError) log(`Tag error output: ${tagError}`);
+            reject(new Error(errorMsg));
+          }
+        });
+
+        tagProcess.on("error", (error) => {
+          log(`ERROR: Failed to execute docker tag: ${error.message}`);
+          if (error.code === "ENOENT") {
+            reject(
+              new Error(
+                "Docker command not found. Please ensure Docker is installed and in PATH",
+              ),
+            );
+          } else {
+            reject(new Error(`Failed to tag Docker image: ${error.message}`));
+          }
+        });
       } else if (code === null) {
-        reject(new Error("Docker build was terminated"));
+        const errorMsg = "Docker pull was terminated";
+        log(`ERROR: ${errorMsg}`);
+        if (pullError) log(`Pull error output: ${pullError}`);
+        reject(new Error(errorMsg));
       } else {
-        reject(new Error(`Docker build failed with exit code ${code}`));
+        const errorMsg = `Docker pull failed with exit code ${code}`;
+        log(`ERROR: ${errorMsg}`);
+        if (pullError) log(`Pull error output: ${pullError}`);
+        reject(new Error(errorMsg));
       }
     });
 
-    buildProcess.on("error", (error) => {
-      clearTimeout(buildTimeout);
+    pullProcess.on("error", (error) => {
+      clearTimeout(pullTimeout);
+      log(`ERROR: Failed to execute docker pull: ${error.message}`);
       if (error.code === "ENOENT") {
         reject(
           new Error(
@@ -468,7 +521,7 @@ function buildDockerImage(workspaceFolder, imageName) {
         );
       } else {
         reject(
-          new Error(`Failed to start Docker build process: ${error.message}`),
+          new Error(`Failed to start Docker pull process: ${error.message}`),
         );
       }
     });
@@ -959,7 +1012,7 @@ function runCommandInNewContainer(workspacePath, command, options = {}) {
 module.exports = {
   generateContainerName,
   checkImageExists,
-  buildDockerImage,
+  pullAndTagDockerImage,
   runDockerCommandWithOutput,
   runCommandInNewContainer,
   generateDockerRunArgs,
