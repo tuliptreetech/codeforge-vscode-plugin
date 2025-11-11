@@ -13,6 +13,7 @@ const {
   InitializationDetectionService,
 } = require("../core/initializationDetectionService");
 const { LaunchConfigManager } = require("../utils/launchConfig");
+const { validateFuzzerName } = require("../fuzzing/fuzzerUtils");
 const fs = require("fs").promises;
 const path = require("path");
 
@@ -970,6 +971,16 @@ class CodeForgeCommandHandlers {
         throw new Error("Fuzzer name not provided");
       }
 
+      // Validate fuzzer name to prevent shell injection
+      const validation = validateFuzzerName(fuzzerName);
+      if (!validation.valid) {
+        vscode.window.showErrorMessage(`CodeForge: ${validation.error}`);
+        this.safeOutputLog(
+          `Fuzzer name validation failed: ${validation.error}`,
+        );
+        return;
+      }
+
       // Check initialization and build status
       const containerName =
         dockerOperations.generateContainerName(workspacePath);
@@ -1186,6 +1197,16 @@ class CodeForgeCommandHandlers {
         );
       }
 
+      // Validate fuzzer name to prevent shell injection
+      const nameValidation = validateFuzzerName(fuzzerName);
+      if (!nameValidation.valid) {
+        vscode.window.showErrorMessage(`CodeForge: ${nameValidation.error}`);
+        this.safeOutputLog(
+          `Fuzzer name validation failed: ${nameValidation.error}`,
+        );
+        return;
+      }
+
       // Check initialization and build status
       const containerName =
         dockerOperations.generateContainerName(workspacePath);
@@ -1201,14 +1222,15 @@ class CodeForgeCommandHandlers {
       }
 
       // Validate analysis requirements
-      const validation = await this.gdbIntegration.validateAnalysisRequirements(
-        workspacePath,
-        fuzzerName,
-        filePath,
-      );
+      const analysisValidation =
+        await this.gdbIntegration.validateAnalysisRequirements(
+          workspacePath,
+          fuzzerName,
+          filePath,
+        );
 
-      if (!validation.valid) {
-        const errorMessage = `Cannot analyze crash: ${validation.issues.join(", ")}`;
+      if (!analysisValidation.valid) {
+        const errorMessage = `Cannot analyze crash: ${analysisValidation.issues.join(", ")}`;
         this.safeOutputLog(errorMessage, false);
         vscode.window.showErrorMessage(`CodeForge: ${errorMessage}`);
         return;
@@ -1591,6 +1613,16 @@ class CodeForgeCommandHandlers {
 
       if (!fuzzerName) {
         throw new Error("Fuzzer name not provided");
+      }
+
+      // Validate fuzzer name to prevent shell injection
+      const validation = validateFuzzerName(fuzzerName);
+      if (!validation.valid) {
+        vscode.window.showErrorMessage(`CodeForge: ${validation.error}`);
+        this.safeOutputLog(
+          `Fuzzer name validation failed: ${validation.error}`,
+        );
+        return;
       }
 
       // Get fuzzer preset from cache

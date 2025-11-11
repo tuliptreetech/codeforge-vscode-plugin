@@ -41,6 +41,94 @@ const execAsync = promisify(exec);
 const trackedContainers = new Map();
 
 /**
+ * Operation lock to prevent concurrent conflicting operations
+ * Maps operation keys to promises
+ */
+const operationLocks = new Map();
+
+/**
+ * Acquire a lock for a specific operation
+ * Prevents concurrent operations on the same resource
+ * @param {string} key - Lock key (e.g., "build:myproject")
+ * @param {Function} operation - Async function to execute with lock
+ * @returns {Promise<any>} Result of the operation
+ */
+async function withLock(key, operation) {
+  // Wait for any existing operation with this key to complete
+  while (operationLocks.has(key)) {
+    await operationLocks.get(key);
+  }
+
+  // Create a new promise for this operation
+  const operationPromise = (async () => {
+    try {
+      return await operation();
+    } finally {
+      // Release the lock when done
+      operationLocks.delete(key);
+    }
+  })();
+
+  // Store the promise
+  operationLocks.set(key, operationPromise);
+
+  return operationPromise;
+}
+
+/**
+ * Retry operation with exponential backoff
+ * @param {Function} operation - Async function to retry
+ * @param {number} maxRetries - Maximum number of retries (default: 3)
+ * @param {number} initialDelay - Initial delay in ms (default: 1000)
+ * @param {Array<string>} retryableErrors - Error messages that should trigger retry
+ * @returns {Promise<any>} Result of the operation
+ */
+async function retryWithBackoff(
+  operation,
+  maxRetries = 3,
+  initialDelay = 1000,
+  retryableErrors = ["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN"],
+) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+
+      // Don't retry on last attempt
+      if (attempt === maxRetries) {
+        break;
+      }
+
+      // Check if error is retryable
+      const isRetryable = retryableErrors.some((errMsg) =>
+        error.message.includes(errMsg),
+      );
+
+      if (!isRetryable) {
+        // Non-retryable error, throw immediately
+        throw error;
+      }
+
+      // Calculate delay with exponential backoff
+      const delay = initialDelay * Math.pow(2, attempt);
+      console.log(
+        `Operation failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms: ${error.message}`,
+      );
+
+      // Wait before retrying
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  // All retries exhausted
+  throw new Error(
+    `Operation failed after ${maxRetries + 1} attempts: ${lastError.message}`,
+  );
+}
+
+/**
  * Adds a container to the tracking list
  * @param {string} containerId - The container ID or name
  * @param {Object} metadata - Additional metadata about the container
@@ -94,16 +182,49 @@ function getActiveContainers() {
 }
 
 /**
+ * Checks if Docker daemon is running and accessible
+ * @param {number} timeout - Timeout in milliseconds (default: 5000)
+ * @returns {Promise<boolean>} True if Docker is running, false otherwise
+ */
+async function isDockerRunning(timeout = 5000) {
+  try {
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error("Docker check timed out"));
+      }, timeout);
+    });
+
+    const execPromise = execAsync("docker info");
+
+    await Promise.race([execPromise, timeoutPromise]);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
  * Checks if a container is still running
  * @param {string} containerId - The container ID or name
+ * @param {number} timeout - Timeout in milliseconds (default: 10000)
  * @returns {Promise<boolean>} True if container is running, false otherwise
  */
-async function isContainerRunning(containerId) {
+async function isContainerRunning(containerId, timeout = 10000) {
   try {
-    // Check both by ID and by exact name match
-    const { stdout } = await execAsync(
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(`Container status check timed out after ${timeout}ms`),
+        );
+      }, timeout);
+    });
+
+    const execPromise = execAsync(
       `docker ps --filter "id=${containerId}" --format "{{.ID}}" 2>/dev/null || docker ps --filter "name=^${containerId}$" --format "{{.ID}}" 2>/dev/null`,
     );
+
+    const { stdout } = await Promise.race([execPromise, timeoutPromise]);
     return stdout.trim().length > 0;
   } catch (error) {
     console.error(`Error checking container status: ${error.message}`);
@@ -356,13 +477,28 @@ function generateContainerName(workspaceFolderPath) {
 /**
  * Checks if a Docker image exists
  * @param {string} imageName - The name of the Docker image to check
+ * @param {number} timeout - Timeout in milliseconds (default: 30000)
  * @returns {Promise<boolean>} True if the image exists, false otherwise
  */
-async function checkImageExists(imageName) {
+async function checkImageExists(imageName, timeout = 30000) {
   try {
-    const { stdout } = await execAsync(
+    // Add timeout to prevent hanging if Docker daemon is not responding
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            `Docker operation timed out after ${timeout}ms. Is Docker running?`,
+          ),
+        );
+      }, timeout);
+    });
+
+    const execPromise = execAsync(
       'docker image ls --format "{{.Repository}}:{{.Tag}}"',
     );
+
+    const { stdout } = await Promise.race([execPromise, timeoutPromise]);
+
     const images = stdout
       .trim()
       .split("\n")
@@ -383,6 +519,19 @@ async function checkImageExists(imageName) {
     return imageExists;
   } catch (error) {
     console.error("Error checking if image exists:", error);
+    // Provide helpful error message if Docker daemon is not running
+    if (
+      error.message.includes("timed out") ||
+      error.message.includes("ECONNREFUSED") ||
+      error.message.includes("Cannot connect to the Docker daemon")
+    ) {
+      console.error(
+        "Docker daemon appears to be not running or not responding.",
+      );
+      console.error(
+        "Please ensure Docker is installed and running before using CodeForge.",
+      );
+    }
     return false;
   }
 }
@@ -390,13 +539,13 @@ async function checkImageExists(imageName) {
 /**
  * Pulls a Docker image from GitHub Container Registry and tags it with a project-specific name
  * @param {string} imageName - The name to tag the pulled image with
- * @param {string} sourceImage - The source image to pull (default: ghcr.io/tuliptreetech/codeforge-docker:main-bbda721)
+ * @param {string} sourceImage - The source image to pull (default: ghcr.io/tuliptreetech/codeforge-cmake:main-92c7654)
  * @param {Object} outputChannel - Optional VSCode output channel for logging
  * @returns {Promise<void>} Resolves when the pull and tag are complete
  */
 function pullAndTagDockerImage(
   imageName,
-  sourceImage = "ghcr.io/tuliptreetech/codeforge-docker:main-bbda721",
+  sourceImage = "ghcr.io/tuliptreetech/codeforge-cmake:main-92c7654",
   outputChannel = null,
 ) {
   return new Promise((resolve, reject) => {
@@ -1012,6 +1161,7 @@ function runCommandInNewContainer(workspacePath, command, options = {}) {
 module.exports = {
   generateContainerName,
   checkImageExists,
+  isDockerRunning,
   pullAndTagDockerImage,
   runDockerCommandWithOutput,
   runCommandInNewContainer,

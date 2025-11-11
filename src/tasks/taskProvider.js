@@ -175,6 +175,19 @@ class CodeForgeTaskTerminal {
       // Record task start time
       this.taskStartTime = new Date();
 
+      // Validate that resourceManager is available
+      // If not, the task cannot run because we need access to scripts
+      if (!this.resourceManager) {
+        const message =
+          "CodeForge: Extension is not properly initialized. Please reload the window.";
+        this.writeEmitter.fire(`\r\n\x1b[31m${message}\x1b[0m\r\n`);
+        this.writeEmitter.fire(
+          `\r\nPlease run "Developer: Reload Window" from the command palette.\r\n`,
+        );
+        this.closeEmitter.fire(1);
+        return;
+      }
+
       // Get configuration
       const config = vscode.workspace.getConfiguration("codeforge");
       const dockerCommand = config.get("dockerCommand", "docker");
