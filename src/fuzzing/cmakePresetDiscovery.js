@@ -352,56 +352,6 @@ async function discoverCMakePresets(workspacePath, containerName, terminal) {
 }
 
 /**
- * Legacy function for backward compatibility
- * Returns fuzz targets for a specific preset by filtering results
- * @param {string} workspacePath - Path to the workspace
- * @param {string} containerName - Docker container name
- * @param {string} preset - CMake preset name
- * @param {string} buildDir - Build directory path (unused)
- * @param {Object} terminal - Terminal instance for logging
- * @returns {Promise<string[]>} Array of fuzz target names
- */
-async function discoverFuzzTargets(
-  workspacePath,
-  containerName,
-  preset,
-  buildDir,
-  terminal,
-) {
-  try {
-    safeFuzzingLog(
-      terminal,
-      `Discovering fuzz targets for preset ${preset}...`,
-    );
-
-    // Use discovery script
-    const fuzzTests = await discoverFuzzTestsWithScript(
-      workspacePath,
-      containerName,
-      terminal,
-    );
-
-    // Filter results for the specific preset
-    const targetsForPreset = fuzzTests
-      .filter((ft) => ft.preset === preset)
-      .map((ft) => ft.fuzzer);
-
-    safeFuzzingLog(
-      terminal,
-      `Found ${targetsForPreset.length} fuzz target(s) for preset ${preset}: ${targetsForPreset.join(", ")}`,
-    );
-
-    return targetsForPreset;
-  } catch (error) {
-    // Log for debugging but don't fail the entire workflow
-    console.log(
-      `CodeForge Debug: Target discovery failed for preset ${preset}: ${error.message}`,
-    );
-    return []; // Return empty array instead of throwing
-  }
-}
-
-/**
  * Legacy function for backward compatibility - simplified validation
  * @param {string} workspacePath - Path to the workspace
  * @param {string} containerName - Docker container name
@@ -443,7 +393,6 @@ async function validatePresetConfiguration(
 
 module.exports = {
   discoverCMakePresets,
-  discoverFuzzTargets,
   discoverFuzzTestsWithScript,
   validatePresetConfiguration,
 };

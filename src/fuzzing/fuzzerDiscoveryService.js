@@ -176,6 +176,9 @@ class FuzzerDiscoveryService {
 
   /**
    * Parses the output from find-fuzz-tests.sh script
+   * Supports two formats:
+   * - CMake format: "preset:fuzzer_name"
+   * - Rust format: "fuzzer_name" (no preset)
    * @param {string} stdout - Script output
    * @returns {Array} Array of {preset, fuzzer} objects
    */
@@ -188,7 +191,12 @@ class FuzzerDiscoveryService {
 
     for (const line of lines) {
       const trimmedLine = line.trim();
-      if (trimmedLine && trimmedLine.includes(":")) {
+      if (!trimmedLine) {
+        continue;
+      }
+
+      // Check if line contains a colon (CMake format: "preset:fuzzer")
+      if (trimmedLine.includes(":")) {
         const [preset, fuzzer] = trimmedLine.split(":", 2);
         if (preset && fuzzer) {
           fuzzerList.push({
@@ -196,6 +204,12 @@ class FuzzerDiscoveryService {
             fuzzer: fuzzer.trim(),
           });
         }
+      } else {
+        // Rust format: just "fuzzer_name" without preset
+        fuzzerList.push({
+          preset: "", // Empty preset for Rust projects
+          fuzzer: trimmedLine,
+        });
       }
     }
 

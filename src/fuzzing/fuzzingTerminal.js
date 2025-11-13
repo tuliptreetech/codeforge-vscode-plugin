@@ -159,36 +159,46 @@ class CodeForgeFuzzingTerminal {
     progressCallback("Discovering fuzzer configuration", 10);
 
     // Import discovery service
-    const cmakePresetDiscovery = require("./cmakePresetDiscovery");
+    const { FuzzerDiscoveryService } = require("./fuzzerDiscoveryService");
 
     // Discover all fuzz tests to find the specific fuzzer
-    const allFuzzTests = await cmakePresetDiscovery.discoverFuzzTestsWithScript(
+    const fuzzerDiscoveryService = new FuzzerDiscoveryService(
+      this.resourceManager,
+    );
+    const allFuzzers = await fuzzerDiscoveryService.discoverFuzzers(
       this.workspacePath,
       containerName,
-      this,
-      false,
-      this.resourceManager,
     );
 
     // Find the specific fuzzer
-    const fuzzerTest = allFuzzTests.find((ft) => ft.fuzzer === fuzzerName);
+    const fuzzerTest = allFuzzers.find((ft) => ft.name === fuzzerName);
 
     if (!fuzzerTest) {
-      throw new Error(
-        `Fuzzer '${fuzzerName}' not found in CMake configuration`,
-      );
+      throw new Error(`Fuzzer '${fuzzerName}' not found in project`);
     }
 
+    // Format fuzzer info display
+    const presetInfo = fuzzerTest.preset
+      ? ` (preset: ${fuzzerTest.preset})`
+      : "";
     this.writeEmitter.fire(
-      `\x1b[32mFound fuzzer: ${fuzzerName} (preset: ${fuzzerTest.preset})\x1b[0m\r\n\r\n`,
+      `\x1b[32mFound fuzzer: ${fuzzerName}${presetInfo}\x1b[0m\r\n\r\n`,
     );
+
+    // Convert fuzzerTest to format expected by build/run operations
+    // FuzzerDiscoveryService returns {name, preset, ...}
+    // but build/run operations expect {fuzzer, preset, ...}
+    const fuzzerForOperations = {
+      fuzzer: fuzzerTest.name,
+      preset: fuzzerTest.preset,
+    };
 
     // Build the fuzzer
     progressCallback(`Building ${fuzzerName}`, 30);
     const buildResults = await fuzzingOperations.buildFuzzTestsWithScript(
       this.workspacePath,
       containerName,
-      [fuzzerTest],
+      [fuzzerForOperations],
       this,
       this.resourceManager,
     );
@@ -204,7 +214,7 @@ class CodeForgeFuzzingTerminal {
     const runResults = await fuzzingOperations.runFuzzTestsWithScript(
       this.workspacePath,
       containerName,
-      [fuzzerTest],
+      [fuzzerForOperations],
       this,
       this.resourceManager,
     );

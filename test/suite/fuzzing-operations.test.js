@@ -319,51 +319,6 @@ suite("Fuzzing Operations Test Suite", () => {
       assert(result.includes("release"), "Should include release preset");
     });
 
-    test("discoverFuzzTargets should filter targets by preset", async () => {
-      const mockScriptOutput =
-        "debug:codeforge-example-fuzz\nrelease:codeforge-another-fuzz\ndebug:codeforge-test-fuzz\n";
-
-      const mockProcess = {
-        stdout: { on: sandbox.stub() },
-        stderr: { on: sandbox.stub() },
-        on: sandbox.stub(),
-      };
-
-      sandbox
-        .stub(dockerOperations, "runDockerCommandWithOutput")
-        .returns(mockProcess);
-
-      mockProcess.stdout.on.withArgs("data").callsArgWith(1, mockScriptOutput);
-      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
-      mockProcess.on.withArgs("close").callsArgWith(1, 0);
-
-      const result = await cmakePresetDiscovery.discoverFuzzTargets(
-        "/test/workspace",
-        "test-container",
-        "debug", // Filter for debug preset
-        "/unused/build/dir",
-        mockOutputChannel,
-      );
-
-      // Should return only debug preset targets
-      assert.strictEqual(
-        result.length,
-        2,
-        "Should return 2 targets for debug preset",
-      );
-      assert(
-        result.includes("codeforge-example-fuzz"),
-        "Should include example fuzz target",
-      );
-      assert(
-        result.includes("codeforge-test-fuzz"),
-        "Should include test fuzz target",
-      );
-      assert(
-        !result.includes("codeforge-another-fuzz"),
-        "Should not include release preset target",
-      );
-    });
   });
 
   suite("Build and Execution", () => {

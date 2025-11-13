@@ -78,6 +78,8 @@ suite("Initialization Detection Service Test Suite", () => {
 
   suite("isCodeForgeInitialized Tests", () => {
     let fsStatStub;
+    let dockerOperations;
+    let checkImageExistsStub;
 
     setup(() => {
       // Only stub if not already stubbed
@@ -86,6 +88,29 @@ suite("Initialization Detection Service Test Suite", () => {
       } else {
         fsStatStub = fs.stat;
         fsStatStub.reset();
+      }
+
+      // Mock Docker operations
+      dockerOperations = require("../../src/core/dockerOperations");
+
+      // Only stub if not already stubbed
+      if (!dockerOperations.checkImageExists.isSinonProxy) {
+        checkImageExistsStub = sandbox
+          .stub(dockerOperations, "checkImageExists")
+          .resolves(true);
+      } else {
+        checkImageExistsStub = dockerOperations.checkImageExists;
+        checkImageExistsStub.reset();
+        checkImageExistsStub.resolves(true);
+      }
+
+      if (!dockerOperations.generateContainerName.isSinonProxy) {
+        sandbox
+          .stub(dockerOperations, "generateContainerName")
+          .returns("test-image");
+      } else {
+        dockerOperations.generateContainerName.reset();
+        dockerOperations.generateContainerName.returns("test-image");
       }
     });
 
@@ -257,6 +282,9 @@ suite("Initialization Detection Service Test Suite", () => {
         return Promise.reject(error);
       });
 
+      // Mock Docker image check error
+      checkImageExistsStub.rejects(new Error("Docker not available"));
+
       const result =
         await initService.isCodeForgeInitialized(mockWorkspacePath);
 
@@ -267,15 +295,36 @@ suite("Initialization Detection Service Test Suite", () => {
       );
       assert.strictEqual(
         result.missingComponents.length,
-        3,
-        "Should have 3 missing components",
+        4,
+        "Should have 4 missing components",
       );
 
-      // Verify error codes are captured
-      Object.values(result.details).forEach((detail) => {
-        assert.strictEqual(detail.exists, false, "Component should not exist");
-        assert.strictEqual(detail.error, "EACCES", "Should capture error code");
-      });
+      // Verify error codes are captured for file system components
+      ["codeforgeDirectory", "scriptsDirectory", "gitignore"].forEach(
+        (component) => {
+          assert.strictEqual(
+            result.details[component].exists,
+            false,
+            `${component} should not exist`,
+          );
+          assert.strictEqual(
+            result.details[component].error,
+            "EACCES",
+            `${component} should capture error code`,
+          );
+        },
+      );
+
+      // Verify Docker image error is captured
+      assert.strictEqual(
+        result.details.dockerImage.exists,
+        false,
+        "dockerImage should not exist",
+      );
+      assert.ok(
+        result.details.dockerImage.error.includes("Docker"),
+        "Should capture Docker error",
+      );
     });
 
     test("Should provide detailed component information", async () => {
@@ -738,7 +787,7 @@ suite("Initialization Detection Service Test Suite", () => {
         "Should have not_initialized status",
       );
       assert.ok(
-        result.message.includes("Missing 1 of 3"),
+        result.message.includes("Missing 1 of 4"),
         "Should indicate missing count",
       );
       assert.ok(
@@ -837,6 +886,18 @@ suite("Initialization Detection Service Test Suite", () => {
         mtime: new Date(),
       });
 
+      // Mock Docker operations
+      const dockerOps = require("../../src/core/dockerOperations");
+      if (!dockerOps.checkImageExists.isSinonProxy) {
+        sandbox.stub(dockerOps, "checkImageExists").resolves(true);
+      } else {
+        dockerOps.checkImageExists.reset();
+        dockerOps.checkImageExists.resolves(true);
+      }
+      if (!dockerOps.generateContainerName.isSinonProxy) {
+        sandbox.stub(dockerOps, "generateContainerName").returns("test-image");
+      }
+
       // Run multiple concurrent checks
       const promises = [
         initService.isCodeForgeInitialized(mockWorkspacePath),
@@ -867,6 +928,20 @@ suite("Initialization Detection Service Test Suite", () => {
       }
       fsStatStub.rejects(new Error("Path too long"));
 
+      // Mock Docker operations
+      const dockerOps = require("../../src/core/dockerOperations");
+      if (!dockerOps.checkImageExists.isSinonProxy) {
+        sandbox
+          .stub(dockerOps, "checkImageExists")
+          .rejects(new Error("Path too long"));
+      } else {
+        dockerOps.checkImageExists.reset();
+        dockerOps.checkImageExists.rejects(new Error("Path too long"));
+      }
+      if (!dockerOps.generateContainerName.isSinonProxy) {
+        sandbox.stub(dockerOps, "generateContainerName").returns("test-image");
+      }
+
       const result = await initService.isCodeForgeInitialized(longPath);
 
       assert.strictEqual(
@@ -876,7 +951,7 @@ suite("Initialization Detection Service Test Suite", () => {
       );
       assert.strictEqual(
         result.missingComponents.length,
-        3,
+        4,
         "Should have all components missing",
       );
     });
@@ -905,13 +980,17 @@ suite("Initialization Detection Service Test Suite", () => {
       const result = await initService.isCodeForgeInitialized(specialPath);
 
       assert.ok(result, "Should handle special characters in path");
-      // Verify paths are constructed correctly
-      Object.values(result.details).forEach((detail) => {
-        assert.ok(
-          detail.path.includes(specialPath),
-          "Should include special path",
-        );
-      });
+      // Verify paths are constructed correctly for file system components
+      ["codeforgeDirectory", "scriptsDirectory", "gitignore"].forEach(
+        (component) => {
+          assert.ok(
+            result.details[component].path.includes(specialPath),
+            `${component} should include special path`,
+          );
+        },
+      );
+      // Verify dockerImage detail exists
+      assert.ok(result.details.dockerImage, "Should have dockerImage detail");
     });
   });
 });
