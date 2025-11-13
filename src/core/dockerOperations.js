@@ -539,19 +539,28 @@ async function checkImageExists(imageName, timeout = 30000) {
 /**
  * Pulls a Docker image from GitHub Container Registry and tags it with a project-specific name
  * @param {string} imageName - The name to tag the pulled image with
- * @param {string} sourceImage - The source image to pull (default: ghcr.io/tuliptreetech/codeforge-cmake:main-92c7654)
+ * @param {string} sourceImage - The source image to pull (if not provided, will use CMake image as default)
  * @param {Object} outputChannel - Optional VSCode output channel for logging
  * @returns {Promise<void>} Resolves when the pull and tag are complete
  */
 function pullAndTagDockerImage(
   imageName,
-  sourceImage = "ghcr.io/tuliptreetech/codeforge-cmake:main-92c7654",
+  sourceImage = null,
   outputChannel = null,
 ) {
   return new Promise((resolve, reject) => {
     if (!imageName) {
       reject(new Error("Image name is required"));
       return;
+    }
+
+    // Use CMake image as default if no source image provided
+    if (!sourceImage) {
+      const {
+        PROJECT_TYPE_IMAGES,
+        PROJECT_TYPES,
+      } = require("../utils/projectTypeDetector");
+      sourceImage = PROJECT_TYPE_IMAGES[PROJECT_TYPES.CMAKE];
     }
 
     const log = (message) => {

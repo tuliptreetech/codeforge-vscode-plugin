@@ -30,16 +30,29 @@ async function buildFuzzTestsWithScript(
     return results;
   }
 
-  // Convert fuzz tests to script format: "preset:fuzzer_name preset:fuzzer_name ..."
+  // Convert fuzz tests to script format
+  // CMake format: "preset:fuzzer_name preset:fuzzer_name ..."
+  // Rust format: "fuzzer_name fuzzer_name ..." (no preset)
   const fuzzerList = fuzzTests
-    .map((ft) => `${ft.preset}:${ft.fuzzer}`)
+    .map((ft) => {
+      if (ft.preset && ft.preset.trim() !== "") {
+        // CMake format with preset
+        return `${ft.preset}:${ft.fuzzer}`;
+      } else {
+        // Rust format without preset
+        return ft.fuzzer;
+      }
+    })
     .join(" ");
 
   safeFuzzingLog(terminal, `Building ${fuzzTests.length} fuzz test(s)...`);
 
   // Display build header in terminal
   if (terminal && typeof terminal.writeRaw === "function") {
-    terminal.writeRaw(`\r\n\x1b[36m╭─ BUILDING FUZZ TESTS ─╮\x1b[0m\r\n`, null);
+    terminal.writeRaw(
+      `\r\n\x1b[36m╭─ BUILDING FUZZ TESTS -─╮\x1b[0m\r\n`,
+      null,
+    );
     terminal.writeRaw(
       `\x1b[36m│ Targets: ${fuzzTests.map((ft) => ft.fuzzer).join(", ")}\x1b[0m\r\n`,
       null,
@@ -477,16 +490,26 @@ async function runFuzzTestsWithScript(
     return results;
   }
 
-  // Convert fuzz tests to script format: "preset:fuzzer_name preset:fuzzer_name ..."
+  // Convert fuzz tests to script format
+  // CMake format: "preset:fuzzer_name preset:fuzzer_name ..."
+  // Rust format: "fuzzer_name fuzzer_name ..." (no preset)
   const fuzzerList = fuzzTests
-    .map((ft) => `${ft.preset}:${ft.fuzzer}`)
+    .map((ft) => {
+      if (ft.preset && ft.preset.trim() !== "") {
+        // CMake format with preset
+        return `${ft.preset}:${ft.fuzzer}`;
+      } else {
+        // Rust format without preset
+        return ft.fuzzer;
+      }
+    })
     .join(" ");
 
   safeFuzzingLog(terminal, `Running ${fuzzTests.length} fuzz test(s)...`);
 
   // Display execution header in terminal
   if (terminal && typeof terminal.writeRaw === "function") {
-    terminal.writeRaw(`\r\n\x1b[35m╭─ RUNNING FUZZ TESTS ─╮\x1b[0m\r\n`, null);
+    terminal.writeRaw(`\r\n\x1b[35m╭─ RUNNING FUZZ TESTS ─-╮\x1b[0m\r\n`, null);
     terminal.writeRaw(
       `\x1b[35m│ Targets: ${fuzzTests.map((ft) => ft.fuzzer).join(", ")}\x1b[0m\r\n`,
       null,

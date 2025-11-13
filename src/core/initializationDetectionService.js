@@ -2,6 +2,7 @@ const vscode = require("vscode");
 const fs = require("fs").promises;
 const path = require("path");
 const dockerOperations = require("./dockerOperations");
+const { getProjectTypeAndImage } = require("../utils/projectTypeDetector");
 
 /**
  * Initialization Detection Service for CodeForge
@@ -56,6 +57,26 @@ class InitializationDetectionService {
         };
         missingComponents.push(component);
       }
+    }
+
+    // Check if Docker image exists
+    const imageName = dockerOperations.generateContainerName(workspacePath);
+    try {
+      const imageExists = await dockerOperations.checkImageExists(imageName);
+      details.dockerImage = {
+        exists: imageExists,
+        name: imageName,
+      };
+      if (!imageExists) {
+        missingComponents.push("dockerImage");
+      }
+    } catch (error) {
+      details.dockerImage = {
+        exists: false,
+        name: imageName,
+        error: error.message,
+      };
+      missingComponents.push("dockerImage");
     }
 
     const isInitialized = missingComponents.length === 0;
@@ -169,71 +190,102 @@ class InitializationDetectionService {
         }
       }
 
-      reportProgress("Pulling Docker image...", 70);
+      reportProgress("Detecting project type...", 65);
 
-      // Pull and tag Docker image
-      const containerName =
-        dockerOperations.generateContainerName(workspacePath);
+      // Detect project type and get appropriate Docker image
+      const { projectType, dockerImage } =
+        await getProjectTypeAndImage(workspacePath);
+      console.log(`Detected project type: ${projectType}`);
+      console.log(`Using Docker image: ${dockerImage}`);
+      if (outputChannel) {
+        outputChannel.appendLine(`Detected project type: ${projectType}`);
+        outputChannel.appendLine(`Using Docker image: ${dockerImage}`);
+      }
 
-      // Check if Docker is available before attempting to pull
-      console.log("Checking Docker availability...");
-      const dockerAvailable = await dockerOperations.checkDockerAvailable();
+      reportProgress("Checking Docker image...", 70);
 
-      if (!dockerAvailable) {
-        const errorMsg =
-          "Docker is not available. Please ensure Docker is installed and running.";
-        console.error(errorMsg);
-        reportProgress(errorMsg, 85);
+      // Pull and tag Docker image (only if it doesn't exist)
+      const imageName = dockerOperations.generateContainerName(workspacePath);
 
-        // Show error message to user
-        if (typeof vscode !== "undefined" && vscode.window) {
-          vscode.window.showErrorMessage(
-            `CodeForge: ${errorMsg} Initialization will continue, but you'll need to pull the Docker image manually later.`,
+      // Check if image already exists
+      let imageExists = false;
+      try {
+        imageExists = await dockerOperations.checkImageExists(imageName);
+      } catch (error) {
+        console.log(
+          `Could not check if image exists: ${error.message}. Will attempt to pull.`,
+        );
+      }
+
+      if (imageExists) {
+        console.log(`Docker image ${imageName} already exists, skipping pull.`);
+        if (outputChannel) {
+          outputChannel.appendLine(
+            `Docker image ${imageName} already exists, skipping pull.`,
           );
         }
+        reportProgress("Docker image already exists", 85);
       } else {
-        try {
-          console.log(
-            `Pulling Docker image from GHCR and tagging as: ${containerName}`,
-          );
-          if (outputChannel) {
-            outputChannel.appendLine(
-              `Pulling Docker image from GHCR and tagging as: ${containerName}`,
-            );
-            // Don't auto-show - user can click "Show Details" button
-          }
-          await dockerOperations.pullAndTagDockerImage(
-            containerName,
-            undefined,
-            outputChannel,
-          );
-          console.log(
-            `Successfully pulled and tagged Docker image: ${containerName}`,
-          );
-          if (outputChannel) {
-            outputChannel.appendLine(
-              `Successfully pulled and tagged Docker image: ${containerName}`,
-            );
-          }
-          reportProgress("Docker image pulled and tagged successfully", 85);
-        } catch (error) {
-          // Log the error and show to user
-          const errorMsg = `Failed to pull Docker image: ${error.message}`;
+        // Check if Docker is available before attempting to pull
+        console.log("Checking Docker availability...");
+        const dockerAvailable = await dockerOperations.checkDockerAvailable();
+
+        if (!dockerAvailable) {
+          const errorMsg =
+            "Docker is not available. Please ensure Docker is installed and running.";
           console.error(errorMsg);
-          console.error(`Error stack: ${error.stack}`);
-          if (outputChannel) {
-            outputChannel.appendLine(`ERROR: ${errorMsg}`);
-            outputChannel.appendLine(`Error stack: ${error.stack}`);
-            // On error, show the output channel automatically
-            outputChannel.show();
-          }
           reportProgress(errorMsg, 85);
 
           // Show error message to user
           if (typeof vscode !== "undefined" && vscode.window) {
             vscode.window.showErrorMessage(
-              `CodeForge: ${errorMsg}. Initialization will continue, but you may need to pull the image manually.`,
+              `CodeForge: ${errorMsg} Initialization will continue, but you'll need to pull the Docker image manually later.`,
             );
+          }
+        } else {
+          try {
+            console.log(
+              `Pulling Docker image from GHCR and tagging as: ${imageName}`,
+            );
+            if (outputChannel) {
+              outputChannel.appendLine(
+                `Pulling Docker image from GHCR and tagging as: ${imageName}`,
+              );
+              // Don't auto-show - user can click "Show Details" button
+            }
+            await dockerOperations.pullAndTagDockerImage(
+              imageName,
+              dockerImage,
+              outputChannel,
+            );
+            console.log(
+              `Successfully pulled and tagged Docker image: ${imageName}`,
+            );
+            if (outputChannel) {
+              outputChannel.appendLine(
+                `Successfully pulled and tagged Docker image: ${imageName}`,
+              );
+            }
+            reportProgress("Docker image pulled and tagged successfully", 85);
+          } catch (error) {
+            // Log the error and show to user
+            const errorMsg = `Failed to pull Docker image: ${error.message}`;
+            console.error(errorMsg);
+            console.error(`Error stack: ${error.stack}`);
+            if (outputChannel) {
+              outputChannel.appendLine(`ERROR: ${errorMsg}`);
+              outputChannel.appendLine(`Error stack: ${error.stack}`);
+              // On error, show the output channel automatically
+              outputChannel.show();
+            }
+            reportProgress(errorMsg, 85);
+
+            // Show error message to user
+            if (typeof vscode !== "undefined" && vscode.window) {
+              vscode.window.showErrorMessage(
+                `CodeForge: ${errorMsg}. Initialization will continue, but you may need to pull the image manually.`,
+              );
+            }
           }
         }
       }

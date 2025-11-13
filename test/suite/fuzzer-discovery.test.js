@@ -62,6 +62,59 @@ debug:codeforge-another-fuzz
     assert.strictEqual(result.length, 0);
   });
 
+  test("should parse Rust format (fuzzer names without presets)", function () {
+    const testOutput = `
+codeforge-example-fuzz
+codeforge-test-fuzz
+codeforge-another-fuzz
+    `;
+
+    const result = fuzzerDiscoveryService.parseFindScriptOutput(testOutput);
+
+    assert.strictEqual(result.length, 3);
+    assert.deepStrictEqual(result[0], {
+      preset: "",
+      fuzzer: "codeforge-example-fuzz",
+    });
+    assert.deepStrictEqual(result[1], {
+      preset: "",
+      fuzzer: "codeforge-test-fuzz",
+    });
+    assert.deepStrictEqual(result[2], {
+      preset: "",
+      fuzzer: "codeforge-another-fuzz",
+    });
+  });
+
+  test("should handle mixed CMake and Rust formats", function () {
+    const testOutput = `
+debug:codeforge-cmake-fuzz
+codeforge-rust-fuzz
+release:codeforge-another-cmake-fuzz
+another-rust-fuzz
+    `;
+
+    const result = fuzzerDiscoveryService.parseFindScriptOutput(testOutput);
+
+    assert.strictEqual(result.length, 4);
+    assert.deepStrictEqual(result[0], {
+      preset: "debug",
+      fuzzer: "codeforge-cmake-fuzz",
+    });
+    assert.deepStrictEqual(result[1], {
+      preset: "",
+      fuzzer: "codeforge-rust-fuzz",
+    });
+    assert.deepStrictEqual(result[2], {
+      preset: "release",
+      fuzzer: "codeforge-another-cmake-fuzz",
+    });
+    assert.deepStrictEqual(result[3], {
+      preset: "",
+      fuzzer: "another-rust-fuzz",
+    });
+  });
+
   test("should handle malformed find script output", function () {
     const testOutput = `
 invalid-line-without-colon
@@ -71,10 +124,19 @@ another-invalid-line
 
     const result = fuzzerDiscoveryService.parseFindScriptOutput(testOutput);
 
-    assert.strictEqual(result.length, 1);
+    // Now all lines are parsed - lines without colons are treated as Rust format
+    assert.strictEqual(result.length, 3);
     assert.deepStrictEqual(result[0], {
+      preset: "",
+      fuzzer: "invalid-line-without-colon",
+    });
+    assert.deepStrictEqual(result[1], {
       preset: "debug",
       fuzzer: "codeforge-valid-fuzz",
+    });
+    assert.deepStrictEqual(result[2], {
+      preset: "",
+      fuzzer: "another-invalid-line",
     });
   });
 
@@ -521,7 +583,7 @@ another-invalid-line
       }
     });
 
-    test("should handle malformed Docker output", async function () {
+    test("should handle Rust format output (no colons)", async function () {
       const dockerOperations = require("../../src/core/dockerOperations");
       const mockProcess = {
         stdout: { on: sandbox.stub() },
@@ -529,10 +591,10 @@ another-invalid-line
         on: sandbox.stub(),
       };
 
-      // Mock the process events with malformed output (no colons)
+      // Mock the process events with Rust format output (no colons)
       mockProcess.stdout.on
         .withArgs("data")
-        .callsArgWith(1, "malformed\noutput\nwithout_proper_format\n");
+        .callsArgWith(1, "rust-fuzzer-1\nrust-fuzzer-2\nrust-fuzzer-3\n");
       mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
       mockProcess.on.withArgs("close").callsArgWith(1, 0);
 
@@ -545,15 +607,32 @@ another-invalid-line
         .stub(fuzzerDiscoveryService.crashDiscoveryService, "discoverCrashes")
         .resolves([]);
 
+      // Mock file system operations
+      const fs = require("fs").promises;
+      sandbox.stub(fs, "access").resolves();
+      sandbox.stub(fs, "stat").resolves({
+        isFile: () => true,
+        mtime: new Date(),
+      });
+
       const result =
         await fuzzerDiscoveryService.discoverFuzzers(testWorkspacePath);
 
-      assert.ok(Array.isArray(result), "Should handle malformed output");
+      assert.ok(Array.isArray(result), "Should handle Rust format output");
       assert.strictEqual(
         result.length,
-        0,
-        "Should return empty array for malformed output",
+        3,
+        "Should parse all Rust format fuzzers",
       );
+
+      // Verify Rust fuzzers have empty presets
+      result.forEach((fuzzer) => {
+        assert.strictEqual(
+          fuzzer.preset,
+          "",
+          "Rust fuzzers should have empty preset",
+        );
+      });
     });
 
     test("should handle concurrent discovery requests", async function () {
