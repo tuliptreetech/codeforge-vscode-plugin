@@ -1,7 +1,7 @@
 {
   "name": "codeforge",
   "displayName": "CodeForge",
-  "description": "Docker container management for development environments",
+  "description": "Comprehensive Docker-based development environment with advanced fuzzing, crash analysis, and container management for security testing and software development",
   "publisher": "TulipTreeTechnology",
   "version": "0.1.4",
   "icon": "media/icon.png",
