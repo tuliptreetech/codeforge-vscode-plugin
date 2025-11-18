@@ -318,7 +318,6 @@ suite("Fuzzing Operations Test Suite", () => {
       assert(result.includes("debug"), "Should include debug preset");
       assert(result.includes("release"), "Should include release preset");
     });
-
   });
 
   suite("Build and Execution", () => {
