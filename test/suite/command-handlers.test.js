@@ -1200,6 +1200,7 @@ suite("Command Handlers Test Suite", () => {
     test("handleAnalyzeCrash should attempt GDB analysis", async () => {
       const crashParams = {
         crashId: "crash-abc123",
+        fullHash: "abc123def456",
         fuzzerName: "libfuzzer",
         filePath: "/test/crash/file.txt",
       };
@@ -1207,25 +1208,43 @@ suite("Command Handlers Test Suite", () => {
       // Mock successful workspace initialization
       sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
 
-      // Mock GDB integration validation failure to simulate fuzzer not found
-      sandbox
-        .stub(commandHandlers.gdbIntegration, "validateAnalysisRequirements")
-        .resolves({
-          valid: false,
-          issues: ["Fuzzer executable not found in test environment"],
-        });
+      // Mock terminal creation
+      const mockTerminal = {
+        show: sandbox.stub(),
+      };
+      testEnvironment.vscodeMocks.window.createTerminal.returns(mockTerminal);
 
       await commandHandlers.handleAnalyzeCrash(crashParams);
 
-      // Should show error message since fuzzer won't be found in test environment
+      // Should create terminal with correct configuration
       assert.ok(
-        testEnvironment.vscodeMocks.window.showErrorMessage.called,
-        "Should show error message when fuzzer not found",
+        testEnvironment.vscodeMocks.window.createTerminal.called,
+        "Should create terminal",
+      );
+
+      const terminalConfig =
+        testEnvironment.vscodeMocks.window.createTerminal.firstCall.args[0];
+      assert.ok(
+        terminalConfig.name.includes("libfuzzer"),
+        "Terminal name should include fuzzer name",
       );
       assert.ok(
-        mockOutputChannel.appendLine.called,
-        "Should log GDB analysis attempt",
+        terminalConfig.shellPath.includes("launch-process-in-docker.sh"),
+        "Should use launch-process-in-docker.sh script",
       );
+      assert.ok(
+        terminalConfig.shellArgs.some((arg) =>
+          arg.includes("codeforge run-crash-in-gdb"),
+        ),
+        "Should include codeforge run-crash-in-gdb command",
+      );
+      assert.ok(
+        terminalConfig.shellArgs.some((arg) =>
+          arg.includes("libfuzzer/abc123def456"),
+        ),
+        "Should pass fuzzer_name/full_hash format",
+      );
+      assert.ok(mockTerminal.show.called, "Should show the terminal");
     });
 
     test("handleAnalyzeCrash should handle errors", async () => {
@@ -1246,6 +1265,7 @@ suite("Command Handlers Test Suite", () => {
     test("handleAnalyzeCrash should validate required parameters", async () => {
       // Test missing crashId
       await commandHandlers.handleAnalyzeCrash({
+        fullHash: "abc123",
         fuzzerName: "libfuzzer",
         filePath: "/test/crash/file.txt",
       });
@@ -1258,9 +1278,25 @@ suite("Command Handlers Test Suite", () => {
       // Reset mocks
       testEnvironment.vscodeMocks.window.showErrorMessage.reset();
 
+      // Test missing fullHash
+      await commandHandlers.handleAnalyzeCrash({
+        crashId: "crash-abc123",
+        fuzzerName: "libfuzzer",
+        filePath: "/test/crash/file.txt",
+      });
+
+      assert.ok(
+        testEnvironment.vscodeMocks.window.showErrorMessage.called,
+        "Should show error for missing fullHash",
+      );
+
+      // Reset mocks
+      testEnvironment.vscodeMocks.window.showErrorMessage.reset();
+
       // Test missing fuzzerName
       await commandHandlers.handleAnalyzeCrash({
         crashId: "crash-abc123",
+        fullHash: "abc123",
         filePath: "/test/crash/file.txt",
       });
 
@@ -1275,6 +1311,7 @@ suite("Command Handlers Test Suite", () => {
       // Test missing filePath
       await commandHandlers.handleAnalyzeCrash({
         crashId: "crash-abc123",
+        fullHash: "abc123",
         fuzzerName: "libfuzzer",
       });
 
@@ -1287,6 +1324,7 @@ suite("Command Handlers Test Suite", () => {
     test("handleAnalyzeCrash should handle workspace initialization failure", async () => {
       const crashParams = {
         crashId: "crash-abc123",
+        fullHash: "abc123def456",
         fuzzerName: "libfuzzer",
         filePath: "/test/crash/file.txt",
       };
@@ -1307,9 +1345,10 @@ suite("Command Handlers Test Suite", () => {
       );
     });
 
-    test("handleAnalyzeCrash should handle GDB validation failure", async () => {
+    test("handleAnalyzeCrash should handle terminal creation failure", async () => {
       const crashParams = {
         crashId: "crash-abc123",
+        fullHash: "abc123def456",
         fuzzerName: "nonexistent-fuzzer",
         filePath: "/test/crash/file.txt",
       };
@@ -1317,33 +1356,31 @@ suite("Command Handlers Test Suite", () => {
       // Mock successful workspace initialization
       sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
 
-      // Mock GDB integration validation failure
-      sandbox
-        .stub(commandHandlers.gdbIntegration, "validateAnalysisRequirements")
-        .resolves({
-          valid: false,
-          issues: ["Fuzzer executable not found", "Crash file not accessible"],
-        });
+      // Mock terminal creation failure
+      testEnvironment.vscodeMocks.window.createTerminal.throws(
+        new Error("Terminal creation failed"),
+      );
 
       await commandHandlers.handleAnalyzeCrash(crashParams);
 
       assert.ok(
         testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
-          sinon.match(/Cannot analyze crash.*Fuzzer executable not found/),
+          sinon.match(/Failed to analyze crash.*Terminal creation failed/),
         ),
-        "Should show validation error message",
+        "Should show terminal creation error message",
       );
       assert.ok(
         mockOutputChannel.appendLine.calledWith(
-          sinon.match(/Cannot analyze crash.*Fuzzer executable not found/),
+          sinon.match(/Error analyzing crash.*Terminal creation failed/),
         ),
-        "Should log validation errors",
+        "Should log terminal creation error",
       );
     });
 
-    test("handleAnalyzeCrash should handle successful GDB analysis", async () => {
+    test("handleAnalyzeCrash should strip crash- prefix from fullHash", async () => {
       const crashParams = {
         crashId: "crash-abc123",
+        fullHash: "crash-abc123def456", // Has "crash-" prefix
         fuzzerName: "libfuzzer",
         filePath: "/test/workspace/crash/file.txt",
       };
@@ -1351,263 +1388,28 @@ suite("Command Handlers Test Suite", () => {
       // Mock successful workspace initialization
       sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
 
-      // Mock successful GDB validation
-      sandbox
-        .stub(commandHandlers.gdbIntegration, "validateAnalysisRequirements")
-        .resolves({
-          valid: true,
-          issues: [],
-        });
-
-      // Mock successful GDB analysis
-      const mockTerminalConfig = {
-        terminalName: "CodeForge GDB: libfuzzer - crash-abc123",
-        shellPath: "docker",
-        shellArgs: [
-          "run",
-          "-it",
-          "--rm",
-          "test-image",
-          "/bin/bash",
-          "-c",
-          "gdb --args fuzzer crash",
-        ],
-        generatedContainerName: "test-gdb-container-abc123",
-      };
-
-      sandbox.stub(commandHandlers.gdbIntegration, "analyzeCrash").resolves({
-        success: true,
-        fuzzerExecutable: "/workspace/.codeforge/fuzzing/libfuzzer",
-        crashFilePath: "/test/workspace/crash/file.txt",
-        gdbCommand: [
-          "gdb",
-          "--args",
-          "/workspace/.codeforge/fuzzing/libfuzzer",
-          "/workspace/crash/file.txt",
-        ],
-        terminalConfig: mockTerminalConfig,
-      });
-
       // Mock terminal creation
       const mockTerminal = {
         show: sandbox.stub(),
       };
       testEnvironment.vscodeMocks.window.createTerminal.returns(mockTerminal);
 
-      // Mock container tracking
-      testEnvironment.dockerMocks.trackLaunchedContainer.resolves(true);
-
-      // Mock webview update
-      sandbox.stub(commandHandlers, "updateWebviewState").resolves();
-
       await commandHandlers.handleAnalyzeCrash(crashParams);
 
-      // Verify terminal creation
-      assert.ok(
-        testEnvironment.vscodeMocks.window.createTerminal.calledWith({
-          name: mockTerminalConfig.terminalName,
-          shellPath: mockTerminalConfig.shellPath,
-          shellArgs: mockTerminalConfig.shellArgs,
-        }),
-        "Should create terminal with correct configuration",
+      // Should strip "crash-" prefix and format correctly
+      const terminalConfig =
+        testEnvironment.vscodeMocks.window.createTerminal.firstCall.args[0];
+      const commandArg = terminalConfig.shellArgs.find(
+        (arg) => typeof arg === "string" && arg.includes("libfuzzer/"),
       );
-
-      assert.ok(mockTerminal.show.called, "Should show the terminal");
-
-      // Verify container tracking
-      assert.ok(
-        testEnvironment.dockerMocks.trackLaunchedContainer.calledWith(
-          mockTerminalConfig.generatedContainerName,
-          sinon.match.string, // workspacePath
-          sinon.match.string, // containerName
-          "gdb-analysis",
-        ),
-        "Should track the GDB analysis container",
-      );
-
-      // Verify logging
-      assert.ok(
-        mockOutputChannel.appendLine.calledWith(
-          sinon.match(/GDB analysis terminal created successfully/),
-        ),
-        "Should log successful terminal creation",
-      );
-    });
-
-    test("handleAnalyzeCrash should handle GDB analysis failure", async () => {
-      const crashParams = {
-        crashId: "crash-abc123",
-        fuzzerName: "libfuzzer",
-        filePath: "/test/workspace/crash/file.txt",
-      };
-
-      // Mock successful workspace initialization and validation
-      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
-      sandbox
-        .stub(commandHandlers.gdbIntegration, "validateAnalysisRequirements")
-        .resolves({
-          valid: true,
-          issues: [],
-        });
-
-      // Mock GDB analysis failure
-      sandbox.stub(commandHandlers.gdbIntegration, "analyzeCrash").resolves({
-        success: false,
-        error: "Failed to resolve fuzzer executable",
-        fuzzerName: "libfuzzer",
-        crashFilePath: "/test/workspace/crash/file.txt",
-      });
-
-      await commandHandlers.handleAnalyzeCrash(crashParams);
 
       assert.ok(
-        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
-          sinon.match(
-            /Failed to analyze crash.*Failed to resolve fuzzer executable/,
-          ),
-        ),
-        "Should show GDB analysis error message",
+        commandArg && commandArg.includes("libfuzzer/abc123def456"),
+        "Should strip crash- prefix from hash",
       );
       assert.ok(
-        mockOutputChannel.appendLine.calledWith(
-          sinon.match(
-            /Error analyzing crash.*Failed to resolve fuzzer executable/,
-          ),
-        ),
-        "Should log GDB analysis error",
-      );
-    });
-
-    test("handleAnalyzeCrash should handle container tracking failure gracefully", async () => {
-      const crashParams = {
-        crashId: "crash-abc123",
-        fuzzerName: "libfuzzer",
-        filePath: "/test/workspace/crash/file.txt",
-      };
-
-      // Mock successful setup
-      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
-      sandbox
-        .stub(commandHandlers.gdbIntegration, "validateAnalysisRequirements")
-        .resolves({
-          valid: true,
-          issues: [],
-        });
-
-      const mockTerminalConfig = {
-        terminalName: "CodeForge GDB: libfuzzer - crash-abc123",
-        shellPath: "docker",
-        shellArgs: ["run", "-it", "--rm", "test-image", "/bin/bash"],
-        generatedContainerName: "test-gdb-container-abc123",
-      };
-
-      sandbox.stub(commandHandlers.gdbIntegration, "analyzeCrash").resolves({
-        success: true,
-        terminalConfig: mockTerminalConfig,
-      });
-
-      const mockTerminal = { show: sandbox.stub() };
-      testEnvironment.vscodeMocks.window.createTerminal.returns(mockTerminal);
-
-      // Mock container tracking failure
-      testEnvironment.dockerMocks.trackLaunchedContainer.rejects(
-        new Error("Container tracking failed"),
-      );
-
-      sandbox.stub(commandHandlers, "updateWebviewState").resolves();
-
-      await commandHandlers.handleAnalyzeCrash(crashParams);
-
-      // Wait for async operations to complete
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      assert.ok(
-        mockOutputChannel.appendLine.calledWith(
-          sinon.match(/Error tracking GDB analysis container/),
-        ),
-        "Should log container tracking error",
-      );
-    });
-
-    test("handleAnalyzeCrash should handle missing container name", async () => {
-      const crashParams = {
-        crashId: "crash-abc123",
-        fuzzerName: "libfuzzer",
-        filePath: "/test/workspace/crash/file.txt",
-      };
-
-      // Mock successful setup
-      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
-      sandbox
-        .stub(commandHandlers.gdbIntegration, "validateAnalysisRequirements")
-        .resolves({
-          valid: true,
-          issues: [],
-        });
-
-      // Mock terminal config without generated container name
-      const mockTerminalConfig = {
-        terminalName: "CodeForge GDB: libfuzzer - crash-abc123",
-        shellPath: "docker",
-        shellArgs: ["run", "-it", "--rm", "test-image", "/bin/bash"],
-        generatedContainerName: null, // No container name generated
-      };
-
-      sandbox.stub(commandHandlers.gdbIntegration, "analyzeCrash").resolves({
-        success: true,
-        terminalConfig: mockTerminalConfig,
-      });
-
-      const mockTerminal = { show: sandbox.stub() };
-      testEnvironment.vscodeMocks.window.createTerminal.returns(mockTerminal);
-
-      await commandHandlers.handleAnalyzeCrash(crashParams);
-
-      // Should handle missing container name gracefully
-      assert.ok(
-        mockOutputChannel.appendLine.calledWith(
-          sinon.match(/no container name generated/),
-        ),
-        "Should log missing container name",
-      );
-    });
-
-    test("handleAnalyzeCrash should handle terminal creation failure", async () => {
-      const crashParams = {
-        crashId: "crash-abc123",
-        fuzzerName: "libfuzzer",
-        filePath: "/test/workspace/crash/file.txt",
-      };
-
-      // Mock successful setup
-      sandbox.stub(commandHandlers, "ensureInitializedAndBuilt").resolves(true);
-      sandbox
-        .stub(commandHandlers.gdbIntegration, "validateAnalysisRequirements")
-        .resolves({
-          valid: true,
-          issues: [],
-        });
-      sandbox.stub(commandHandlers.gdbIntegration, "analyzeCrash").resolves({
-        success: true,
-        terminalConfig: {
-          terminalName: "CodeForge GDB",
-          shellPath: "docker",
-          shellArgs: ["run", "-it", "test"],
-        },
-      });
-
-      // Mock terminal creation failure
-      testEnvironment.vscodeMocks.window.createTerminal.throws(
-        new Error("Failed to create terminal"),
-      );
-
-      await commandHandlers.handleAnalyzeCrash(crashParams);
-
-      assert.ok(
-        testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
-          sinon.match(/Failed to analyze crash.*Failed to create terminal/),
-        ),
-        "Should show terminal creation error",
+        !commandArg || !commandArg.includes("crash-crash-"),
+        "Should not double-prefix",
       );
     });
 
