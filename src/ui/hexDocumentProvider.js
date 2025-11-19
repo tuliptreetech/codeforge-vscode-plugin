@@ -31,6 +31,7 @@ class HexDocumentProvider {
       const query = new URLSearchParams(uri.query);
       const filePath = query.get("file");
       const crashId = query.get("crashId") || path.basename(filePath);
+      const fullHash = query.get("fullHash");
       const fuzzerName = query.get("fuzzerName");
       const workspacePath = query.get("workspacePath");
 
@@ -50,6 +51,7 @@ class HexDocumentProvider {
         crashId,
         fuzzerName,
         workspacePath,
+        fullHash,
       );
 
       // Cache the content
@@ -65,7 +67,10 @@ class HexDocumentProvider {
   /**
    * Generate hex dump content for binary files
    * @param {string} filePath - Path to the file to dump
-   * @param {string} crashId - Crash identifier for display
+   * @param {string} crashId - Crash identifier for display (abbreviated)
+   * @param {string} fuzzerName - Name of the fuzzer (optional)
+   * @param {string} workspacePath - Path to workspace root (optional)
+   * @param {string} fullHash - Full crash hash (optional, for backtrace generation)
    * @param {number} maxSize - Maximum size to read (default 64KB)
    * @returns {Promise<string>} Hex dump content
    */
@@ -74,6 +79,7 @@ class HexDocumentProvider {
     crashId,
     fuzzerName = null,
     workspacePath = null,
+    fullHash = null,
     maxSize = 1024 * 64,
   ) {
     try {
@@ -170,6 +176,7 @@ class HexDocumentProvider {
           fuzzerName,
           crashId,
           filePath,
+          fullHash,
         );
       }
 
@@ -203,11 +210,18 @@ class HexDocumentProvider {
    * Append backtrace to hex dump content
    * @param {string} workspacePath - Path to workspace root
    * @param {string} fuzzerName - Name of the fuzzer
-   * @param {string} crashId - Crash identifier
+   * @param {string} crashId - Crash identifier (abbreviated, for display)
    * @param {string} crashFilePath - Path to crash file (to get timestamp)
+   * @param {string} fullHash - Full crash hash (optional, preferred for backtrace generation)
    * @returns {Promise<string>} Formatted backtrace section or error message
    */
-  async appendBacktrace(workspacePath, fuzzerName, crashId, crashFilePath) {
+  async appendBacktrace(
+    workspacePath,
+    fuzzerName,
+    crashId,
+    crashFilePath,
+    fullHash = null,
+  ) {
     try {
       // Check if backtrace generation is available
       const isAvailable = await this.backtraceService.isBacktraceAvailable(
@@ -216,11 +230,14 @@ class HexDocumentProvider {
       );
 
       if (!isAvailable) {
-        return `\nBacktrace generation not available (generate-backtrace.sh not found)\n`;
+        return `\nBacktrace generation not available (fuzzing directory not found)\n`;
       }
 
-      // Extract crash hash from crash ID
-      const crashHash = this.backtraceService.extractCrashHash(crashId);
+      // Use fullHash if provided, otherwise extract from crashId or filename
+      let crashHash = fullHash;
+      if (!crashHash) {
+        crashHash = this.backtraceService.extractCrashHash(crashId);
+      }
 
       // Generate container/image name
       const imageName = dockerOperations.generateContainerName(workspacePath);
@@ -237,12 +254,11 @@ class HexDocumentProvider {
         imageName,
       );
 
-      // Format and return backtrace with clickable file links and crash timestamp
+      // Format and return backtrace with crash timestamp
       return this.backtraceService.formatBacktraceForDisplay(
         backtrace,
         fuzzerName,
         crashId,
-        workspacePath,
         crashTime,
       );
     } catch (error) {
@@ -255,9 +271,10 @@ class HexDocumentProvider {
   /**
    * Create a virtual URI for a hex document
    * @param {string} filePath - Original file path
-   * @param {string} crashId - Crash identifier
+   * @param {string} crashId - Crash identifier (abbreviated)
    * @param {string} fuzzerName - Name of the fuzzer (optional)
    * @param {string} workspacePath - Path to workspace root (optional)
+   * @param {string} fullHash - Full crash hash (optional, for backtrace generation)
    * @returns {vscode.Uri} Virtual URI for the hex document
    */
   static createHexUri(
@@ -265,6 +282,7 @@ class HexDocumentProvider {
     crashId,
     fuzzerName = null,
     workspacePath = null,
+    fullHash = null,
   ) {
     const queryParams = {
       file: filePath,
@@ -277,6 +295,9 @@ class HexDocumentProvider {
     }
     if (workspacePath) {
       queryParams.workspacePath = workspacePath;
+    }
+    if (fullHash) {
+      queryParams.fullHash = fullHash;
     }
 
     const query = new URLSearchParams(queryParams);

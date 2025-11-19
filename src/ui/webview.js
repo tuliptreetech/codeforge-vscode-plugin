@@ -477,11 +477,11 @@
             </div>
             <div class="crash-actions">
               <button class="crash-action-btn" data-action="view" data-crash-id="${crash.id}"
-                      data-file-path="${crash.filePath}" data-fuzzer-name="${fuzzer.name}" title="View crash">👁️</button>
+                      data-full-hash="${crash.fullHash}" data-file-path="${crash.filePath}" data-fuzzer-name="${fuzzer.name}" title="View crash">👁️</button>
               <button class="crash-action-btn" data-action="analyze" data-crash-id="${crash.id}"
-                      data-fuzzer-name="${fuzzer.name}" data-file-path="${crash.filePath}" title="Analyze crash">🔍</button>
+                      data-full-hash="${crash.fullHash}" data-fuzzer-name="${fuzzer.name}" data-file-path="${crash.filePath}" title="Analyze crash">🔍</button>
               <button class="crash-action-btn" data-action="debug" data-crash-id="${crash.id}"
-                      data-fuzzer-name="${fuzzer.name}" data-file-path="${crash.filePath}" title="Debug crash (launch GDB server)">🐛</button>
+                      data-full-hash="${crash.fullHash}" data-fuzzer-name="${fuzzer.name}" data-file-path="${crash.filePath}" title="Debug crash (launch GDB server)">🐛</button>
             </div>
           </div>
         `;
@@ -568,9 +568,15 @@
       .forEach((btn) => {
         btn.addEventListener("click", (e) => {
           const crashId = e.target.dataset.crashId;
+          const fullHash = e.target.dataset.fullHash;
           const filePath = e.target.dataset.filePath;
           const fuzzerName = e.target.dataset.fuzzerName;
-          executeCommand("viewCrash", { crashId, filePath, fuzzerName });
+          executeCommand("viewCrash", {
+            crashId,
+            fullHash,
+            filePath,
+            fuzzerName,
+          });
         });
       });
 
@@ -580,9 +586,15 @@
       .forEach((btn) => {
         btn.addEventListener("click", (e) => {
           const crashId = e.target.dataset.crashId;
+          const fullHash = e.target.dataset.fullHash;
           const fuzzerName = e.target.dataset.fuzzerName;
           const filePath = e.target.dataset.filePath;
-          executeCommand("analyzeCrash", { crashId, fuzzerName, filePath });
+          executeCommand("analyzeCrash", {
+            crashId,
+            fullHash,
+            fuzzerName,
+            filePath,
+          });
         });
       });
 
@@ -592,9 +604,15 @@
       .forEach((btn) => {
         btn.addEventListener("click", (e) => {
           const crashId = e.target.dataset.crashId;
+          const fullHash = e.target.dataset.fullHash;
           const fuzzerName = e.target.dataset.fuzzerName;
           const filePath = e.target.dataset.filePath;
-          executeCommand("debugCrash", { crashId, fuzzerName, filePath });
+          executeCommand("debugCrash", {
+            crashId,
+            fullHash,
+            fuzzerName,
+            filePath,
+          });
         });
       });
 
