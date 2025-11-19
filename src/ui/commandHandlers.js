@@ -1390,8 +1390,8 @@ class CodeForgeCommandHandlers {
       // Get fuzzer preset from cache
       const cachedFuzzer =
         this.fuzzerDiscoveryService.getCachedFuzzer(fuzzerName);
-      if (!cachedFuzzer || !cachedFuzzer.preset) {
-        throw new Error(`Could not find preset for fuzzer: ${fuzzerName}`);
+      if (!cachedFuzzer || !("preset" in cachedFuzzer)) {
+        throw new Error(`Could not find fuzzer in cache: ${fuzzerName}`);
       }
 
       // Check initialization and build status
@@ -1411,8 +1411,12 @@ class CodeForgeCommandHandlers {
       this.safeOutputLog(`Clearing crashes for fuzzer: ${fuzzerName}`, false);
 
       // Execute clear-crashes.sh script inside Docker container
-      // The script expects fuzzer name in "preset:fuzzer_name" format
-      const fuzzerIdentifier = `${cachedFuzzer.preset}:${fuzzerName}`;
+      // The script expects fuzzer name in "preset:fuzzer_name" format for CMake
+      // or just "fuzzer_name" for Rust fuzzers (which have empty preset)
+      const fuzzerIdentifier =
+        cachedFuzzer.preset && cachedFuzzer.preset.trim() !== ""
+          ? `${cachedFuzzer.preset}:${fuzzerName}`
+          : fuzzerName;
       const clearCommand = `codeforge clear-crashes "${fuzzerIdentifier}"`;
 
       const options = {
@@ -1501,7 +1505,7 @@ class CodeForgeCommandHandlers {
         this.fuzzerDiscoveryService.getCachedFuzzer(fuzzerName);
 
       // If fuzzer not in cache or cache is invalid, refresh the fuzzer data
-      if (!cachedFuzzer || !cachedFuzzer.preset) {
+      if (!cachedFuzzer || !("preset" in cachedFuzzer)) {
         this.safeOutputLog(
           `Fuzzer ${fuzzerName} not in cache, refreshing fuzzer data...`,
           false,
@@ -1519,8 +1523,8 @@ class CodeForgeCommandHandlers {
         // Try to get the fuzzer again
         cachedFuzzer = this.fuzzerDiscoveryService.getCachedFuzzer(fuzzerName);
 
-        if (!cachedFuzzer || !cachedFuzzer.preset) {
-          throw new Error(`Could not find preset for fuzzer: ${fuzzerName}`);
+        if (!cachedFuzzer || !("preset" in cachedFuzzer)) {
+          throw new Error(`Could not find fuzzer in cache: ${fuzzerName}`);
         }
       }
 
@@ -1555,7 +1559,12 @@ class CodeForgeCommandHandlers {
             // First, rebuild the fuzzer to ensure we have the latest binary
             progress.report({ message: "Building fuzzer..." });
 
-            const fuzzerIdentifier = `${cachedFuzzer.preset}:${fuzzerName}`;
+            // Build fuzzer identifier based on project type
+            // CMake format: "preset:fuzzer_name", Rust format: "fuzzer_name"
+            const fuzzerIdentifier =
+              cachedFuzzer.preset && cachedFuzzer.preset.trim() !== ""
+                ? `${cachedFuzzer.preset}:${fuzzerName}`
+                : fuzzerName;
             const buildCommand = `codeforge build-fuzz-tests "${fuzzerIdentifier}"`;
 
             const buildOptions = {

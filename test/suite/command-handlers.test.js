@@ -1513,7 +1513,7 @@ suite("Command Handlers Test Suite", () => {
 
       assert.ok(
         testEnvironment.vscodeMocks.window.showErrorMessage.calledWith(
-          sinon.match(/Could not find preset for fuzzer/),
+          sinon.match(/Could not find fuzzer in cache/),
         ),
         "Should show error when fuzzer not found in cache",
       );
