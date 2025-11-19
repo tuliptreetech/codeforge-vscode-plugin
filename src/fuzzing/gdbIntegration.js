@@ -381,15 +381,15 @@ class GdbServerLauncher {
   /**
    * Launch gdbserver in a Docker container
    * @param {string} workspacePath - Path to the workspace root
-   * @param {string} containerCrashPath - Path to crash file in container
-   * @param {string} containerFuzzerPath - Path to fuzzer executable in container
+   * @param {string} fuzzerName - Name of the fuzzer
+   * @param {string} fullCrashHash - Full hash of the crash file
    * @param {Object} options - Launch options
    * @returns {Promise<Object>} Launch result with port and container info
    */
   async launchGdbServer(
     workspacePath,
-    containerCrashPath,
-    containerFuzzerPath,
+    fuzzerName,
+    fullCrashHash,
     options = {},
   ) {
     const {
@@ -414,10 +414,9 @@ class GdbServerLauncher {
       containerName ||
       this.dockerOperations.generateContainerName(workspacePath);
 
-    // Build gdbserver command
-    // gdbserver listens on all interfaces (0.0.0.0) inside the container
-    // Use --once to exit after one debugging session
-    const gdbserverCommand = `gdbserver --once 0.0.0.0:${containerPort} ${containerFuzzerPath} ${containerCrashPath}`;
+    // Build gdbserver command using codeforge CLI
+    // Format: codeforge run-crash-in-gdbserver fuzzer_name:full_crash_hash:port
+    const gdbserverCommand = `codeforge run-crash-in-gdbserver ${fuzzerName}:${fullCrashHash}:${containerPort}`;
 
     // Prepare Docker run options with port forwarding
     const dockerArgs = [
@@ -552,36 +551,30 @@ class GdbIntegration {
     options = {},
   ) {
     try {
-      // Resolve fuzzer executable
-      const fuzzerExecutable =
-        await this.fuzzerResolver.resolveFuzzerExecutable(
-          workspacePath,
-          fuzzerName,
+      // Extract full crash hash from the crash file path
+      // Expected format: crash-{HASH}
+      const path = require("path");
+      const crashFileName = path.basename(crashFilePath);
+      const fullCrashHash = crashFileName.replace(/^crash-/, "");
+
+      if (!fullCrashHash || fullCrashHash === crashFileName) {
+        throw new Error(
+          `Invalid crash file name format: ${crashFileName}. Expected format: crash-{HASH}`,
         );
+      }
 
-      // Map crash file path to container path
-      const containerCrashPath = this.pathMapper.mapHostToContainer(
-        crashFilePath,
-        workspacePath,
-      );
-
-      // Map fuzzer executable to container path
-      const containerFuzzerPath = this.pathMapper.mapHostToContainer(
-        fuzzerExecutable,
-        workspacePath,
-      );
-
-      // Launch gdbserver in container
+      // Launch gdbserver in container using codeforge CLI
       const launchResult = await this.gdbServerLauncher.launchGdbServer(
         workspacePath,
-        containerCrashPath,
-        containerFuzzerPath,
+        fuzzerName,
+        fullCrashHash,
         options,
       );
 
       return {
         success: true,
-        fuzzerExecutable,
+        fuzzerName,
+        fullCrashHash,
         crashFilePath,
         hostPort: launchResult.hostPort,
         containerPort: launchResult.containerPort,

@@ -1315,48 +1315,200 @@ class CodeForgeCommandHandlers {
         return;
       }
 
-      // Format crash identifier as "fuzzer_name/full_hash" for codeforge command
-      // Remove "crash-" prefix if present in the hash
-      const crashHash = fullHash.startsWith("crash-")
-        ? fullHash.substring(6)
-        : fullHash;
-      const crashIdentifier = `${fuzzerName}/${crashHash}`;
+      // Launch gdbserver using GdbIntegration
+      const { GdbIntegration } = require("../fuzzing/gdbIntegration");
+      const gdbIntegration = new GdbIntegration(dockerOperations);
 
-      // Launch GDB using codeforge run-crash-in-gdb command
-      const terminalName = `GDB Server: ${fuzzerName} - ${crashId}`;
-      const gdbCommand = `codeforge run-crash-in-gdb "${crashIdentifier}"`;
-
-      this.safeOutputLog(`Launching GDB with: ${gdbCommand}`, false);
-
-      // Build launch script path and arguments
-      const scriptPath = path.join(
+      const result = await gdbIntegration.launchGdbServer(
         workspacePath,
-        ".codeforge",
-        "scripts",
-        "launch-process-in-docker.sh",
+        fuzzerName,
+        filePath,
       );
 
-      const scriptArgs = [
-        "-i", // Interactive mode for GDB
-        "--image",
-        containerName,
-        "--type",
-        "gdb-server",
-        gdbCommand,
-      ];
+      if (!result.success) {
+        throw new Error(result.error);
+      }
 
-      // Create terminal with the script
+      // Log to output channel for record keeping
+      this.safeOutputLog(
+        `GDB server started on ${result.connectionString} for crash ${crashId} from ${fuzzerName}`,
+      );
+      this.safeOutputLog(`Command: ${result.gdbserverCommand}`, false);
+
+      // Create or update launch configuration for VSCode debugging
+      const { LaunchConfigManager } = require("../utils/launchConfig");
+      const launchConfigManager = new LaunchConfigManager();
+      const configName = `Debug Crash: ${fuzzerName} - ${crashId}`;
+
+      const launchConfigResult =
+        await launchConfigManager.createOrUpdateGdbAttachConfig(
+          workspacePath,
+          configName,
+          result.hostPort,
+          null, // Don't specify executable, use -ex arguments instead
+          {
+            stopAtConnect: true,
+          },
+        );
+
+      if (launchConfigResult.success) {
+        this.safeOutputLog(
+          `Launch configuration '${configName}' ${launchConfigResult.action} in .vscode/launch.json`,
+          false,
+        );
+      } else {
+        this.safeOutputLog(
+          `Warning: Failed to create launch configuration: ${launchConfigResult.error}`,
+          false,
+        );
+      }
+
+      // Create a pseudo-terminal to display gdbserver output
+      const writeEmitter = new vscode.EventEmitter();
+      const closeEmitter = new vscode.EventEmitter();
+
+      let waitingForKeyPress = false;
+
+      const pty = {
+        onDidWrite: writeEmitter.event,
+        onDidClose: closeEmitter.event,
+        open: () => {
+          // Write header information
+          writeEmitter.fire(
+            "\r\n\x1b[1;32m=== CodeForge GDB Server ===\x1b[0m\r\n\r\n",
+          );
+          writeEmitter.fire(
+            `\x1b[1mConnection:\x1b[0m ${result.connectionString}\r\n`,
+          );
+          writeEmitter.fire(`\x1b[1mFuzzer:\x1b[0m ${fuzzerName}\r\n`);
+          writeEmitter.fire(
+            `\x1b[1mCrash Hash:\x1b[0m ${result.fullCrashHash}\r\n`,
+          );
+          writeEmitter.fire(
+            `\x1b[1mCrash File:\x1b[0m ${result.crashFilePath}\r\n`,
+          );
+          writeEmitter.fire(
+            `\x1b[1mCommand:\x1b[0m ${result.gdbserverCommand}\r\n`,
+          );
+          writeEmitter.fire("\r\n");
+          if (launchConfigResult.success) {
+            writeEmitter.fire(
+              "\x1b[1;32mDebugger will launch automatically...\x1b[0m\r\n",
+            );
+            writeEmitter.fire(`\x1b[2mLaunch config: ${configName}\x1b[0m\r\n`);
+          } else {
+            writeEmitter.fire("\x1b[1mTo debug this crash:\x1b[0m\r\n");
+            writeEmitter.fire(
+              `  \x1b[36mgdb -ex "target remote ${result.connectionString}"\x1b[0m\r\n`,
+            );
+          }
+          writeEmitter.fire("\r\n");
+          writeEmitter.fire(
+            "\x1b[33mWaiting for debugger connection...\x1b[0m\r\n",
+          );
+          writeEmitter.fire("\r\n");
+          writeEmitter.fire("\x1b[2m--- GDB Server Output ---\x1b[0m\r\n\r\n");
+        },
+        close: () => {
+          // Clean up when terminal is closed
+          if (result.process && !result.process.killed) {
+            result.process.kill();
+          }
+        },
+        handleInput: () => {
+          // When waiting for key press, any key will close the terminal
+          if (waitingForKeyPress) {
+            closeEmitter.fire(0);
+          }
+        },
+      };
+
+      // Create terminal with the pseudo-terminal
+      const terminalName = `GDB Server: ${fuzzerName} - ${crashId}`;
       const terminal = vscode.window.createTerminal({
         name: terminalName,
-        shellPath: scriptPath,
-        shellArgs: scriptArgs,
+        pty: pty,
       });
 
+      // Monitor the gdbserver process and write output to terminal
+      if (result.process) {
+        result.process.stdout.on("data", (data) => {
+          const output = data.toString();
+          // Convert line endings for terminal
+          writeEmitter.fire(output.replace(/\n/g, "\r\n"));
+          // Also log to output channel
+          this.safeOutputLog(`[GDB Server] ${output.trim()}`, false);
+        });
+
+        result.process.stderr.on("data", (data) => {
+          const output = data.toString();
+          // Show stderr in red
+          writeEmitter.fire(`\x1b[31m${output.replace(/\n/g, "\r\n")}\x1b[0m`);
+          // Also log to output channel
+          this.safeOutputLog(`[GDB Server Error] ${output.trim()}`, false);
+        });
+
+        result.process.on("close", (code) => {
+          writeEmitter.fire("\r\n");
+          if (code === 0) {
+            writeEmitter.fire(
+              "\x1b[1;32mGDB server session completed successfully\x1b[0m\r\n",
+            );
+          } else {
+            writeEmitter.fire(
+              `\x1b[1;31mGDB server exited with code ${code}\x1b[0m\r\n`,
+            );
+          }
+          writeEmitter.fire("\r\n");
+          writeEmitter.fire("Press any key to close this terminal...\r\n");
+
+          // Log to output channel
+          this.safeOutputLog(
+            `GDB server for ${crashId} exited with code ${code}`,
+          );
+
+          // Enable key press handling to close terminal
+          waitingForKeyPress = true;
+        });
+      }
+
+      // Show the terminal
       terminal.show();
 
       this.safeOutputLog(
         `GDB server terminal created successfully for ${crashId} from ${fuzzerName}`,
       );
+
+      // Automatically start debugging if launch configuration was created successfully
+      if (launchConfigResult.success) {
+        // Get the workspace folder
+        const workspaceFolder = vscode.workspace.workspaceFolders
+          ? vscode.workspace.workspaceFolders[0]
+          : undefined;
+
+        // Give the gdbserver a moment to fully start
+        setTimeout(async () => {
+          try {
+            this.safeOutputLog(
+              `Starting debugger with configuration '${configName}'`,
+              false,
+            );
+
+            // Start debugging with the created configuration
+            await vscode.debug.startDebugging(workspaceFolder, configName);
+
+            this.safeOutputLog(
+              `Debugger started successfully for ${crashId}`,
+              false,
+            );
+          } catch (debugError) {
+            this.safeOutputLog(
+              `Warning: Failed to automatically start debugger: ${debugError.message}`,
+              false,
+            );
+          }
+        }, 1000); // Wait 1 second for gdbserver to be ready
+      }
     } catch (error) {
       this.safeOutputLog(`Error launching GDB server: ${error.message}`, true);
       vscode.window.showErrorMessage(

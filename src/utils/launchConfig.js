@@ -15,7 +15,7 @@ class LaunchConfigManager {
    * @param {string} workspacePath - Path to the workspace root
    * @param {string} configName - Name for the launch configuration
    * @param {number} port - Port number for GDB server connection
-   * @param {string} fuzzerExecutable - Path to the fuzzer executable (host path)
+   * @param {string} fuzzerExecutable - Path to the fuzzer executable (host path, optional)
    * @param {Object} options - Additional configuration options
    * @returns {Promise<Object>} Result object with success status and details
    */
@@ -23,7 +23,7 @@ class LaunchConfigManager {
     workspacePath,
     configName,
     port,
-    fuzzerExecutable,
+    fuzzerExecutable = null,
     options = {},
   ) {
     try {
@@ -66,17 +66,23 @@ class LaunchConfigManager {
         name: configName,
         type: "gdb",
         request: "attach",
-        target: `localhost:${port}`,
         remote: true,
+        target: `:${port}`,
         cwd: "${workspaceFolder}",
-        executable: fuzzerExecutable,
-        autorun: options.autorun || [],
         valuesFormatting: options.valuesFormatting || "parseText",
         printCalls:
           options.printCalls !== undefined ? options.printCalls : false,
-        stopAtConnect:
-          options.stopAtConnect !== undefined ? options.stopAtConnect : true,
       };
+
+      // Add executable if provided
+      if (fuzzerExecutable) {
+        gdbConfig.executable = fuzzerExecutable;
+      }
+
+      // Add autorun commands if provided, or default to connecting
+      if (options.autorun && options.autorun.length > 0) {
+        gdbConfig.autorun = options.autorun;
+      }
 
       // Check if a configuration with this name already exists
       const existingIndex = launchConfig.configurations.findIndex(

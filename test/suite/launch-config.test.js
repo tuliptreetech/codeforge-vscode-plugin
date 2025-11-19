@@ -101,7 +101,7 @@ suite("Launch Configuration Manager Test Suite", () => {
       assert.strictEqual(config.name, configName);
       assert.strictEqual(config.type, "gdb");
       assert.strictEqual(config.request, "attach");
-      assert.strictEqual(config.target, `localhost:${port}`);
+      assert.strictEqual(config.target, `:${port}`);
       assert.strictEqual(config.remote, true);
       assert.strictEqual(config.executable, fuzzerExecutable);
     });
@@ -180,7 +180,7 @@ suite("Launch Configuration Manager Test Suite", () => {
       assert.strictEqual(writtenContent.configurations.length, 1);
 
       const config = writtenContent.configurations[0];
-      assert.strictEqual(config.target, `localhost:${port}`);
+      assert.strictEqual(config.target, `:${port}`);
       assert.strictEqual(config.executable, fuzzerExecutable);
     });
 
