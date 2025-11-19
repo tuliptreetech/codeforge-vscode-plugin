@@ -1103,7 +1103,7 @@ class CodeForgeCommandHandlers {
    */
   async handleViewCrash(params) {
     try {
-      const { crashId, filePath, fuzzerName } = params;
+      const { crashId, fullHash, filePath, fuzzerName } = params;
 
       if (!filePath) {
         throw new Error("Crash file path not provided");
@@ -1152,6 +1152,7 @@ class CodeForgeCommandHandlers {
         crashId,
         fuzzerName,
         workspacePath,
+        fullHash,
       );
 
       this.safeOutputLog(
