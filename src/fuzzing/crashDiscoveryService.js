@@ -79,11 +79,22 @@ class CrashDiscoveryService {
           return;
         }
 
+        // Check for empty output even with exit code 0
+        if (stdout.trim().length === 0) {
+          console.log("No crashes found in project");
+          resolve([]);
+          return;
+        }
+
         try {
           // Parse script output: "fuzzer_name/crash_hash" format
           const crashList = this.parseFindCrashesScriptOutput(stdout);
           resolve(crashList);
         } catch (parseError) {
+          console.error(
+            "Failed to parse find-crashes output:",
+            parseError.message,
+          );
           reject(
             new Error(
               `Failed to parse find crashes script output: ${parseError.message}`,
@@ -102,7 +113,7 @@ class CrashDiscoveryService {
 
   /**
    * Parses the output from codeforge find-crashes command
-   * @param {string} stdout - Script output in format: fuzzername:path_relative_to_project_directory
+   * @param {string} stdout - Script output in format: fuzzer_name/crash_hash
    * @returns {Array} Array of {fuzzerName, crashPath} objects
    */
   parseFindCrashesScriptOutput(stdout) {
@@ -114,12 +125,14 @@ class CrashDiscoveryService {
 
     for (const line of lines) {
       const trimmedLine = line.trim();
-      if (trimmedLine && trimmedLine.includes(":")) {
-        const colonIndex = trimmedLine.indexOf(":");
-        if (colonIndex > 0) {
-          const fuzzerName = trimmedLine.substring(0, colonIndex).trim();
-          const crashPath = trimmedLine.substring(colonIndex + 1).trim();
-          if (fuzzerName && crashPath) {
+      if (trimmedLine && trimmedLine.includes("/")) {
+        const slashIndex = trimmedLine.indexOf("/");
+        if (slashIndex > 0) {
+          const fuzzerName = trimmedLine.substring(0, slashIndex).trim();
+          const crashHash = trimmedLine.substring(slashIndex + 1).trim();
+          if (fuzzerName && crashHash) {
+            // Build the crash path from fuzzer name and hash
+            const crashPath = `.codeforge/fuzzing/${fuzzerName}-output/crash-${crashHash}`;
             crashList.push({
               fuzzerName,
               crashPath,
