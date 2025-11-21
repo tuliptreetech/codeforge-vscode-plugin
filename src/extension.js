@@ -231,25 +231,25 @@ function activate(context) {
     }
   });
 
-    // let disposable = vscode.commands.registerCommand('codeforge.addBreakpoint', () => {
-    //     // Define the path to the source file where you want to set the breakpoint
-    //     const fileUri = vscode.Uri.file(path.join(vscode.workspace.rootPath || '', 'tests/fuzz/one-valid-packet.cpp'));
-        
-    //     // Define the line number (VS Code API uses 0-based lines)
-    //     const lineNumber = 167; 
+  // let disposable = vscode.commands.registerCommand('codeforge.addBreakpoint', () => {
+  //     // Define the path to the source file where you want to set the breakpoint
+  //     const fileUri = vscode.Uri.file(path.join(vscode.workspace.rootPath || '', 'tests/fuzz/one-valid-packet.cpp'));
 
-    //     // Create the SourceBreakpoint object
-    //     const breakpoint = new vscode.SourceBreakpoint(
-    //         new vscode.Location(fileUri, new vscode.Position(lineNumber, 0))
-    //     );
+  //     // Define the line number (VS Code API uses 0-based lines)
+  //     const lineNumber = 167;
 
-    //     // Add the breakpoint to VS Code
-    //     vscode.debug.addBreakpoints([breakpoint]);
-    //     vscode.window.showInformationMessage(`Breakpoint added at line ${lineNumber + 1}`);
-    // });
+  //     // Create the SourceBreakpoint object
+  //     const breakpoint = new vscode.SourceBreakpoint(
+  //         new vscode.Location(fileUri, new vscode.Position(lineNumber, 0))
+  //     );
 
-    // context.subscriptions.push(disposable);
-        
+  //     // Add the breakpoint to VS Code
+  //     vscode.debug.addBreakpoints([breakpoint]);
+  //     vscode.window.showInformationMessage(`Breakpoint added at line ${lineNumber + 1}`);
+  // });
+
+  // context.subscriptions.push(disposable);
+
   // Register the register task command (keeping this one as it's not in the command handlers)
   let registerTaskCommand = vscode.commands.registerCommand(
     "codeforge.registerTask",
