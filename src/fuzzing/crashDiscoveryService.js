@@ -125,14 +125,12 @@ class CrashDiscoveryService {
 
     for (const line of lines) {
       const trimmedLine = line.trim();
-      if (trimmedLine && trimmedLine.includes("/")) {
-        const slashIndex = trimmedLine.indexOf("/");
-        if (slashIndex > 0) {
-          const fuzzerName = trimmedLine.substring(0, slashIndex).trim();
-          const crashHash = trimmedLine.substring(slashIndex + 1).trim();
-          if (fuzzerName && crashHash) {
-            // Build the crash path from fuzzer name and hash
-            const crashPath = `.codeforge/fuzzing/${fuzzerName}-output/crash-${crashHash}`;
+      if (trimmedLine && trimmedLine.includes(":")) {
+        const colonIndex = trimmedLine.indexOf(":");
+        if (colonIndex > 0) {
+          const fuzzerName = trimmedLine.substring(0, colonIndex).trim();
+          const crashPath = trimmedLine.substring(colonIndex + 1).trim();
+          if (fuzzerName && crashPath) {
             crashList.push({
               fuzzerName,
               crashPath,

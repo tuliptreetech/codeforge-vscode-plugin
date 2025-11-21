@@ -48,20 +48,14 @@ suite("CrashDiscoveryService Tests", () => {
 
     test("should parse script output correctly", () => {
       const scriptOutput =
-        "test-fuzzer/abc123def456\nanother-fuzzer/xyz789abc123\n";
+        "test-fuzzer:abc123def456\nanother-fuzzer:xyz789abc123\n";
       const crashList = crashService.parseFindCrashesScriptOutput(scriptOutput);
 
       assert.strictEqual(crashList.length, 2);
       assert.strictEqual(crashList[0].fuzzerName, "test-fuzzer");
-      assert.strictEqual(
-        crashList[0].crashPath,
-        ".codeforge/fuzzing/test-fuzzer-output/crash-abc123def456",
-      );
+      assert.strictEqual(crashList[0].crashPath, "abc123def456");
       assert.strictEqual(crashList[1].fuzzerName, "another-fuzzer");
-      assert.strictEqual(
-        crashList[1].crashPath,
-        ".codeforge/fuzzing/another-fuzzer-output/crash-xyz789abc123",
-      );
+      assert.strictEqual(crashList[1].crashPath, "xyz789abc123");
     });
 
     test("should handle empty script output", () => {
@@ -72,15 +66,12 @@ suite("CrashDiscoveryService Tests", () => {
     });
 
     test("should handle malformed script output lines", () => {
-      const scriptOutput = "valid-fuzzer/abc123\ninvalid-line-no-slash\n";
+      const scriptOutput = "valid-fuzzer:abc123\ninvalid-line-no-slash\n";
       const crashList = crashService.parseFindCrashesScriptOutput(scriptOutput);
 
       assert.strictEqual(crashList.length, 1);
       assert.strictEqual(crashList[0].fuzzerName, "valid-fuzzer");
-      assert.strictEqual(
-        crashList[0].crashPath,
-        ".codeforge/fuzzing/valid-fuzzer-output/crash-abc123",
-      );
+      assert.strictEqual(crashList[0].crashPath, "abc123");
     });
 
     test("should truncate crash hash to 9 characters for id", () => {

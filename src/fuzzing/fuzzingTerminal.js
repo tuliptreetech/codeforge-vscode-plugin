@@ -193,23 +193,7 @@ class CodeForgeFuzzingTerminal {
       preset: fuzzerTest.preset,
     };
 
-    // Build the fuzzer
-    progressCallback(`Building ${fuzzerName}`, 30);
-    const buildResults = await fuzzingOperations.buildFuzzTestsWithScript(
-      this.workspacePath,
-      containerName,
-      [fuzzerForOperations],
-      this,
-      this.resourceManager,
-    );
-
-    if (buildResults.builtTargets === 0) {
-      throw new Error(
-        `Failed to build fuzzer '${fuzzerName}': ${buildResults.errors.map((e) => e.error).join(", ")}`,
-      );
-    }
-
-    // Run the fuzzer
+    // Run the fuzzer - the runner should build if necessary
     progressCallback(`Running ${fuzzerName}`, 70);
     const runResults = await fuzzingOperations.runFuzzTestsWithScript(
       this.workspacePath,
