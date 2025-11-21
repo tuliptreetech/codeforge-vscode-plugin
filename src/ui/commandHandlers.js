@@ -1271,7 +1271,7 @@ class CodeForgeCommandHandlers {
       );
     }
   }
-  
+
   /**
    * Launch GDB server for remote debugging
    */
