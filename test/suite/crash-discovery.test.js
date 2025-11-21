@@ -48,7 +48,7 @@ suite("CrashDiscoveryService Tests", () => {
 
     test("should parse script output correctly", () => {
       const scriptOutput =
-        "test-fuzzer:.codeforge/fuzzing/test-fuzzer-output/crash-abc123def456\nanother-fuzzer:.codeforge/fuzzing/another-fuzzer-output/crash-xyz789abc123\n";
+        "test-fuzzer/abc123def456\nanother-fuzzer/xyz789abc123\n";
       const crashList = crashService.parseFindCrashesScriptOutput(scriptOutput);
 
       assert.strictEqual(crashList.length, 2);
@@ -72,8 +72,7 @@ suite("CrashDiscoveryService Tests", () => {
     });
 
     test("should handle malformed script output lines", () => {
-      const scriptOutput =
-        "valid-fuzzer:.codeforge/fuzzing/valid-fuzzer-output/crash-abc123\ninvalid-line-no-colon\n";
+      const scriptOutput = "valid-fuzzer/abc123\ninvalid-line-no-slash\n";
       const crashList = crashService.parseFindCrashesScriptOutput(scriptOutput);
 
       assert.strictEqual(crashList.length, 1);
