@@ -1315,6 +1315,29 @@ class CodeForgeCommandHandlers {
         return;
       }
 
+      // Validate that the fuzzer executable exists
+      const { LaunchConfigManager } = require("../utils/launchConfig");
+      const launchConfigManager = new LaunchConfigManager();
+      const fuzzerCheck = await launchConfigManager.checkFuzzerExists(
+        workspacePath,
+        fuzzerName,
+      );
+
+      if (!fuzzerCheck.exists) {
+        const errorMsg = `Fuzzer executable not found: ${fuzzerName}. ${fuzzerCheck.error || ""}`;
+        this.safeOutputLog(errorMsg, true);
+        vscode.window.showErrorMessage(`CodeForge: ${errorMsg}`);
+        return;
+      }
+
+      this.safeOutputLog(
+        `Fuzzer executable found at: ${fuzzerCheck.path}`,
+        false,
+      );
+
+      // Store the validated fuzzer path for later use
+      const validatedFuzzerPath = fuzzerCheck.path;
+
       // Launch gdbserver using GdbIntegration
       const { GdbIntegration } = require("../fuzzing/gdbIntegration");
       const gdbIntegration = new GdbIntegration(dockerOperations);
@@ -1336,8 +1359,7 @@ class CodeForgeCommandHandlers {
       this.safeOutputLog(`Command: ${result.gdbserverCommand}`, false);
 
       // Create or update launch configuration for VSCode debugging
-      const { LaunchConfigManager } = require("../utils/launchConfig");
-      const launchConfigManager = new LaunchConfigManager();
+      // (launchConfigManager already created above during fuzzer validation)
       const configName = `Debug Crash: ${fuzzerName} - ${crashId}`;
 
       const launchConfigResult =
@@ -1345,9 +1367,10 @@ class CodeForgeCommandHandlers {
           workspacePath,
           configName,
           result.hostPort,
-          null, // Don't specify executable, use -ex arguments instead
+          validatedFuzzerPath, // Use the validated fuzzer path
           {
             stopAtConnect: true,
+            fuzzerName: fuzzerName, // Pass fuzzer name as fallback
           },
         );
 
@@ -1356,6 +1379,12 @@ class CodeForgeCommandHandlers {
           `Launch configuration '${configName}' ${launchConfigResult.action} in .vscode/launch.json`,
           false,
         );
+        if (launchConfigResult.extensionUsed) {
+          this.safeOutputLog(
+            `Using ${launchConfigResult.extensionUsed} debug extension`,
+            false,
+          );
+        }
       } else {
         this.safeOutputLog(
           `Warning: Failed to create launch configuration: ${launchConfigResult.error}`,

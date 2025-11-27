@@ -43,6 +43,190 @@ suite("Launch Configuration Manager Test Suite", () => {
     cleanupTestEnvironment(sandbox);
   });
 
+  suite("checkFuzzerExists", () => {
+    const workspacePath = "/workspace";
+    const fuzzerName = "test_fuzzer";
+
+    test("Should return exists=true when fuzzer is found", async () => {
+      // Create mock process with event emitters
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      // Use the existing stub from testEnvironment and configure it
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockProcess,
+      );
+
+      // Set up the process event handlers
+      mockProcess.stdout.on
+        .withArgs("data")
+        .callsArgWith(
+          1,
+          "/workspace/.codeforge/fuzzing/target/debug/test_fuzzer\n",
+        );
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0);
+
+      const result = await launchConfigManager.checkFuzzerExists(
+        workspacePath,
+        fuzzerName,
+      );
+
+      assert.strictEqual(result.exists, true);
+      assert.strictEqual(
+        result.path,
+        "/workspace/.codeforge/fuzzing/target/debug/test_fuzzer",
+      );
+      assert.strictEqual(result.error, undefined);
+
+      // Verify the command was called correctly
+      assert.strictEqual(
+        testEnvironment.dockerMocks.runDockerCommandWithOutput.calledOnce,
+        true,
+      );
+      const callArgs =
+        testEnvironment.dockerMocks.runDockerCommandWithOutput.firstCall.args;
+      assert.strictEqual(
+        callArgs[2],
+        `codeforge get-path-to-fuzzer ${fuzzerName}`,
+      );
+    });
+
+    test("Should return exists=false when fuzzer is not found", async () => {
+      // Create mock process with event emitters
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      // Use the existing stub from testEnvironment and configure it
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockProcess,
+      );
+
+      // Set up the process event handlers for failure case
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.stderr.on
+        .withArgs("data")
+        .callsArgWith(1, "Error: Fuzzer 'test_fuzzer' not found\n");
+      mockProcess.on.withArgs("close").callsArgWith(1, 1);
+
+      const result = await launchConfigManager.checkFuzzerExists(
+        workspacePath,
+        fuzzerName,
+      );
+
+      assert.strictEqual(result.exists, false);
+      assert.strictEqual(result.path, undefined);
+      assert.strictEqual(result.error, "Error: Fuzzer 'test_fuzzer' not found");
+    });
+
+    test("Should return exists=false when command throws error", async () => {
+      // Create mock process with event emitters
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      // Use the existing stub from testEnvironment and configure it
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockProcess,
+      );
+
+      // Set up the process event handlers to trigger error event
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on
+        .withArgs("error")
+        .callsArgWith(1, new Error("Docker command failed"));
+
+      const result = await launchConfigManager.checkFuzzerExists(
+        workspacePath,
+        fuzzerName,
+      );
+
+      assert.strictEqual(result.exists, false);
+      assert.strictEqual(result.path, undefined);
+      assert.strictEqual(result.error, "Docker command failed");
+    });
+
+    test("Should return exists=false when stdout is empty", async () => {
+      // Create mock process with event emitters
+      const mockProcess = {
+        stdout: { on: sandbox.stub() },
+        stderr: { on: sandbox.stub() },
+        on: sandbox.stub(),
+      };
+
+      // Use the existing stub from testEnvironment and configure it
+      testEnvironment.dockerMocks.runDockerCommandWithOutput.returns(
+        mockProcess,
+      );
+
+      // Set up the process event handlers with empty stdout
+      mockProcess.stdout.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.stderr.on.withArgs("data").callsArgWith(1, "");
+      mockProcess.on.withArgs("close").callsArgWith(1, 0);
+
+      const result = await launchConfigManager.checkFuzzerExists(
+        workspacePath,
+        fuzzerName,
+      );
+
+      assert.strictEqual(result.exists, false);
+      assert.strictEqual(result.error, "Fuzzer not found");
+    });
+  });
+
+  suite("getFuzzerPath", () => {
+    const workspacePath = "/workspace";
+    const fuzzerName = "test_fuzzer";
+
+    test("Should return path when fuzzer exists", async () => {
+      // Mock checkFuzzerExists
+      const checkStub = sandbox
+        .stub(launchConfigManager, "checkFuzzerExists")
+        .resolves({
+          exists: true,
+          path: "/workspace/.codeforge/fuzzing/target/debug/test_fuzzer",
+        });
+
+      const result = await launchConfigManager.getFuzzerPath(
+        workspacePath,
+        fuzzerName,
+      );
+
+      assert.strictEqual(
+        result,
+        "/workspace/.codeforge/fuzzing/target/debug/test_fuzzer",
+      );
+      assert.strictEqual(checkStub.calledOnce, true);
+    });
+
+    test("Should return null when fuzzer does not exist", async () => {
+      // Mock checkFuzzerExists
+      const checkStub = sandbox
+        .stub(launchConfigManager, "checkFuzzerExists")
+        .resolves({
+          exists: false,
+          error: "Fuzzer not found",
+        });
+
+      const result = await launchConfigManager.getFuzzerPath(
+        workspacePath,
+        fuzzerName,
+      );
+
+      assert.strictEqual(result, null);
+      assert.strictEqual(checkStub.calledOnce, true);
+    });
+  });
+
   suite("createOrUpdateGdbAttachConfig", () => {
     const workspacePath = "/workspace";
     const configName = "Test GDB Config";
@@ -539,6 +723,395 @@ suite("Launch Configuration Manager Test Suite", () => {
 
       assert.strictEqual(parsed.key, "value");
       assert.deepStrictEqual(parsed.nested.array, [1, 2, 3]);
+    });
+  });
+
+  suite("Extension Detection", () => {
+    test("Should detect CodeLLDB extension", () => {
+      // Create mock vscode with CodeLLDB extension
+      const mockVscode = {
+        extensions: {
+          all: [{ id: "vadimcn.vscode-lldb" }, { id: "some.other.extension" }],
+        },
+      };
+
+      const manager = new LaunchConfigManager(mockFs, mockVscode);
+      const result = manager.detectDebugExtensions();
+
+      assert.strictEqual(result.codeLLDB, true);
+      assert.strictEqual(result.nativeDebug, false);
+      assert.strictEqual(result.preferredExtension, "codeLLDB");
+    });
+
+    test("Should detect NativeDebug extension", () => {
+      // Create mock vscode with NativeDebug extension
+      const mockVscode = {
+        extensions: {
+          all: [{ id: "webfreak.debug" }, { id: "some.other.extension" }],
+        },
+      };
+
+      const manager = new LaunchConfigManager(mockFs, mockVscode);
+      const result = manager.detectDebugExtensions();
+
+      assert.strictEqual(result.codeLLDB, false);
+      assert.strictEqual(result.nativeDebug, true);
+      assert.strictEqual(result.preferredExtension, "nativeDebug");
+    });
+
+    test("Should prefer CodeLLDB over NativeDebug when both installed", () => {
+      // Create mock vscode with both extensions
+      const mockVscode = {
+        extensions: {
+          all: [
+            { id: "vadimcn.vscode-lldb" },
+            { id: "webfreak.debug" },
+            { id: "some.other.extension" },
+          ],
+        },
+      };
+
+      const manager = new LaunchConfigManager(mockFs, mockVscode);
+      const result = manager.detectDebugExtensions();
+
+      assert.strictEqual(result.codeLLDB, true);
+      assert.strictEqual(result.nativeDebug, true);
+      assert.strictEqual(result.preferredExtension, "codeLLDB");
+    });
+
+    test("Should return null when no debug extensions installed", () => {
+      // Create mock vscode with no debug extensions
+      const mockVscode = {
+        extensions: {
+          all: [{ id: "some.other.extension" }, { id: "another.extension" }],
+        },
+      };
+
+      const manager = new LaunchConfigManager(mockFs, mockVscode);
+      const result = manager.detectDebugExtensions();
+
+      assert.strictEqual(result.codeLLDB, false);
+      assert.strictEqual(result.nativeDebug, false);
+      assert.strictEqual(result.preferredExtension, null);
+    });
+  });
+
+  suite("Configuration Generation", () => {
+    const configName = "Test Debug Config";
+    const port = 2000;
+    const fuzzerExecutable =
+      "/workspace/.codeforge/fuzzing/target/debug/fuzz_target_1";
+
+    test("Should create CodeLLDB configuration", () => {
+      const config = launchConfigManager.createCodeLLDBConfig(
+        configName,
+        port,
+        fuzzerExecutable,
+      );
+
+      assert.strictEqual(config.type, "lldb");
+      assert.strictEqual(config.request, "launch");
+      assert.strictEqual(config.name, configName);
+      assert.strictEqual(config.program, fuzzerExecutable);
+      assert.deepStrictEqual(config.processCreateCommands, [
+        `gdb-remote localhost:${port}`,
+      ]);
+    });
+
+    test("Should create CodeLLDB configuration without program path", () => {
+      const config = launchConfigManager.createCodeLLDBConfig(configName, port);
+
+      assert.strictEqual(config.type, "lldb");
+      assert.strictEqual(config.request, "launch");
+      assert.strictEqual(config.name, configName);
+      assert.strictEqual(config.program, undefined);
+      assert.deepStrictEqual(config.processCreateCommands, [
+        `gdb-remote localhost:${port}`,
+      ]);
+    });
+
+    test("Should create NativeDebug configuration", () => {
+      const config = launchConfigManager.createNativeDebugConfig(
+        configName,
+        port,
+        fuzzerExecutable,
+      );
+
+      assert.strictEqual(config.type, "gdb");
+      assert.strictEqual(config.request, "attach");
+      assert.strictEqual(config.name, configName);
+      assert.strictEqual(config.remote, true);
+      assert.strictEqual(config.target, `:${port}`);
+      assert.strictEqual(config.executable, fuzzerExecutable);
+      assert.strictEqual(config.cwd, "${workspaceFolder}");
+    });
+
+    test("Should create NativeDebug configuration with options", () => {
+      const options = {
+        valuesFormatting: "prettyPrinters",
+        printCalls: true,
+        autorun: ["continue"],
+      };
+
+      const config = launchConfigManager.createNativeDebugConfig(
+        configName,
+        port,
+        fuzzerExecutable,
+        options,
+      );
+
+      assert.strictEqual(config.valuesFormatting, "prettyPrinters");
+      assert.strictEqual(config.printCalls, true);
+      assert.deepStrictEqual(config.autorun, ["continue"]);
+    });
+  });
+
+  suite("createOrUpdateGdbAttachConfig with Extension Detection", () => {
+    const workspacePath = "/workspace";
+    const configName = "Test GDB Config";
+    const port = 2000;
+    const fuzzerExecutable = "/workspace/.codeforge/fuzzing/test-fuzzer";
+
+    test("Should create CodeLLDB config when CodeLLDB is installed", async () => {
+      // Mock vscode with CodeLLDB extension
+      const mockVscode = {
+        extensions: {
+          all: [{ id: "vadimcn.vscode-lldb" }],
+        },
+      };
+
+      const manager = new LaunchConfigManager(mockFs, mockVscode);
+
+      // Mock file system
+      mockFs.access.rejects(new Error("ENOENT"));
+      mockFs.readFile.rejects(new Error("ENOENT"));
+      mockFs.mkdir.resolves();
+      mockFs.writeFile.resolves();
+
+      const result = await manager.createOrUpdateGdbAttachConfig(
+        workspacePath,
+        configName,
+        port,
+        fuzzerExecutable,
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.extensionUsed, "CodeLLDB");
+      assert.strictEqual(result.debugExtensions.codeLLDB, true);
+      assert.strictEqual(result.debugExtensions.preferred, "codeLLDB");
+
+      // Verify the written config is CodeLLDB format
+      const writeCall = mockFs.writeFile.firstCall;
+      const writtenContent = JSON.parse(writeCall.args[1]);
+      const config = writtenContent.configurations[0];
+
+      assert.strictEqual(config.type, "lldb");
+      assert.strictEqual(config.request, "launch");
+      assert.ok(config.processCreateCommands);
+    });
+
+    test("Should create NativeDebug config when NativeDebug is installed", async () => {
+      // Mock vscode with NativeDebug extension
+      const mockVscode = {
+        extensions: {
+          all: [{ id: "webfreak.debug" }],
+        },
+      };
+
+      const manager = new LaunchConfigManager(mockFs, mockVscode);
+
+      // Mock file system
+      mockFs.access.rejects(new Error("ENOENT"));
+      mockFs.readFile.rejects(new Error("ENOENT"));
+      mockFs.mkdir.resolves();
+      mockFs.writeFile.resolves();
+
+      const result = await manager.createOrUpdateGdbAttachConfig(
+        workspacePath,
+        configName,
+        port,
+        fuzzerExecutable,
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.extensionUsed, "NativeDebug");
+      assert.strictEqual(result.debugExtensions.nativeDebug, true);
+      assert.strictEqual(result.debugExtensions.preferred, "nativeDebug");
+
+      // Verify the written config is NativeDebug format
+      const writeCall = mockFs.writeFile.firstCall;
+      const writtenContent = JSON.parse(writeCall.args[1]);
+      const config = writtenContent.configurations[0];
+
+      assert.strictEqual(config.type, "gdb");
+      assert.strictEqual(config.request, "attach");
+      assert.strictEqual(config.remote, true);
+    });
+
+    test("Should fallback to NativeDebug when no extensions installed", async () => {
+      // Mock vscode with no debug extensions
+      const mockVscode = {
+        extensions: {
+          all: [{ id: "some.other.extension" }],
+        },
+      };
+
+      const manager = new LaunchConfigManager(mockFs, mockVscode);
+
+      // Mock file system
+      mockFs.access.rejects(new Error("ENOENT"));
+      mockFs.readFile.rejects(new Error("ENOENT"));
+      mockFs.mkdir.resolves();
+      mockFs.writeFile.resolves();
+
+      const result = await manager.createOrUpdateGdbAttachConfig(
+        workspacePath,
+        configName,
+        port,
+        fuzzerExecutable,
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.extensionUsed, "NativeDebug (fallback)");
+      assert.strictEqual(result.debugExtensions.preferred, null);
+
+      // Verify the written config is NativeDebug format (fallback)
+      const writeCall = mockFs.writeFile.firstCall;
+      const writtenContent = JSON.parse(writeCall.args[1]);
+      const config = writtenContent.configurations[0];
+
+      assert.strictEqual(config.type, "gdb");
+      assert.strictEqual(config.request, "attach");
+    });
+
+    test("Should prefer CodeLLDB when both extensions are installed", async () => {
+      // Mock vscode with both extensions
+      const mockVscode = {
+        extensions: {
+          all: [{ id: "vadimcn.vscode-lldb" }, { id: "webfreak.debug" }],
+        },
+      };
+
+      const manager = new LaunchConfigManager(mockFs, mockVscode);
+
+      // Mock file system
+      mockFs.access.rejects(new Error("ENOENT"));
+      mockFs.readFile.rejects(new Error("ENOENT"));
+      mockFs.mkdir.resolves();
+      mockFs.writeFile.resolves();
+
+      const result = await manager.createOrUpdateGdbAttachConfig(
+        workspacePath,
+        configName,
+        port,
+        fuzzerExecutable,
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.extensionUsed, "CodeLLDB");
+      assert.strictEqual(result.debugExtensions.codeLLDB, true);
+      assert.strictEqual(result.debugExtensions.nativeDebug, true);
+      assert.strictEqual(result.debugExtensions.preferred, "codeLLDB");
+
+      // Verify CodeLLDB config was created
+      const writeCall = mockFs.writeFile.firstCall;
+      const writtenContent = JSON.parse(writeCall.args[1]);
+      const config = writtenContent.configurations[0];
+
+      assert.strictEqual(config.type, "lldb");
+    });
+
+    test("Should fetch fuzzer path for CodeLLDB when fuzzerName is provided", async () => {
+      // Mock vscode with CodeLLDB extension
+      const mockVscode = {
+        extensions: {
+          all: [{ id: "vadimcn.vscode-lldb" }],
+        },
+      };
+
+      const manager = new LaunchConfigManager(mockFs, mockVscode);
+
+      // Mock getFuzzerPath to return a path
+      const expectedFuzzerPath =
+        "/workspace/.codeforge/fuzzing/target/debug/test_fuzzer";
+      sandbox.stub(manager, "getFuzzerPath").resolves(expectedFuzzerPath);
+
+      // Mock file system
+      mockFs.access.rejects(new Error("ENOENT"));
+      mockFs.readFile.rejects(new Error("ENOENT"));
+      mockFs.mkdir.resolves();
+      mockFs.writeFile.resolves();
+
+      const fuzzerName = "test_fuzzer";
+      const result = await manager.createOrUpdateGdbAttachConfig(
+        workspacePath,
+        configName,
+        port,
+        null, // No explicit fuzzer executable
+        { fuzzerName: fuzzerName },
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.extensionUsed, "CodeLLDB");
+
+      // Verify getFuzzerPath was called with correct arguments
+      assert.strictEqual(manager.getFuzzerPath.calledOnce, true);
+      assert.strictEqual(
+        manager.getFuzzerPath.calledWith(workspacePath, fuzzerName),
+        true,
+      );
+
+      // Verify the written config has the fuzzer path
+      const writeCall = mockFs.writeFile.firstCall;
+      const writtenContent = JSON.parse(writeCall.args[1]);
+      const config = writtenContent.configurations[0];
+
+      assert.strictEqual(config.type, "lldb");
+      assert.strictEqual(config.program, expectedFuzzerPath);
+    });
+
+    test("Should not fetch fuzzer path if executable is already provided", async () => {
+      // Mock vscode with CodeLLDB extension
+      const mockVscode = {
+        extensions: {
+          all: [{ id: "vadimcn.vscode-lldb" }],
+        },
+      };
+
+      const manager = new LaunchConfigManager(mockFs, mockVscode);
+
+      // Mock getFuzzerPath (should not be called)
+      const getFuzzerPathStub = sandbox.stub(manager, "getFuzzerPath");
+
+      // Mock file system
+      mockFs.access.rejects(new Error("ENOENT"));
+      mockFs.readFile.rejects(new Error("ENOENT"));
+      mockFs.mkdir.resolves();
+      mockFs.writeFile.resolves();
+
+      const fuzzerName = "test_fuzzer";
+      const explicitPath = "/explicit/path/to/fuzzer";
+      const result = await manager.createOrUpdateGdbAttachConfig(
+        workspacePath,
+        configName,
+        port,
+        explicitPath, // Explicit fuzzer executable provided
+        { fuzzerName: fuzzerName },
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.extensionUsed, "CodeLLDB");
+
+      // Verify getFuzzerPath was NOT called
+      assert.strictEqual(getFuzzerPathStub.called, false);
+
+      // Verify the written config uses the explicit path
+      const writeCall = mockFs.writeFile.firstCall;
+      const writtenContent = JSON.parse(writeCall.args[1]);
+      const config = writtenContent.configurations[0];
+
+      assert.strictEqual(config.type, "lldb");
+      assert.strictEqual(config.program, explicitPath);
     });
   });
 });
