@@ -2,11 +2,11 @@ const assert = require("assert");
 const vscode = require("vscode");
 const path = require("path");
 const fs = require("fs").promises;
-const { HexDocumentProvider } = require("../../src/ui/hexDocumentProvider");
+const { CrashReportProvider } = require("../../src/ui/crashReportProvider");
 
-suite("HexDocumentProvider Test Suite", () => {
+suite("CrashReportProvider Test Suite", () => {
   let testCrashFile;
-  let hexProvider;
+  let crashReportProvider;
 
   suiteSetup(async () => {
     // Create a test crash file
@@ -93,7 +93,7 @@ suite("HexDocumentProvider Test Suite", () => {
     await fs.writeFile(testCrashFile, testData);
 
     // Create hex provider instance
-    hexProvider = new HexDocumentProvider();
+    crashReportProvider = new CrashReportProvider();
   });
 
   suiteTeardown(async () => {
@@ -105,16 +105,16 @@ suite("HexDocumentProvider Test Suite", () => {
     }
 
     // Dispose provider
-    if (hexProvider) {
-      hexProvider.dispose();
+    if (crashReportProvider) {
+      crashReportProvider.dispose();
     }
   });
 
-  test("HexDocumentProvider should create virtual URI correctly", () => {
+  test("CrashReportProvider should create virtual URI correctly", () => {
     const filePath = "/path/to/crash-file.bin";
     const crashId = "crash-001";
 
-    const uri = HexDocumentProvider.createHexUri(filePath, crashId);
+    const uri = CrashReportProvider.createHexUri(filePath, crashId);
 
     assert.strictEqual(uri.scheme, "codeforge-crash");
     assert.strictEqual(uri.path, "crash-001.txt");
@@ -124,11 +124,11 @@ suite("HexDocumentProvider Test Suite", () => {
     assert.strictEqual(query.get("crashId"), crashId);
   });
 
-  test("HexDocumentProvider should generate hex dump content", async () => {
+  test("CrashReportProvider should generate hex dump content", async () => {
     const crashId = "test-crash-001";
-    const uri = HexDocumentProvider.createHexUri(testCrashFile, crashId);
+    const uri = CrashReportProvider.createHexUri(testCrashFile, crashId);
 
-    const content = await hexProvider.provideTextDocumentContent(uri);
+    const content = await crashReportProvider.provideTextDocumentContent(uri);
 
     // Verify content structure
     assert(content.includes(`Crash ID:    ${crashId}`));
@@ -151,12 +151,12 @@ suite("HexDocumentProvider Test Suite", () => {
     assert(content.includes("Hello World!"));
   });
 
-  test("HexDocumentProvider should handle missing file gracefully", async () => {
+  test("CrashReportProvider should handle missing file gracefully", async () => {
     const nonExistentFile = "/path/to/nonexistent/file.bin";
     const crashId = "missing-crash-001";
-    const uri = HexDocumentProvider.createHexUri(nonExistentFile, crashId);
+    const uri = CrashReportProvider.createHexUri(nonExistentFile, crashId);
 
-    const content = await hexProvider.provideTextDocumentContent(uri);
+    const content = await crashReportProvider.provideTextDocumentContent(uri);
 
     // Should return error content
     assert(content.includes("ERROR: Failed to generate hex dump"));
@@ -165,49 +165,49 @@ suite("HexDocumentProvider Test Suite", () => {
     );
   });
 
-  test("HexDocumentProvider should cache content", async () => {
+  test("CrashReportProvider should cache content", async () => {
     const crashId = "cache-test-001";
-    const uri = HexDocumentProvider.createHexUri(testCrashFile, crashId);
+    const uri = CrashReportProvider.createHexUri(testCrashFile, crashId);
 
     // First call
-    const content1 = await hexProvider.provideTextDocumentContent(uri);
+    const content1 = await crashReportProvider.provideTextDocumentContent(uri);
 
     // Second call should use cache
-    const content2 = await hexProvider.provideTextDocumentContent(uri);
+    const content2 = await crashReportProvider.provideTextDocumentContent(uri);
 
     assert.strictEqual(content1, content2);
 
     // Verify cache is working by checking internal cache
     const cacheKey = `${testCrashFile}:${crashId}`;
-    assert(hexProvider.contentCache.has(cacheKey));
+    assert(crashReportProvider.contentCache.has(cacheKey));
   });
 
-  test("HexDocumentProvider should clear cache", async () => {
+  test("CrashReportProvider should clear cache", async () => {
     const crashId = "clear-cache-test-001";
-    const uri = HexDocumentProvider.createHexUri(testCrashFile, crashId);
+    const uri = CrashReportProvider.createHexUri(testCrashFile, crashId);
 
     // Generate content to populate cache
-    await hexProvider.provideTextDocumentContent(uri);
+    await crashReportProvider.provideTextDocumentContent(uri);
 
     const cacheKey = `${testCrashFile}:${crashId}`;
-    assert(hexProvider.contentCache.has(cacheKey));
+    assert(crashReportProvider.contentCache.has(cacheKey));
 
     // Clear cache
-    hexProvider.clearCache();
+    crashReportProvider.clearCache();
 
-    assert(!hexProvider.contentCache.has(cacheKey));
+    assert(!crashReportProvider.contentCache.has(cacheKey));
   });
 
-  test("HexDocumentProvider should handle empty files", async () => {
+  test("CrashReportProvider should handle empty files", async () => {
     // Create empty test file
     const emptyFile = path.join(__dirname, "..", "fixtures", "empty-crash.bin");
     await fs.writeFile(emptyFile, Buffer.alloc(0));
 
     try {
       const crashId = "empty-crash-001";
-      const uri = HexDocumentProvider.createHexUri(emptyFile, crashId);
+      const uri = CrashReportProvider.createHexUri(emptyFile, crashId);
 
-      const content = await hexProvider.provideTextDocumentContent(uri);
+      const content = await crashReportProvider.provideTextDocumentContent(uri);
 
       assert(content.includes("Empty file - no content to display"));
       assert(content.includes("0 bytes"));
@@ -221,7 +221,7 @@ suite("HexDocumentProvider Test Suite", () => {
     }
   });
 
-  test("HexDocumentProvider should truncate large files", async () => {
+  test("CrashReportProvider should truncate large files", async () => {
     // Create a large test file (larger than 64KB)
     const largeFile = path.join(__dirname, "..", "fixtures", "large-crash.bin");
     const largeData = Buffer.alloc(100 * 1024, 0xaa); // 100KB of 0xAA
@@ -229,9 +229,9 @@ suite("HexDocumentProvider Test Suite", () => {
 
     try {
       const crashId = "large-crash-001";
-      const uri = HexDocumentProvider.createHexUri(largeFile, crashId);
+      const uri = CrashReportProvider.createHexUri(largeFile, crashId);
 
-      const content = await hexProvider.provideTextDocumentContent(uri);
+      const content = await crashReportProvider.provideTextDocumentContent(uri);
 
       assert(content.includes("102400 bytes (showing first 64KB)"));
       assert(content.includes("File truncated at 65536 bytes for display"));

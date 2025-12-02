@@ -7,7 +7,7 @@ const {
 const { CodeForgeTaskProvider } = require("./tasks/taskProvider");
 const { CodeForgeWebviewProvider } = require("./ui/webviewProvider");
 const { CodeForgeCommandHandlers } = require("./ui/commandHandlers");
-const { HexDocumentProvider } = require("./ui/hexDocumentProvider");
+const { CrashReportProvider } = require("./ui/crashReportProvider");
 const { CorpusDocumentProvider } = require("./ui/corpusDocumentProvider");
 const fs = require("fs").promises;
 const path = require("path");
@@ -108,20 +108,20 @@ function activate(context) {
 
   // Register the crash report document provider for read-only crash file viewing
   try {
-    const hexDocumentProvider = new HexDocumentProvider();
-    const hexProviderDisposable =
+    const crashReportProvider = new CrashReportProvider();
+    const crashReportProviderDisposable =
       vscode.workspace.registerTextDocumentContentProvider(
         "codeforge-crash",
-        hexDocumentProvider,
+        crashReportProvider,
       );
 
-    if (!hexProviderDisposable) {
+    if (!crashReportProviderDisposable) {
       throw new Error(
         "Failed to create crash report document provider disposable",
       );
     }
 
-    context.subscriptions.push(hexProviderDisposable);
+    context.subscriptions.push(crashReportProviderDisposable);
     safeOutputLog(
       "CodeForge: ✓ Crash report document provider registered successfully",
     );
