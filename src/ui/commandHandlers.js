@@ -7,7 +7,7 @@ const {
 } = require("../fuzzing/fuzzingTerminal");
 const { FuzzerDiscoveryService } = require("../fuzzing/fuzzerDiscoveryService");
 const { GdbIntegration } = require("../fuzzing/gdbIntegration");
-const { HexDocumentProvider } = require("./hexDocumentProvider");
+const { CrashReportProvider } = require("./crashReportProvider");
 const { CorpusDocumentProvider } = require("./corpusDocumentProvider");
 const {
   InitializationDetectionService,
@@ -1146,8 +1146,8 @@ class CodeForgeCommandHandlers {
         }
       }
 
-      // Create virtual URI for the read-only hex document with backtrace support
-      const hexUri = HexDocumentProvider.createHexUri(
+      // Create virtual URI for the read-only crash report document
+      const crashReportUri = CrashReportProvider.createCrashReportUri(
         filePath,
         crashId,
         fuzzerName,
@@ -1155,12 +1155,10 @@ class CodeForgeCommandHandlers {
         fullHash,
       );
 
-      this.safeOutputLog(
-        `Opening read-only hex document for crash file: ${crashId}`,
-      );
+      this.safeOutputLog(`Opening crash report for crash file: ${crashId}`);
 
-      // Open the virtual document using the hex document provider
-      const document = await vscode.workspace.openTextDocument(hexUri);
+      // Open the virtual document using the crash report provider
+      const document = await vscode.workspace.openTextDocument(crashReportUri);
 
       // Show document in editor - VSCode will detect ANSI escape codes and render colors
       await vscode.window.showTextDocument(document, {
