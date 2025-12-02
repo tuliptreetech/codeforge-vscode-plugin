@@ -114,7 +114,7 @@ suite("CrashReportProvider Test Suite", () => {
     const filePath = "/path/to/crash-file.bin";
     const crashId = "crash-001";
 
-    const uri = CrashReportProvider.createHexUri(filePath, crashId);
+    const uri = CrashReportProvider.createCrashReportUri(filePath, crashId);
 
     assert.strictEqual(uri.scheme, "codeforge-crash");
     assert.strictEqual(uri.path, "crash-001.txt");
@@ -124,42 +124,44 @@ suite("CrashReportProvider Test Suite", () => {
     assert.strictEqual(query.get("crashId"), crashId);
   });
 
-  test("CrashReportProvider should generate hex dump content", async () => {
+  test("CrashReportProvider should return message when fuzzer context missing", async () => {
     const crashId = "test-crash-001";
-    const uri = CrashReportProvider.createHexUri(testCrashFile, crashId);
+    const uri = CrashReportProvider.createCrashReportUri(
+      testCrashFile,
+      crashId,
+    );
 
     const content = await crashReportProvider.provideTextDocumentContent(uri);
 
-    // Verify content structure
-    assert(content.includes(`Crash ID:    ${crashId}`));
-    assert(content.includes(`File:        ${path.basename(testCrashFile)}`));
-    assert(content.includes(`Path:        ${testCrashFile}`));
-
-    // Verify hex dump format
+    // Should return message about missing fuzzer context
+    assert(content.includes(`Crash file: ${crashId}`));
+    assert(content.includes(`Path: ${testCrashFile}`));
     assert(
       content.includes(
-        "00000000  00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f  |................|",
+        "Full crash report unavailable - missing fuzzer context",
       ),
     );
     assert(
-      content.includes(
-        "00000010  10 11 12 13 14 15 16 17  18 19 1a 1b 1c 1d 1e 1f  |................|",
-      ),
+      content.includes("This document is read-only and cannot be edited."),
     );
-
-    // Verify ASCII representation
-    assert(content.includes("Hello World!"));
   });
 
   test("CrashReportProvider should handle missing file gracefully", async () => {
     const nonExistentFile = "/path/to/nonexistent/file.bin";
     const crashId = "missing-crash-001";
-    const uri = CrashReportProvider.createHexUri(nonExistentFile, crashId);
+    const uri = CrashReportProvider.createCrashReportUri(
+      nonExistentFile,
+      crashId,
+    );
 
     const content = await crashReportProvider.provideTextDocumentContent(uri);
 
-    // Should return error content
-    assert(content.includes("ERROR: Failed to generate hex dump"));
+    // Should return message about missing fuzzer context (not an error about missing file)
+    assert(
+      content.includes(
+        "Full crash report unavailable - missing fuzzer context",
+      ),
+    );
     assert(
       content.includes("This document is read-only and cannot be edited."),
     );
@@ -167,7 +169,10 @@ suite("CrashReportProvider Test Suite", () => {
 
   test("CrashReportProvider should cache content", async () => {
     const crashId = "cache-test-001";
-    const uri = CrashReportProvider.createHexUri(testCrashFile, crashId);
+    const uri = CrashReportProvider.createCrashReportUri(
+      testCrashFile,
+      crashId,
+    );
 
     // First call
     const content1 = await crashReportProvider.provideTextDocumentContent(uri);
@@ -184,7 +189,10 @@ suite("CrashReportProvider Test Suite", () => {
 
   test("CrashReportProvider should clear cache", async () => {
     const crashId = "clear-cache-test-001";
-    const uri = CrashReportProvider.createHexUri(testCrashFile, crashId);
+    const uri = CrashReportProvider.createCrashReportUri(
+      testCrashFile,
+      crashId,
+    );
 
     // Generate content to populate cache
     await crashReportProvider.provideTextDocumentContent(uri);
@@ -205,12 +213,16 @@ suite("CrashReportProvider Test Suite", () => {
 
     try {
       const crashId = "empty-crash-001";
-      const uri = CrashReportProvider.createHexUri(emptyFile, crashId);
+      const uri = CrashReportProvider.createCrashReportUri(emptyFile, crashId);
 
       const content = await crashReportProvider.provideTextDocumentContent(uri);
 
-      assert(content.includes("Empty file - no content to display"));
-      assert(content.includes("0 bytes"));
+      // Should return message about missing fuzzer context
+      assert(
+        content.includes(
+          "Full crash report unavailable - missing fuzzer context",
+        ),
+      );
     } finally {
       // Clean up
       try {
@@ -229,13 +241,16 @@ suite("CrashReportProvider Test Suite", () => {
 
     try {
       const crashId = "large-crash-001";
-      const uri = CrashReportProvider.createHexUri(largeFile, crashId);
+      const uri = CrashReportProvider.createCrashReportUri(largeFile, crashId);
 
       const content = await crashReportProvider.provideTextDocumentContent(uri);
 
-      assert(content.includes("102400 bytes (showing first 64KB)"));
-      assert(content.includes("File truncated at 65536 bytes for display"));
-      assert(content.includes("Total file size: 102400 bytes"));
+      // Should return message about missing fuzzer context
+      assert(
+        content.includes(
+          "Full crash report unavailable - missing fuzzer context",
+        ),
+      );
     } finally {
       // Clean up
       try {
