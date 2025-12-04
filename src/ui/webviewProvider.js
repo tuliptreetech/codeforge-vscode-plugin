@@ -31,6 +31,12 @@ class CodeForgeWebviewProvider {
         data: [],
         error: null,
       },
+      dockerImage: {
+        isUpToDate: true,
+        isChecking: false,
+        lastChecked: null,
+        error: null,
+      },
     };
 
     // Add backward compatibility getter for crashes
@@ -94,6 +100,9 @@ class CodeForgeWebviewProvider {
     // Check initialization status when webview is first created
     setTimeout(() => this._checkInitializationStatus(), 0);
 
+    // Check Docker image status when webview is first created
+    setTimeout(() => this._checkDockerImageStatus(), 50);
+
     // Trigger initial fuzzer discovery when webview is first created (asynchronously)
     setTimeout(() => this._performInitialFuzzerDiscovery(), 100);
   }
@@ -154,6 +163,7 @@ class CodeForgeWebviewProvider {
         reevaluateCrashes: "codeforge.reevaluateCrashes",
         viewCorpus: "codeforge.viewCorpus",
         initializeCodeForge: "codeforge.initializeProject",
+        updateDockerImage: "codeforge.updateDockerImage",
       };
 
       const vscodeCommand = commandMap[command];
@@ -379,6 +389,9 @@ class CodeForgeWebviewProvider {
                     <span class="btn-text">Run Fuzzing Tests</span>
                 </button>
             </div>
+            <button class="action-btn update-image-btn" id="update-image-btn" style="display: none;">
+                <span class="btn-text">Update Image</span>
+            </button>
         </section>
 
         <!-- Fuzzers Section -->
@@ -429,6 +442,71 @@ class CodeForgeWebviewProvider {
    */
   refresh() {
     // State detection removed
+  }
+
+  /**
+   * Check Docker image status and update state
+   */
+  async _checkDockerImageStatus() {
+    try {
+      // Check if there's an open workspace
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        console.log("[_checkDockerImageStatus] No workspace folder");
+        return;
+      }
+
+      const workspacePath = workspaceFolder.uri.fsPath;
+      console.log(
+        `[_checkDockerImageStatus] Checking Docker image status for: ${workspacePath}`,
+      );
+
+      // Set checking state
+      this._currentState.dockerImage.isChecking = true;
+      this._sendMessage({
+        type: "stateUpdate",
+        state: this._currentState,
+      });
+
+      // Verify Docker image
+      const imageStatus =
+        await dockerOperations.verifyDockerImageUpToDate(workspacePath);
+
+      console.log(
+        `[_checkDockerImageStatus] Image verification result: isUpToDate=${imageStatus.isUpToDate}`,
+      );
+
+      // Update state with results
+      this._currentState.dockerImage = {
+        isUpToDate: imageStatus.isUpToDate,
+        isChecking: false,
+        lastChecked: new Date().toISOString(),
+        error: null,
+      };
+
+      this._sendMessage({
+        type: "stateUpdate",
+        state: this._currentState,
+      });
+
+      console.log(
+        `[_checkDockerImageStatus] State updated, button should ${imageStatus.isUpToDate ? "NOT" : ""} show`,
+      );
+    } catch (error) {
+      // Handle errors gracefully
+      console.error(`[_checkDockerImageStatus] Error: ${error.message}`, error);
+      this._currentState.dockerImage = {
+        isUpToDate: true, // Assume up to date on error to avoid false warnings
+        isChecking: false,
+        lastChecked: new Date().toISOString(),
+        error: error.message,
+      };
+      this._sendMessage({
+        type: "stateUpdate",
+        state: this._currentState,
+      });
+      console.warn(`Docker image status check failed: ${error.message}`);
+    }
   }
 
   /**

@@ -19,12 +19,19 @@
       data: [],
       error: null,
     },
+    dockerImage: {
+      isUpToDate: true,
+      isChecking: false,
+      lastChecked: null,
+      error: null,
+    },
   };
 
   // DOM elements
   const elements = {
     terminalBtn: document.getElementById("terminal-btn"),
     fuzzingBtn: document.getElementById("fuzzing-btn"),
+    updateImageBtn: document.getElementById("update-image-btn"),
     loadingOverlay: document.getElementById("loading-overlay"),
     loadingText: document.getElementById("loading-text"),
     refreshFuzzersBtn: document.getElementById("refresh-fuzzers-btn"),
@@ -70,6 +77,11 @@
   if (elements.initializeBtn) {
     elements.initializeBtn.addEventListener("click", () =>
       executeInitialization(),
+    );
+  }
+  if (elements.updateImageBtn) {
+    elements.updateImageBtn.addEventListener("click", () =>
+      executeCommand("updateDockerImage"),
     );
   }
 
@@ -134,6 +146,12 @@
         ...newState.initialization,
       };
     }
+    if (newState.dockerImage) {
+      currentState.dockerImage = {
+        ...currentState.dockerImage,
+        ...newState.dockerImage,
+      };
+    }
     if (newState.isLoading !== undefined) {
       currentState.isLoading = newState.isLoading;
     }
@@ -144,6 +162,7 @@
   function updateUI() {
     updateInitializationUI();
     updateButtonStates();
+    updateDockerImageUI();
     updateFuzzerDisplay();
   }
 
@@ -195,6 +214,7 @@
       reevaluateCrashes: "Reevaluating crashes...",
       viewCorpus: "Opening corpus viewer...",
       initializeCodeForge: "Initializing CodeForge...",
+      updateDockerImage: "Updating Docker image...",
     };
     return messages[command] || "Processing...";
   }
@@ -288,6 +308,44 @@
       elements.actionsSection.style.display = "block";
     if (elements.fuzzersSection)
       elements.fuzzersSection.style.display = "block";
+  }
+
+  function updateDockerImageUI() {
+    const { dockerImage, initialization } = currentState;
+
+    console.log("[updateDockerImageUI] State:", {
+      initialized: initialization.isInitialized,
+      isUpToDate: dockerImage.isUpToDate,
+      isChecking: dockerImage.isChecking,
+      lastChecked: dockerImage.lastChecked,
+    });
+
+    // Only show Update Image button if:
+    // 1. Project is initialized
+    // 2. Docker image is not up to date
+    // 3. Not currently checking
+    if (
+      initialization.isInitialized &&
+      !dockerImage.isUpToDate &&
+      !dockerImage.isChecking &&
+      elements.updateImageBtn
+    ) {
+      console.log(
+        "[updateDockerImageUI] Showing Update Image button (image is out of date)",
+      );
+      elements.updateImageBtn.style.display = "block";
+    } else if (elements.updateImageBtn) {
+      console.log("[updateDockerImageUI] Hiding Update Image button", {
+        reason: !initialization.isInitialized
+          ? "not initialized"
+          : dockerImage.isUpToDate
+            ? "image is up to date"
+            : dockerImage.isChecking
+              ? "currently checking"
+              : "unknown",
+      });
+      elements.updateImageBtn.style.display = "none";
+    }
   }
 
   function updateInitializationProgress() {

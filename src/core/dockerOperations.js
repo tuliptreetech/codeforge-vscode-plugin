@@ -687,6 +687,118 @@ function pullAndTagDockerImage(
 }
 
 /**
+ * Verifies if the local Docker image is up to date with the remote image
+ * This is a lightweight check that only looks at local images without pulling
+ * @param {string} workspacePath - The path to the workspace folder
+ * @returns {Promise<{isUpToDate: boolean, localImage: string, remoteImage: string, localImageId: string|null, remoteImageId: string|null}>}
+ */
+async function verifyDockerImageUpToDate(workspacePath) {
+  try {
+    const { getProjectTypeAndImage } = require("../utils/projectTypeDetector");
+
+    // Get the project-specific image name and the remote image
+    const imageName = generateContainerName(workspacePath);
+    const { dockerImage: remoteImage } =
+      await getProjectTypeAndImage(workspacePath);
+
+    console.log(
+      `[verifyDockerImageUpToDate] Checking image: ${imageName} against remote: ${remoteImage}`,
+    );
+
+    // Check if local image exists
+    const localImageExists = await checkImageExists(imageName);
+    if (!localImageExists) {
+      console.log(
+        `[verifyDockerImageUpToDate] Local image ${imageName} does not exist`,
+      );
+      return {
+        isUpToDate: false,
+        localImage: imageName,
+        remoteImage: remoteImage,
+        localImageId: null,
+        remoteImageId: null,
+      };
+    }
+
+    // Get local image ID
+    let localImageId = null;
+    try {
+      const { stdout: localStdout } = await execAsync(
+        `docker image inspect ${imageName} --format "{{.Id}}"`,
+      );
+      localImageId = localStdout.trim();
+      console.log(
+        `[verifyDockerImageUpToDate] Local image ID: ${localImageId}`,
+      );
+    } catch (error) {
+      console.error("Error inspecting local image:", error);
+      return {
+        isUpToDate: false,
+        localImage: imageName,
+        remoteImage: remoteImage,
+        localImageId: null,
+        remoteImageId: null,
+      };
+    }
+
+    // Check if remote image exists locally (without pulling)
+    const remoteImageExists = await checkImageExists(remoteImage);
+    if (!remoteImageExists) {
+      console.log(
+        `[verifyDockerImageUpToDate] Remote image ${remoteImage} not found locally - assuming out of date`,
+      );
+      // Remote image not pulled yet - can't determine if up to date
+      // Show update button to let user pull and update
+      return {
+        isUpToDate: false,
+        localImage: imageName,
+        remoteImage: remoteImage,
+        localImageId: localImageId,
+        remoteImageId: null,
+      };
+    }
+
+    // Get remote image ID (from local copy)
+    let remoteImageId = null;
+    try {
+      const { stdout: remoteStdout } = await execAsync(
+        `docker image inspect ${remoteImage} --format "{{.Id}}"`,
+      );
+      remoteImageId = remoteStdout.trim();
+      console.log(
+        `[verifyDockerImageUpToDate] Remote image ID: ${remoteImageId}`,
+      );
+    } catch (error) {
+      console.error("Error inspecting remote image:", error);
+      return {
+        isUpToDate: false,
+        localImage: imageName,
+        remoteImage: remoteImage,
+        localImageId: localImageId,
+        remoteImageId: null,
+      };
+    }
+
+    // Compare image IDs
+    const isUpToDate = localImageId === remoteImageId;
+    console.log(
+      `[verifyDockerImageUpToDate] Images match: ${isUpToDate} (local: ${localImageId.substring(0, 20)}... vs remote: ${remoteImageId.substring(0, 20)}...)`,
+    );
+
+    return {
+      isUpToDate: isUpToDate,
+      localImage: imageName,
+      remoteImage: remoteImage,
+      localImageId: localImageId,
+      remoteImageId: remoteImageId,
+    };
+  } catch (error) {
+    console.error("Error verifying Docker image:", error);
+    throw error;
+  }
+}
+
+/**
  * Runs a command in a Docker container with output capture support (Internal Use)
  *
  * This function provides low-level Docker container management with full control over
@@ -1172,6 +1284,7 @@ module.exports = {
   checkImageExists,
   isDockerRunning,
   pullAndTagDockerImage,
+  verifyDockerImageUpToDate,
   runDockerCommandWithOutput,
   runCommandInNewContainer,
   generateDockerRunArgs,
