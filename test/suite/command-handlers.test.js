@@ -100,8 +100,8 @@ suite("Command Handlers Test Suite", () => {
       assert.ok(handlers, "Should return handlers object");
       assert.strictEqual(
         Object.keys(handlers).length,
-        13,
-        "Should have 13 handlers",
+        14,
+        "Should have 14 handlers",
       );
       assert.ok(
         handlers["codeforge.launchTerminal"],

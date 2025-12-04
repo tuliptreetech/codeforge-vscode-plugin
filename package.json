@@ -108,6 +108,11 @@
         "command": "codeforge.reevaluateCrashes",
         "title": "CodeForge: Reevaluate Crashes",
         "icon": "$(sync)"
+      },
+      {
+        "command": "codeforge.updateDockerImage",
+        "title": "CodeForge: Update Docker Image",
+        "icon": "$(cloud-download)"
       }
     ],
     "menus": {},

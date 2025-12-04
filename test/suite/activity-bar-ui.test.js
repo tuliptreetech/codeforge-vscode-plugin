@@ -86,6 +86,12 @@ suite("Activity Bar UI Test Suite", () => {
             data: [],
             error: null,
           },
+          dockerImage: {
+            isUpToDate: true,
+            isChecking: false,
+            lastChecked: null,
+            error: null,
+          },
         },
         "Initial state should be correct",
       );
@@ -187,6 +193,12 @@ suite("Activity Bar UI Test Suite", () => {
             isLoading: false,
             lastUpdated: null,
             data: [],
+            error: null,
+          },
+          dockerImage: {
+            isUpToDate: true,
+            isChecking: false,
+            lastChecked: null,
             error: null,
           },
         },

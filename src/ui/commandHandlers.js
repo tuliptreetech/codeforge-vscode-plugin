@@ -2053,6 +2053,87 @@ class CodeForgeCommandHandlers {
   }
 
   /**
+   * Update Docker image to latest version
+   */
+  async handleUpdateDockerImage() {
+    try {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        vscode.window.showErrorMessage(
+          "No workspace folder open. Please open a folder first.",
+        );
+        return;
+      }
+
+      const workspacePath = workspaceFolder.uri.fsPath;
+
+      // Show progress notification
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "Updating Docker Image",
+          cancellable: false,
+        },
+        async (progress) => {
+          progress.report({ message: "Checking current image status..." });
+
+          // Get project type and remote image
+          const {
+            getProjectTypeAndImage,
+          } = require("../utils/projectTypeDetector");
+          const { dockerImage: remoteImage } =
+            await getProjectTypeAndImage(workspacePath);
+          const imageName =
+            dockerOperations.generateContainerName(workspacePath);
+
+          this.safeOutputLog(`Updating Docker image for project...`);
+          this.safeOutputLog(`Remote image: ${remoteImage}`);
+          this.safeOutputLog(`Local image tag: ${imageName}`);
+
+          // Pull the latest remote image
+          progress.report({ message: "Pulling latest image from registry..." });
+          this.safeOutputLog(`Pulling ${remoteImage}...`);
+
+          try {
+            await dockerOperations.pullAndTagDockerImage(
+              imageName,
+              remoteImage,
+              this.outputChannel,
+            );
+
+            progress.report({ message: "Image updated successfully!" });
+            this.safeOutputLog("Docker image updated successfully!");
+
+            vscode.window.showInformationMessage(
+              "Docker image updated successfully!",
+            );
+
+            // Refresh webview to update UI state
+            if (
+              this.webviewProvider &&
+              this.webviewProvider._checkDockerImageStatus
+            ) {
+              await this.webviewProvider._checkDockerImageStatus();
+            }
+          } catch (pullError) {
+            this.safeOutputLog(
+              `Failed to pull and tag image: ${pullError.message}`,
+            );
+            throw new Error(
+              `Failed to update Docker image: ${pullError.message}`,
+            );
+          }
+        },
+      );
+    } catch (error) {
+      this.safeOutputLog(`Error updating Docker image: ${error.message}`, true);
+      vscode.window.showErrorMessage(
+        `Failed to update Docker image: ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * Get all command handlers as a map
    */
   getCommandHandlers() {
@@ -2071,6 +2152,7 @@ class CodeForgeCommandHandlers {
       "codeforge.reevaluateCrashes": this.handleReevaluateCrashes.bind(this),
       "codeforge.viewCorpus": this.handleViewCorpus.bind(this),
       "codeforge.initializeProject": this.handleInitializeProject.bind(this),
+      "codeforge.updateDockerImage": this.handleUpdateDockerImage.bind(this),
     };
   }
 }

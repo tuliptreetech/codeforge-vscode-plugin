@@ -273,6 +273,23 @@ body {
   filter: brightness(1.1);
 }
 
+.action-btn.update-image-btn {
+  background: linear-gradient(135deg, #007acc 0%, #0098ff 100%);
+  color: #ffffff;
+  border: none;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3);
+  margin-top: 12px;
+  width: 100%;
+  justify-content: center;
+}
+
+.action-btn.update-image-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0098ff 0%, #00b3ff 100%);
+  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4);
+  transform: translateY(-2px);
+}
+
 .btn-icon {
   font-size: 16px;
   flex-shrink: 0;
