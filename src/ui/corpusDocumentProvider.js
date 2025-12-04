@@ -1,20 +1,23 @@
 const vscode = require("vscode");
-const { CorpusViewerService } = require("../fuzzing/corpusViewerService");
+const { CorpusReportService } = require("../fuzzing/corpusReportService");
+const dockerOperations = require("../core/dockerOperations");
+const path = require("path");
 
 /**
  * Read-only corpus document provider for viewing corpus files
  * Creates virtual documents that cannot be edited or saved
  */
 class CorpusDocumentProvider {
-  constructor() {
+  constructor(resourceManager = null) {
     this.onDidChangeEmitter = new vscode.EventEmitter();
     this.onDidChange = this.onDidChangeEmitter.event;
 
     // Cache for corpus content to avoid regenerating
     this.contentCache = new Map();
 
-    // Corpus viewer service for generating content
-    this.corpusViewerService = new CorpusViewerService();
+    // Corpus report service for generating content
+    this.corpusReportService = new CorpusReportService(resourceManager);
+    this.resourceManager = resourceManager;
 
     // Map of fuzzer corpus directories being watched
     // Key: cacheKey (workspacePath:fuzzerName), Value: FileSystemWatcher
@@ -54,12 +57,15 @@ class CorpusDocumentProvider {
         return this.contentCache.get(cacheKey);
       }
 
-      // Generate corpus viewer content
-      const content =
-        await this.corpusViewerService.generateCorpusViewerContent(
-          workspacePath,
-          fuzzerName,
-        );
+      // Get the Docker image name for the workspace
+      const imageName = dockerOperations.generateContainerName(workspacePath);
+
+      // Generate corpus report using the Docker command
+      const content = await this.corpusReportService.generateCorpusReport(
+        workspacePath,
+        fuzzerName,
+        imageName,
+      );
 
       // Cache the content
       this.contentCache.set(cacheKey, content);
@@ -140,9 +146,12 @@ class CorpusDocumentProvider {
     }
 
     // Get the corpus directory path
-    const corpusDir = this.corpusViewerService.getCorpusDirectory(
+    const corpusDir = path.join(
       workspacePath,
-      fuzzerName,
+      ".codeforge",
+      "fuzzing",
+      `${fuzzerName}-output`,
+      "corpus",
     );
 
     // Create a file system watcher for the corpus directory

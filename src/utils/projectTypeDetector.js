@@ -14,8 +14,8 @@ const PROJECT_TYPES = {
  * Docker images for each project type
  */
 const PROJECT_TYPE_IMAGES = {
-  [PROJECT_TYPES.CMAKE]: "ghcr.io/tuliptreetech/codeforge-cmake:main-3002c27",
-  [PROJECT_TYPES.RUST]: "ghcr.io/tuliptreetech/codeforge-rust:main-3002c27",
+  [PROJECT_TYPES.CMAKE]: "ghcr.io/tuliptreetech/codeforge-cmake:main-872ac55",
+  [PROJECT_TYPES.RUST]: "ghcr.io/tuliptreetech/codeforge-rust:main-872ac55",
 };
 
 /**

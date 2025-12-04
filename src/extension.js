@@ -133,7 +133,7 @@ function activate(context) {
 
   // Register the corpus document provider for read-only corpus file viewing
   try {
-    const corpusDocumentProvider = new CorpusDocumentProvider();
+    const corpusDocumentProvider = new CorpusDocumentProvider(resourceManager);
     const corpusProviderDisposable =
       vscode.workspace.registerTextDocumentContentProvider(
         "codeforge-corpus",
