@@ -81,7 +81,7 @@ suite("Activity Bar UI Test Suite", () => {
             details: {},
           },
           fuzzers: {
-            isLoading: false,
+            isLoading: true,
             lastUpdated: null,
             data: [],
             error: null,
@@ -190,7 +190,7 @@ suite("Activity Bar UI Test Suite", () => {
             details: {},
           },
           fuzzers: {
-            isLoading: false,
+            isLoading: true,
             lastUpdated: null,
             data: [],
             error: null,
@@ -697,7 +697,10 @@ suite("Activity Bar UI Test Suite", () => {
 
       await webviewProvider.resolveWebviewView(mockWebviewView);
 
-      // Verify initial state remains unchanged when no .codeforge directory
+      // Wait for async initialization checks to complete (setTimeout 100ms in resolveWebviewView)
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      // Verify state is set to not loading after discovery checks fail
       assert.deepStrictEqual(
         webviewProvider._currentState.crashes,
         {
@@ -706,7 +709,7 @@ suite("Activity Bar UI Test Suite", () => {
           data: [],
           error: null,
         },
-        "Initial crash state should remain unchanged when .codeforge doesn't exist",
+        "Crash state should have loading cleared when .codeforge doesn't exist",
       );
     });
   });
@@ -754,7 +757,7 @@ suite("Activity Bar UI Test Suite", () => {
       assert.deepStrictEqual(
         webviewProvider._currentState.fuzzers,
         {
-          isLoading: false,
+          isLoading: true,
           lastUpdated: null,
           data: [],
           error: null,
