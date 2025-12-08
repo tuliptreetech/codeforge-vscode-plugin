@@ -17,8 +17,6 @@ vsc-extension-quickstart.md
 **/*.map
 
 # Internal documentation (not needed in VSIX)
-CLAUDE.md
-PUBLISHING.md
 docs/**
 examples/**
 
