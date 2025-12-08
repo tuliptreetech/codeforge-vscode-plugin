@@ -26,7 +26,7 @@ class CodeForgeWebviewProvider {
         details: {},
       },
       fuzzers: {
-        isLoading: false,
+        isLoading: true, // Start in loading state to prevent flash of empty state
         lastUpdated: null,
         data: [],
         error: null,
@@ -518,6 +518,7 @@ class CodeForgeWebviewProvider {
       // Check if there's an open workspace
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       if (!workspaceFolder) {
+        this._setFuzzerLoading(false);
         return;
       }
 
@@ -529,6 +530,7 @@ class CodeForgeWebviewProvider {
         await fs.access(codeforgeDir);
       } catch (error) {
         // .codeforge directory doesn't exist yet, skip fuzzer discovery
+        this._setFuzzerLoading(false);
         return;
       }
 
@@ -537,6 +539,7 @@ class CodeForgeWebviewProvider {
         await this._initializationService.isCodeForgeInitialized(workspacePath);
       if (!initStatus.isInitialized) {
         // Project not initialized, skip fuzzer discovery
+        this._setFuzzerLoading(false);
         return;
       }
 
@@ -545,13 +548,11 @@ class CodeForgeWebviewProvider {
       const imageExists = await dockerOperations.checkImageExists(imageName);
       if (!imageExists) {
         // Docker image not built yet, skip fuzzer discovery
+        this._setFuzzerLoading(false);
         return;
       }
 
-      // Set loading state
-      this._setFuzzerLoading(true);
-
-      // Discover fuzzers
+      // Discover fuzzers (loading state already true from initial state)
       const fuzzerData = await this._fuzzerDiscoveryService.discoverFuzzers(
         workspacePath,
         imageName,

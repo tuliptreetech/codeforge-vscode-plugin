@@ -93,7 +93,11 @@
     }
 
     console.log(`Executing command: ${command}`, params);
-    setLoading(true, getLoadingMessage(command));
+
+    // Don't show global loading overlay for refreshFuzzers - it has its own section loading state
+    if (command !== "refreshFuzzers") {
+      setLoading(true, getLoadingMessage(command));
+    }
 
     vscode.postMessage({
       type: "command",
@@ -241,11 +245,8 @@
     // Hide all sections initially
     hideAllSections();
 
-    if (initialization.isLoading) {
-      // Show initialization progress
-      showInitializationProgress();
-    } else if (initialization.isInitialized) {
-      // Show main interface (Quick Actions and Crashes)
+    if (initialization.isInitialized || initialization.isLoading) {
+      // Show main interface immediately (even while checking initialization status)
       showMainInterface();
     } else if (initialization.error && initialization.lastChecked) {
       // Show initialization button with error context
@@ -287,13 +288,6 @@
           description.classList.remove("error");
         }
       }
-    }
-  }
-
-  function showInitializationProgress() {
-    if (elements.initializationProgressSection) {
-      elements.initializationProgressSection.style.display = "block";
-      updateInitializationProgress();
     }
   }
 
@@ -348,52 +342,6 @@
     }
   }
 
-  function updateInitializationProgress() {
-    const { initialization } = currentState;
-
-    if (!elements.initProgressSteps || !elements.initStatusMessage) return;
-
-    // Update status message
-    if (initialization.details && initialization.details.currentStep) {
-      elements.initStatusMessage.textContent =
-        initialization.details.currentStep;
-    } else {
-      elements.initStatusMessage.textContent = "Setting up your workspace...";
-    }
-
-    // Update progress steps
-    const steps = [
-      "Creating .codeforge directory",
-      "Setting up Docker configuration",
-      "Configuring fuzzing environment",
-      "Finalizing setup",
-    ];
-
-    let html = "";
-    const currentStepIndex = initialization.details?.stepIndex || 0;
-
-    steps.forEach((step, index) => {
-      const isCompleted = index < currentStepIndex;
-      const isCurrent = index === currentStepIndex;
-      const stepClass = isCompleted
-        ? "completed"
-        : isCurrent
-          ? "current"
-          : "pending";
-
-      html += `
-        <div class="progress-step ${stepClass}">
-          <div class="step-indicator">
-            ${isCompleted ? "✓" : isCurrent ? "⏳" : "○"}
-          </div>
-          <div class="step-text">${step}</div>
-        </div>
-      `;
-    });
-
-    elements.initProgressSteps.innerHTML = html;
-  }
-
   // Message handling from extension
   window.addEventListener("message", (event) => {
     const message = event.data;
@@ -405,13 +353,18 @@
         break;
       case "commandComplete":
         currentCommand = null;
-        setLoading(false);
+        // Don't clear loading for refreshFuzzers - it manages its own loading state
+        if (message.command !== "refreshFuzzers") {
+          setLoading(false);
+        }
         if (message.success) {
           console.log(`Command ${message.command} completed successfully`);
-          // Refresh state after successful command
-          setTimeout(() => {
-            vscode.postMessage({ type: "requestState" });
-          }, 500);
+          // Refresh state after successful command (but not for refreshFuzzers to avoid double refresh)
+          if (message.command !== "refreshFuzzers") {
+            setTimeout(() => {
+              vscode.postMessage({ type: "requestState" });
+            }, 500);
+          }
         } else {
           console.error(`Command ${message.command} failed:`, message.error);
         }
@@ -732,11 +685,7 @@
     currentState = { ...currentState, ...window.initialState };
   }
 
-  // Request initial state
-  console.log("Requesting initial state");
-  vscode.postMessage({ type: "requestState" });
-
-  // Initial UI update
+  // Initial UI update (no need to request state since we have window.initialState)
   updateUI();
 
   // Auto-refresh crashes after fuzzing completes
