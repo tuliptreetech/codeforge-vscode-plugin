@@ -8,6 +8,19 @@
 **License:** MIT
 **Repository:** https://github.com/tuliptreetech/codeforge
 
+## Table of Contents
+
+- [Project Architecture](#project-architecture)
+- [Development Practices](#development-practices)
+- [Configuration](#configuration)
+- [Commands and Features](#commands-and-features)
+- [Technical Considerations](#technical-considerations)
+- [Common Patterns](#common-patterns)
+- [Publishing](#publishing)
+- [Documentation](#documentation)
+
+---
+
 ## Project Architecture
 
 ### Directory Structure
@@ -54,7 +67,7 @@ codeforge-vscode-plugin/
 
 ### Key Components
 
-#### 1. Docker Operations ([src/core/dockerOperations.js](src/core/dockerOperations.js))
+#### 1. Docker Operations ([src/core/dockerOperations.js](../src/core/dockerOperations.js))
 
 Two primary approaches for running Docker commands:
 
@@ -72,9 +85,9 @@ Container tracking system:
 
 - `trackedContainers` Map tracks all extension-created containers
 - Lifecycle management for proper cleanup
-- See [src/core/dockerOperations.js:41](src/core/dockerOperations.js#L41)
+- See [src/core/dockerOperations.js:41](../src/core/dockerOperations.js#L41)
 
-#### 2. Task Provider ([src/tasks/taskProvider.js](src/tasks/taskProvider.js))
+#### 2. Task Provider ([src/tasks/taskProvider.js](../src/tasks/taskProvider.js))
 
 VSCode task integration for running commands in Docker containers:
 
@@ -82,7 +95,7 @@ VSCode task integration for running commands in Docker containers:
 - Required property: `"command"`
 - Optional: `"ports"`, `"interactive"`, `"label"`, `"detail"`
 
-#### 3. Fuzzing Framework ([src/fuzzing/](src/fuzzing/))
+#### 3. Fuzzing Framework ([src/fuzzing/](../src/fuzzing/))
 
 Complete fuzzing workflow:
 
@@ -92,7 +105,7 @@ Complete fuzzing workflow:
 - Automated crash detection and analysis
 - GDB integration for debugging
 
-#### 4. Activity Bar UI ([src/ui/webviewProvider.js](src/ui/webviewProvider.js))
+#### 4. Activity Bar UI ([src/ui/webviewProvider.js](../src/ui/webviewProvider.js))
 
 Interactive webview control panel:
 
@@ -100,6 +113,8 @@ Interactive webview control panel:
 - Real-time status updates
 - Fuzzer management
 - Crash analysis tools
+
+---
 
 ## Development Practices
 
@@ -170,44 +185,13 @@ describe("Docker Operations", () => {
 });
 ```
 
-### Git Workflow
+---
 
-**IMPORTANT:** Follow these steps for all commits:
+## Configuration
 
-1. **Before committing:**
-   - Run Prettier: `npx prettier --write .`
-   - Ensure all source files are in appropriate `src/` directories
-   - Verify tests would pass (don't run them yourself)
+Extension settings are defined in [package.json](../package.json#L145) under `contributes.configuration`:
 
-2. **Commit process:**
-   - Check current branch: `git status`
-   - Sync with remote: `git fetch origin && git pull origin main`
-   - Create feature branch: `git checkout -b feat/descriptive-name`
-   - Stage changes: `git add .`
-   - Commit with **clean message** (no Claude/AI references)
-   - Push to remote: `git push -u origin feat/descriptive-name`
-
-3. **Commit message guidelines:**
-   - Use conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`
-   - Be descriptive and concise
-   - **Never mention Claude, AI, or automated tools**
-   - Focus on what changed and why
-
-Example good commit messages:
-
-```
-feat: add port forwarding support for task provider
-fix: prevent default.profraw generation in fuzzer initialization
-refactor: update terminal creation to use unified Docker script
-test: add mocking layer for Docker operations
-docs: update README with port forwarding examples
-```
-
-### Configuration
-
-Extension settings are defined in [package.json](package.json#L145) under `contributes.configuration`:
-
-**Core Settings:**
+### Core Settings
 
 - `codeforge.dockerCommand` - Docker binary to use (default: "docker")
 - `codeforge.defaultBaseImage` - Base image for Dockerfiles (default: "ubuntu:24.04")
@@ -215,7 +199,7 @@ Extension settings are defined in [package.json](package.json#L145) under `contr
 - `codeforge.workspaceMount` - Container mount point (default: "/workspace")
 - `codeforge.defaultPortMappings` - Global port mappings (default: [])
 
-**Fuzzing Settings:**
+### Fuzzing Settings
 
 - `codeforge.fuzzing.libfuzzer.*` - LibFuzzer parameters
 - `codeforge.fuzzing.memoryLimit` - Memory limit per fuzzer (default: 2048 MB)
@@ -243,6 +227,8 @@ Supports both task-specific and global port mappings:
 }
 ```
 
+---
+
 ## Commands and Features
 
 ### Core Commands
@@ -264,6 +250,8 @@ Users can run commands in Docker containers via VSCode tasks:
 - Quick registration: Command Palette → "CodeForge: Register Task"
 - Manual configuration in `.vscode/tasks.json`
 - Seamless integration with VSCode's task system
+
+---
 
 ## Technical Considerations
 
@@ -296,36 +284,21 @@ Users can run commands in Docker containers via VSCode tasks:
 4. **Monitor** - Real-time progress and crash detection
 5. **Analyze** - GDB integration for crash investigation
 
-## Dependencies
-
-**Runtime:**
-
-- VSCode API (^1.103.0)
-- Docker (external requirement)
-- CMake (for fuzzing features)
-- GDB (optional, for enhanced debugging)
-
-**Development:**
-
-- `mocha` - Test framework
-- `sinon` - Mocking library
-- `prettier` - Code formatting
-- `@vscode/test-electron` - VSCode extension testing
-- `@vscode/vsce` - Extension packaging
+---
 
 ## Common Patterns
 
 ### Adding a New Command
 
-1. Add command to [package.json](package.json#L79) under `contributes.commands`
+1. Add command to [package.json](../package.json#L79) under `contributes.commands`
 2. Add activation event to `activationEvents`
-3. Implement handler in [src/ui/commandHandlers.js](src/ui/commandHandlers.js)
-4. Register in [src/extension.js](src/extension.js)
+3. Implement handler in [src/ui/commandHandlers.js](../src/ui/commandHandlers.js)
+4. Register in [src/extension.js](../src/extension.js)
 5. Add tests in `test/suite/`
 
 ### Adding Configuration Settings
 
-1. Add to [package.json](package.json#L145) under `contributes.configuration.properties`
+1. Add to [package.json](../package.json#L145) under `contributes.configuration.properties`
 2. Access via `vscode.workspace.getConfiguration("codeforge")`
 3. Document in README.md and relevant docs
 4. Add validation if needed
@@ -364,14 +337,199 @@ function activate(context) {
 }
 ```
 
+---
+
+## Publishing
+
+### Prerequisites
+
+1. **Node.js and npm** installed (v16.x or higher)
+2. **Visual Studio Code** installed
+3. **Personal Access Token (PAT)** for VS Code Marketplace
+4. **Docker** installed (for testing)
+
+### Setup
+
+1. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Install VS Code Extension Manager (vsce):
+
+   ```bash
+   npm install -g @vscode/vsce
+   ```
+
+3. Generate the PNG icon from SVG (if needed):
+   ```bash
+   convert -background none -resize 128x128 icon.svg icon.png
+   ```
+
+### Testing
+
+Before packaging, ensure all tests pass:
+
+```bash
+# Run tests
+npm test
+
+# Test the extension locally
+# Press F5 in VS Code to launch a new Extension Development Host window
+```
+
+### Packaging
+
+#### Local Package
+
+To create a .vsix package for local distribution:
+
+```bash
+vsce package
+```
+
+This creates a file like `codeforge-0.1.0.vsix` that can be:
+
+- Shared directly with users
+- Installed using `code --install-extension codeforge-0.1.0.vsix`
+- Uploaded to private extension registries
+
+#### Pre-publish Checklist
+
+- [ ] Update version in `package.json`
+- [ ] Update `CHANGELOG.md` with release notes
+- [ ] Ensure `README.md` is up to date
+- [ ] Verify icon.png exists (128x128 PNG)
+- [ ] Run all tests: `npm test`
+- [ ] Test extension manually in VS Code
+- [ ] Commit all changes
+- [ ] Create a git tag: `git tag v0.1.0`
+
+### Publishing to VS Code Marketplace
+
+#### First-time Setup
+
+1. Create a publisher account at https://marketplace.visualstudio.com/manage
+
+2. Generate a Personal Access Token (PAT):
+   - Go to https://dev.azure.com/[your-organization]/_usersSettings/tokens
+   - Create new token with "Marketplace (Publish)" scope
+   - Copy the token (you won't see it again!)
+
+3. Login to vsce:
+   ```bash
+   vsce login [publisher-name]
+   # Enter your PAT when prompted
+   ```
+
+#### Publish
+
+```bash
+# Publish to VS Code Marketplace
+vsce publish
+
+# Or publish with version bump
+vsce publish minor  # 0.0.1 -> 0.1.0
+vsce publish major  # 0.1.0 -> 1.0.0
+vsce publish patch  # 0.1.0 -> 0.1.1
+```
+
+#### Automated Publishing
+
+The GitHub Actions workflow will automatically:
+
+1. Run tests on push/PR
+2. Create releases when pushing to main
+3. Publish to marketplace when a release is created (requires VSCE_PAT secret)
+
+To set up automated publishing:
+
+1. Add `VSCE_PAT` secret to GitHub repository settings
+2. Push to main branch or create a release
+
+### Publishing to Open VSX Registry
+
+For VS Code compatible editors (VSCodium, Gitpod, etc.):
+
+1. Create account at https://open-vsx.org/
+2. Generate access token
+3. Install ovsx CLI: `npm install -g ovsx`
+4. Publish: `ovsx publish -p [token]`
+
+### Distribution Channels
+
+1. **VS Code Marketplace**: Official Microsoft marketplace
+2. **Open VSX**: Open-source alternative marketplace
+3. **Direct VSIX**: Share .vsix file directly
+4. **GitHub Releases**: Automated via CI/CD
+5. **Private Registry**: For enterprise distribution
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **Missing icon.png**: Generate from icon.svg (see instructions)
+2. **Tests failing**: Run `npm test` locally to debug
+3. **PAT expired**: Generate new token and re-login
+4. **Version conflict**: Bump version in package.json
+
+#### Validation
+
+Before publishing, validate your extension:
+
+```bash
+vsce ls  # List files that will be included
+vsce package --out test.vsix  # Test packaging
+```
+
+### Post-publish
+
+After publishing:
+
+1. Verify extension appears in marketplace (may take a few minutes)
+2. Test installation: `code --install-extension codeforge`
+3. Monitor user feedback and ratings
+4. Update GitHub release notes
+
+### Version Management
+
+Follow semantic versioning:
+
+- **Major** (1.0.0): Breaking changes
+- **Minor** (0.1.0): New features, backward compatible
+- **Patch** (0.0.1): Bug fixes
+
+Always update CHANGELOG.md with version changes!
+
+---
+
 ## Documentation
 
-- [README.md](README.md) - Main documentation
-- [CHANGELOG.md](CHANGELOG.md) - Version history
-- [docs/FUZZING_CONFIGURATION.md](docs/FUZZING_CONFIGURATION.md) - Fuzzing settings
-- [docs/TASK_PROVIDER.md](docs/TASK_PROVIDER.md) - Task system documentation
-- [docs/PORT_FORWARDING.md](docs/PORT_FORWARDING.md) - Port forwarding guide
-- [test/README.md](test/README.md) - Testing documentation
+- [README.md](../README.md) - Main documentation
+- [CHANGELOG.md](../CHANGELOG.md) - Version history
+- [test/README.md](../test/README.md) - Testing documentation
+
+---
+
+## Dependencies
+
+### Runtime
+
+- VSCode API (^1.103.0)
+- Docker (external requirement)
+- CMake (for fuzzing features)
+- GDB (optional, for enhanced debugging)
+
+### Development
+
+- `mocha` - Test framework
+- `sinon` - Mocking library
+- `prettier` - Code formatting
+- `@vscode/test-electron` - VSCode extension testing
+- `@vscode/vsce` - Extension packaging
+
+---
 
 ## Quick Reference
 
@@ -396,12 +554,14 @@ npm run verify:extension   # Check extension loading
 
 ### Key Files to Know
 
-- [src/extension.js](src/extension.js) - Extension entry point
-- [src/core/dockerOperations.js](src/core/dockerOperations.js) - Docker API
-- [src/tasks/taskProvider.js](src/tasks/taskProvider.js) - Task provider
-- [src/ui/webviewProvider.js](src/ui/webviewProvider.js) - Activity bar UI
-- [src/fuzzing/fuzzingOperations.js](src/fuzzing/fuzzingOperations.js) - Fuzzing workflow
-- [package.json](package.json) - Extension manifest
+- [src/extension.js](../src/extension.js) - Extension entry point
+- [src/core/dockerOperations.js](../src/core/dockerOperations.js) - Docker API
+- [src/tasks/taskProvider.js](../src/tasks/taskProvider.js) - Task provider
+- [src/ui/webviewProvider.js](../src/ui/webviewProvider.js) - Activity bar UI
+- [src/fuzzing/fuzzingOperations.js](../src/fuzzing/fuzzingOperations.js) - Fuzzing workflow
+- [package.json](../package.json) - Extension manifest
+
+---
 
 ## Important Notes
 
