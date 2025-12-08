@@ -83,6 +83,7 @@ class CodeForgeWebviewProvider {
       enableScripts: true,
       localResourceRoots: [
         vscode.Uri.file(path.join(this._context.extensionPath, "src", "ui")),
+        vscode.Uri.file(path.join(this._context.extensionPath, "media")),
       ],
     };
 
@@ -327,6 +328,11 @@ class CodeForgeWebviewProvider {
         path.join(this._context.extensionPath, "src", "ui", "webview.js"),
       ),
     );
+    const iconUri = webview.asWebviewUri(
+      vscode.Uri.file(
+        path.join(this._context.extensionPath, "media", "icon.png"),
+      ),
+    );
 
     // Generate nonce for security
     const nonce = this._getNonce();
@@ -336,21 +342,24 @@ class CodeForgeWebviewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource};">
     <title>CodeForge Control Panel</title>
     <link rel="stylesheet" href="${cssUri}">
 </head>
 <body>
     <div class="container">
+        <!-- CodeForge Icon Header -->
+        <div class="control-panel-header">
+            <img src="${iconUri}" alt="CodeForge" class="codeforge-icon" />
+        </div>
+
         <!-- Initialization Section -->
         <section class="initialization-section" id="initialization-section" style="display: none;">
             <div class="init-content">
-                <div class="init-icon">🔧</div>
-                <h2>Initialize CodeForge</h2>
-                <p class="init-description">Set up CodeForge in your workspace to enable fuzzing capabilities.</p>
                 <button class="action-btn primary" id="initialize-btn">
                     <span class="btn-text">Initialize CodeForge</span>
                 </button>
+                <p class="init-description">Set up CodeForge in your workspace to enable fuzzing capabilities.</p>
             </div>
         </section>
 

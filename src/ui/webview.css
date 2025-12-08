@@ -24,6 +24,21 @@ body {
   position: relative;
 }
 
+/* Control Panel Header */
+.control-panel-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 16px 0;
+}
+
+.codeforge-icon {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
 /* Initialization Sections */
 .initialization-section,
 .initialization-progress-section,
@@ -54,8 +69,15 @@ body {
   color: var(--vscode-foreground);
 }
 
+#initialize-btn {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
 .init-description {
-  margin: 0 0 24px 0;
+  margin: 0;
   color: var(--vscode-descriptionForeground);
   font-size: 14px;
   line-height: 1.5;
