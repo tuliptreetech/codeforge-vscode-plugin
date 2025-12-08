@@ -210,21 +210,22 @@ suite("GDB Integration Test Suite", () => {
     test("Should resolve fuzzer executable from direct path", async () => {
       const workspacePath = "/test/workspace";
       const fuzzerName = "libfuzzer";
-      const expectedPath = path.join(
-        workspacePath,
-        ".codeforge",
-        "fuzzing",
-        fuzzerName,
-      );
+      const fuzzingDir = path.join(workspacePath, ".codeforge", "fuzzing");
+      const expectedPath = path.join(fuzzingDir, fuzzerName);
 
       // Mock file system operations
-      testEnvironment.fsMocks.access.resolves(); // fuzzing directory exists
-      testEnvironment.fsMocks.stat
-        .onFirstCall()
-        .resolves({ isFile: () => true });
-      testEnvironment.fsMocks.access
-        .withArgs(expectedPath, sinon.match.any)
-        .resolves();
+      testEnvironment.fsMocks.access.callsFake((filePath) => {
+        if (filePath === fuzzingDir || filePath === expectedPath) {
+          return Promise.resolve();
+        }
+        return Promise.reject(new Error("File not found"));
+      });
+      testEnvironment.fsMocks.stat.callsFake((filePath) => {
+        if (filePath === expectedPath) {
+          return Promise.resolve({ isFile: () => true });
+        }
+        return Promise.reject(new Error("File not found"));
+      });
 
       const result = await fuzzerResolver.resolveFuzzerExecutable(
         workspacePath,
