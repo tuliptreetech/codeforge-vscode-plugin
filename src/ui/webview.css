@@ -34,9 +34,9 @@ body {
 }
 
 .codeforge-icon {
-  width: 140px;
+  width: 100%;
+  max-width: 300px;
   height: auto;
-  max-width: 100%;
   object-fit: contain;
 }
 

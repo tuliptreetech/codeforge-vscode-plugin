@@ -4,7 +4,7 @@
   "description": "Comprehensive Docker-based development environment with advanced fuzzing, crash analysis, and container management for security testing and software development",
   "publisher": "TulipTreeTechnology",
   "version": "0.1.4",
-  "icon": "media/icon1.png",
+  "icon": "media/code-forge-orange-circle.png",
   "engines": {
     "vscode": "^1.103.0"
   },

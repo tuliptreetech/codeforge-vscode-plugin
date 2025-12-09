@@ -159,6 +159,10 @@
     if (newState.isLoading !== undefined) {
       currentState.isLoading = newState.isLoading;
     }
+
+    // Mark that we've received a state update
+    hasReceivedStateUpdate = true;
+
     updateUI();
   }
 
@@ -245,14 +249,26 @@
     // Hide all sections initially
     hideAllSections();
 
-    if (initialization.isInitialized || initialization.isLoading) {
-      // Show main interface immediately (even while checking initialization status)
+    // If we've checked before and know we're initialized, or currently checking with prior knowledge
+    if (initialization.isInitialized) {
+      showMainInterface();
+    } else if (initialization.isLoading && initialization.lastChecked) {
+      // We're checking but we've checked before - show interface
       showMainInterface();
     } else if (initialization.error && initialization.lastChecked) {
       // Show initialization button with error context
       showInitializationSection(true);
-    } else if (initialization.lastChecked === null) {
-      // Show unknown state while checking
+    } else if (
+      initialization.lastChecked === null &&
+      !initialization.isLoading
+    ) {
+      // First load, waiting for state - show main interface (blank)
+      showMainInterface();
+    } else if (
+      initialization.lastChecked === null &&
+      initialization.isLoading
+    ) {
+      // First time checking - show loading state
       showUnknownState();
     } else {
       // Show initialization button
@@ -421,14 +437,28 @@
     // Clear content first to prevent duplication
     elements.fuzzersContent.innerHTML = "";
 
+    // Show loading state if:
+    // 1. We're loading AND have loaded before (refreshing), OR
+    // 2. We're loading for the first time (lastUpdated is null and isLoading is true)
     if (fuzzers.isLoading) {
-      elements.fuzzersContent.innerHTML = `
-        <div class="fuzzers-loading">
-          <div class="loading-spinner"></div>
-          <div class="loading-text">Scanning for fuzzers...</div>
-        </div>
-      `;
-      return;
+      // Only skip loading spinner if we have cached data to show instead
+      if (
+        fuzzers.lastUpdated !== null &&
+        fuzzers.data &&
+        fuzzers.data.length > 0
+      ) {
+        // We have cached data, render it instead of showing loading spinner
+        // (fall through to render cached data)
+      } else {
+        // Show loading spinner (first load or refreshing with no cached data)
+        elements.fuzzersContent.innerHTML = `
+          <div class="fuzzers-loading">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Scanning for fuzzers...</div>
+          </div>
+        `;
+        return;
+      }
     }
 
     if (fuzzers.error) {
@@ -442,7 +472,11 @@
       return;
     }
 
-    if (!fuzzers.data || fuzzers.data.length === 0) {
+    // Only show "no fuzzers" state if we've actually checked (lastUpdated is not null)
+    if (
+      (!fuzzers.data || fuzzers.data.length === 0) &&
+      fuzzers.lastUpdated !== null
+    ) {
       elements.fuzzersContent.innerHTML = `
         <div class="no-fuzzers-state">
           <div class="empty-icon">🎯</div>
@@ -450,6 +484,11 @@
           <div class="empty-subtext">Create fuzz targets to get started</div>
         </div>
       `;
+      return;
+    }
+
+    // If we haven't gotten initial data yet and not loading, don't show anything (waiting for state)
+    if (fuzzers.lastUpdated === null) {
       return;
     }
 
@@ -680,13 +719,48 @@
     return (count / 1000000).toFixed(1) + "M";
   }
 
+  // Track if we've received at least one state update
+  let hasReceivedStateUpdate = false;
+
   // Initialize with initial state if available
   if (window.initialState) {
-    currentState = { ...currentState, ...window.initialState };
+    // Deep merge the initial state to preserve all nested properties
+    currentState = {
+      ...currentState,
+      ...window.initialState,
+      initialization: {
+        ...currentState.initialization,
+        ...window.initialState.initialization,
+      },
+      fuzzers: {
+        ...currentState.fuzzers,
+        ...window.initialState.fuzzers,
+      },
+      dockerImage: {
+        ...currentState.dockerImage,
+        ...window.initialState.dockerImage,
+      },
+    };
+
+    // If we have valid cached data, mark that we've received state
+    if (
+      window.initialState.initialization.lastChecked &&
+      window.initialState.fuzzers.lastUpdated
+    ) {
+      hasReceivedStateUpdate = true;
+    }
   }
 
-  // Initial UI update (no need to request state since we have window.initialState)
-  updateUI();
+  // Only update UI if we have valid cached data, otherwise wait for state update
+  if (hasReceivedStateUpdate) {
+    updateUI();
+  }
+
+  // Always request fresh state from provider to override stale embedded state
+  // VS Code retains webview HTML when switching panels, so embedded state can be stale
+  setTimeout(() => {
+    vscode.postMessage({ type: "requestState" });
+  }, 0);
 
   // Auto-refresh crashes after fuzzing completes
   let lastFuzzingState = false;
@@ -707,13 +781,6 @@
 
     lastFuzzingState = isFuzzing;
   };
-
-  // Periodic state refresh (every 30 seconds)
-  setInterval(() => {
-    if (!currentState.isLoading) {
-      vscode.postMessage({ type: "requestState" });
-    }
-  }, 30000);
 
   console.log("CodeForge webview initialized");
 })();
