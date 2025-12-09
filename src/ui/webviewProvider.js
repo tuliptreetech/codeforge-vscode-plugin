@@ -330,7 +330,7 @@ class CodeForgeWebviewProvider {
     );
     const iconUri = webview.asWebviewUri(
       vscode.Uri.file(
-        path.join(this._context.extensionPath, "media", "icon.png"),
+        path.join(this._context.extensionPath, "media", "icon1.png"),
       ),
     );
 
