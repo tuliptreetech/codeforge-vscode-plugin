@@ -29,13 +29,14 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 24px;
-  padding: 16px 0;
+  margin-bottom: 16px;
+  padding: 8px 0;
 }
 
 .codeforge-icon {
-  width: 64px;
-  height: 64px;
+  width: 140px;
+  height: auto;
+  max-width: 100%;
   object-fit: contain;
 }
 
