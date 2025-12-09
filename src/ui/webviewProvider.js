@@ -78,7 +78,7 @@ class CodeForgeWebviewProvider {
   resolveWebviewView(webviewView, context, token) {
     this._view = webviewView;
 
-    // Configure webview options
+    // Configure webview options - disable retainContextWhenHidden to force recreation
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
@@ -87,7 +87,14 @@ class CodeForgeWebviewProvider {
       ],
     };
 
-    // Set initial HTML content
+    // Update state BEFORE generating HTML to ensure embedded state is correct
+    const fuzzersLastUpdated = this._currentState.fuzzers.lastUpdated;
+    if (fuzzersLastUpdated) {
+      // Already have fuzzer data, mark as not loading synchronously
+      this._currentState.fuzzers.isLoading = false;
+    }
+
+    // Set initial HTML content with current state (after updating it)
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
     // Handle messages from the webview
@@ -98,14 +105,22 @@ class CodeForgeWebviewProvider {
       this._view = undefined;
     });
 
-    // Check initialization status when webview is first created
-    setTimeout(() => this._checkInitializationStatus(), 0);
+    // Only check initialization status if we've never checked before
+    const initLastChecked = this._currentState.initialization.lastChecked;
+    if (!initLastChecked) {
+      setTimeout(() => this._checkInitializationStatus(), 0);
+    }
 
-    // Check Docker image status when webview is first created
-    setTimeout(() => this._checkDockerImageStatus(), 50);
+    // Only check Docker image status if we've never checked before
+    const dockerLastChecked = this._currentState.dockerImage.lastChecked;
+    if (!dockerLastChecked) {
+      setTimeout(() => this._checkDockerImageStatus(), 50);
+    }
 
-    // Trigger initial fuzzer discovery when webview is first created (asynchronously)
-    setTimeout(() => this._performInitialFuzzerDiscovery(), 100);
+    // Only trigger initial fuzzer discovery if we've never checked before
+    if (!fuzzersLastUpdated) {
+      setTimeout(() => this._performInitialFuzzerDiscovery(), 100);
+    }
   }
 
   /**
@@ -120,7 +135,7 @@ class CodeForgeWebviewProvider {
           await this._executeCommand(message.command, message.params);
           break;
         case "requestState":
-          // State detection removed - send current state
+          // Always send current cached state immediately
           this._sendMessage({
             type: "stateUpdate",
             state: this._currentState,
@@ -330,7 +345,11 @@ class CodeForgeWebviewProvider {
     );
     const iconUri = webview.asWebviewUri(
       vscode.Uri.file(
-        path.join(this._context.extensionPath, "media", "icon1.png"),
+        path.join(
+          this._context.extensionPath,
+          "media",
+          "codeforge-horizontal.png",
+        ),
       ),
     );
 
