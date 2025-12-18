@@ -368,6 +368,60 @@ For complete configuration documentation, parameter reference, validation rules,
 
 ## Release Notes
 
+### 0.1.5
+
+Comprehensive update focused on performance optimization, Rust support, and enhanced debugging capabilities:
+
+#### Major Features
+
+- **Rust Project Support**: Full automatic detection and support for Rust fuzzing projects
+  - Automatic cargo-fuzz project detection via Cargo.toml
+  - Seamless integration with Rust fuzzing workflows
+  - Enhanced fuzzer discovery for Rust-based fuzzers
+- **Docker Image Update Management**: One-click updates with visual notifications
+  - Prominent blue gradient "Update Image" button in control panel
+  - Lightweight verification without automatic downloads
+  - Progress notifications and automatic re-verification
+- **Automated GDB Crash Debugging**: VSCode-integrated debugging workflow
+  - Automated gdbserver-based crash debugging
+  - Streamlined crash investigation with CodeLLDB integration
+  - Improved debugging reliability with proper error handling
+
+#### Performance & UI Enhancements
+
+- **Control Panel Performance**: Dramatic improvements for panel interactions
+  - Near-instant panel switching (only message round-trip delay)
+  - Cached initialization and fuzzer discovery results per session
+  - Eliminated redundant initialization checks
+  - Reduced unnecessary Docker command executions
+- **Loading State Management**: Eliminated UI flickering and flashing
+  - Single smooth transition from loading to displaying fuzzers
+  - Removed redundant state update cycles
+  - Show cached data immediately when available
+- **Visual Branding**: CodeForge icon header in control panel
+  - Responsive icon scaling (0-300px width) with aspect ratio maintenance
+  - Cleaner initialization UI with prominent buttons
+
+#### Developer Experience
+
+- **Consolidated Documentation**: Single comprehensive developer guide
+  - Merged 8 documentation files (3,329 lines) into unified [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
+  - Improved discoverability and maintainability
+- **Report Generation**: Migrated to codeforge CLI commands
+  - Replaced manual corpus/crash report generation with CLI tools
+  - Centralized logic in Docker images for better maintainability
+- **Crash Discovery**: Improved accuracy with path-based format
+  - Updated delimiter handling (using `/` instead of `:`)
+  - Enhanced detection in multiple locations
+
+#### Technical Improvements
+
+- Real-time corpus viewer updates when files are open
+- Enhanced GDB integration with proper Rust fuzzer support
+- Updated Docker images to main-10c67cb
+- Comprehensive test suite updates with improved coverage
+- Content Security Policy updates for icon display
+
 ### 0.1.4
 
 Major architectural update focused on security, reliability, and deployment improvements:
