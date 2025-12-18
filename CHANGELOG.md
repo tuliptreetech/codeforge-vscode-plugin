@@ -6,6 +6,99 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.5] - 2025-12-18
+
+### Added
+
+- **Rust Project Support**: Comprehensive automatic detection and support for Rust fuzzing projects
+  - Automatic detection of cargo-fuzz projects via Cargo.toml
+  - Integration with Rust fuzzing workflows and tooling
+  - Enhanced fuzzer discovery for Rust-based fuzzers
+- **Docker Image Update Management**: One-click Docker image updates with visual notifications
+  - Lightweight image verification without automatic downloads
+  - Prominent blue gradient "Update Image" button in control panel
+  - Progress notifications during updates with automatic re-verification
+  - New `codeforge.updateDockerImage` command
+- **CodeLLDB Debug Extension Support**: Automatic fuzzer validation with debugging integration
+  - Integration with CodeLLDB extension for enhanced debugging capabilities
+  - Automatic fuzzer validation during debug sessions
+  - Improved debugging workflow for crash analysis
+- **Automated GDB-based Crash Debugging**: VSCode-integrated crash debugging with gdbserver
+  - Automated gdbserver-based crash debugging workflow
+  - VSCode debugging integration for crash analysis
+  - Streamlined crash investigation process
+- **Consolidated Developer Documentation**: Single comprehensive developer guide
+  - Merged CLAUDE.md, PUBLISHING.md, and subsystem docs into [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
+  - Simplified documentation structure (removed 8 files, 3,329 lines)
+  - Improved discoverability with unified reference
+- **CodeForge Icon in Control Panel**: Visual branding enhancement
+  - Added CodeForge icon (icon.png) as centered header in control panel webview
+  - Responsive icon scaling (0-300px width) with aspect ratio maintenance
+  - New media assets: codeforge-horizontal.png and code-forge-orange-circle.png
+
+### Enhanced
+
+- **Control Panel Performance**: Dramatic performance improvements for panel interactions
+  - Eliminated redundant initialization checks on panel switches
+  - Cached initialization, Docker, and fuzzer discovery results per session
+  - Panel switching now nearly instant (only message round-trip time)
+  - Smart UI rendering waits for valid data before display
+  - Reduced unnecessary Docker command executions
+- **Loading State Management**: Eliminated UI flickering and flashing
+  - Fixed webview loading state flickering on initialization
+  - Prevented "No fuzzers found" message from flashing before scan completion
+  - Removed redundant state update cycles
+  - Single smooth transition from loading to displaying fuzzers
+  - Show cached data immediately when available
+- **Report Generation**: Migrated to codeforge CLI commands
+  - Replaced manual corpus generation with `codeforge generate-corpus-report` command
+  - Replaced manual crash report generation with `codeforge generate-crash-report` command
+  - Improved maintainability by centralizing logic in Docker images
+- **Corpus Viewer**: Enhanced real-time updates
+  - Automatic corpus viewer document updates when files are open
+  - Real-time corpus monitoring and display
+- **Crash Discovery**: Improved crash detection accuracy
+  - Updated crash parser delimiter (using `/` separator instead of `:`)
+  - Enhanced crash file detection in both corpus subdirectory and output root
+  - Path-based crash output format for better organization
+- **Initialization UI**: Cleaner initialization interface
+  - Redesigned initialization section with prominent "Initialize CodeForge" button
+  - Button displayed above description text for better visibility
+  - Removed wrench emoji icon for cleaner appearance
+
+### Fixed
+
+- **GDB Integration**: Enhanced crash debugging reliability
+  - Fixed crash parser delimiter handling
+  - Removed redundant build step in debug workflow
+  - Proper handling of empty preset strings for Rust fuzzers
+  - Improved path matching in GDB integration tests
+- **Test Suite Updates**: Comprehensive test coverage improvements
+  - Updated test expectations for new fuzzer loading state
+  - Fixed async wait for discovery checks in initialization tests
+  - Updated CrashReportProvider tests to match new behavior
+  - Fixed old tests to use `/` separator instead of `:`
+  - Added proper mock setup using callsFake for path matching
+- **Content Security Policy**: Added img-src support for icon display in webview
+- **File Naming**: Various file name corrections and consistency improvements
+
+### Refactored
+
+- **Crash Debugging Workflow**: Delegated to codeforge CLI
+  - Integrated `codeforge` command for backtrace generation
+  - Delegated GDB crash debugging to codeforge CLI commands
+  - Streamlined debugging workflow with centralized tooling
+- **Docker Images**: Updated to latest versions
+  - Updated to main-10c67cb for both CMake and Rust workflows
+  - Ensured compatibility with latest codeforge CLI features
+
+### Technical
+
+- **Documentation**: Updated VSCode marketplace description to reflect full feature set
+- **Code Formatting**: Applied prettier to ensure consistent code style
+- **Asset Management**: Removed CI icon download step (icons now committed to repo)
+- **Media Resources**: Added webview localResourceRoots for media folder access
+
 ## [0.1.4] - 2025-11-11
 
 ### Added

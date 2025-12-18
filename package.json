@@ -3,7 +3,7 @@
   "displayName": "CodeForge",
   "description": "Comprehensive Docker-based development environment with advanced fuzzing, crash analysis, and container management for security testing and software development",
   "publisher": "TulipTreeTechnology",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "icon": "media/code-forge-orange-circle.png",
   "engines": {
     "vscode": "^1.103.0"
