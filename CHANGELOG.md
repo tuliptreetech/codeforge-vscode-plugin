@@ -6,6 +6,19 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.6] - 2025-12-23
+
+### Changed
+
+- **Docker Images**: Updated Docker images to main-609e0ab
+  - Updated CMake and Rust workflow images to latest version
+  - Ensures compatibility with latest codeforge CLI features and improvements
+
+### Technical
+
+- **Image Updates**: Synchronized Docker image versions across all workflows
+- **Build Improvements**: Latest image includes enhanced build tools and dependencies
+
 ## [0.1.5] - 2025-12-18
 
 ### Added

@@ -368,6 +368,17 @@ For complete configuration documentation, parameter reference, validation rules,
 
 ## Release Notes
 
+### 0.1.6
+
+Maintenance release with Docker image updates:
+
+#### Changed
+
+- **Docker Images**: Updated to main-609e0ab
+  - Updated CMake and Rust workflow images to latest version
+  - Ensures compatibility with latest codeforge CLI features and improvements
+  - Enhanced build tools and dependencies
+
 ### 0.1.5
 
 Comprehensive update focused on performance optimization, Rust support, and enhanced debugging capabilities:
